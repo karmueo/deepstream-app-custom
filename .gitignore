@@ -1,0 +1,6 @@
+*.o
+*.so
+*.mp4
+
+src/deepstream-test5
+src/deepstream-image-meta-test
