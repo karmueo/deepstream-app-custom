@@ -87,34 +87,6 @@ all_bbox_generated(AppCtx *appCtx, GstBuffer *buf,
     guint num_rects = 0; // 矩形数量
 
     memset(num_objects, 0, sizeof(num_objects));
-
-    // for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame != NULL;
-    //      l_frame = l_frame->next)
-    // {
-    //     int stream_num = 0;
-    //     NvDsFrameMeta *frame_meta = l_frame->data;
-    //     for (NvDsMetaList *l_obj = frame_meta->obj_meta_list; l_obj != NULL;
-    //          l_obj = l_obj->next)
-    //     {
-    //         NvDsObjectMeta *obj = (NvDsObjectMeta *)l_obj->data;
-    //         if (obj->unique_component_id ==
-    //             (gint)appCtx->config.primary_gie_config.unique_id)
-    //         {
-    //             char fileObjNameString[FILE_NAME_SIZE]; // 文件名字符串
-    //             // 添加保存图片到指定路径
-    //             if (obj->class_id >= 0 && obj->class_id < 10 &&
-    //                 (frame_number == 0 || (frame_number - last_save_frame_number) > 10))
-    //             {
-    //                 FILE *file; // 文件指针
-
-    //                 last_save_frame_number = frame_number; // 更新保存帧数
-    //                 frame_number++;
-    //             }
-    //         }
-    //     }
-    // }
-
-    // nvds_obj_enc_finish((gpointer)appCtx);
 }
 
 /**

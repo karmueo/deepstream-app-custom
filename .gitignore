@@ -4,3 +4,6 @@
 
 src/deepstream-test5
 src/deepstream-image-meta-test
+src/deepstream-app/deepstream-app
+
+.vscode
