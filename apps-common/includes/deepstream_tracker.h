@@ -1,26 +1,36 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  *
- * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
- * property and proprietary rights in and to this material, related
- * documentation and any modifications thereto. Any use, reproduction,
- * disclosure or distribution of this material and related documentation
- * without an express license agreement from NVIDIA CORPORATION or
- * its affiliates is strictly prohibited.
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
  */
 
 #ifndef __NVGSTDS_TRACKER_H__
 #define __NVGSTDS_TRACKER_H__
 
-#include <gst/gst.h>
-#include <stdint.h>
-#include "nvds_tracker_meta.h"
-
 #ifdef __cplusplus
 extern "C"
 {
 #endif
+
+#include <gst/gst.h>
+#include <stdint.h>
+#include "nvds_tracker_meta.h"
 
 typedef struct
 {
@@ -31,15 +41,14 @@ typedef struct
   guint tracking_surf_type;
   gchar* ll_config_file;
   gchar* ll_lib_file;
+  gboolean enable_batch_process;
+  gboolean enable_past_frame;
   guint tracking_surface_type;
   gboolean display_tracking_id;
   guint tracking_id_reset_mode;
   gboolean input_tensor_meta;
   guint input_tensor_gie_id;
   guint compute_hw;
-  guint user_meta_pool_size;
-  gchar* sub_batches;
-  gint sub_batch_err_recovery_trial_cnt;
 } NvDsTrackerConfig;
 
 typedef struct

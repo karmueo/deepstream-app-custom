@@ -1,25 +1,34 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  *
- * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
- * property and proprietary rights in and to this material, related
- * documentation and any modifications thereto. Any use, reproduction,
- * disclosure or distribution of this material and related documentation
- * without an express license agreement from NVIDIA CORPORATION or
- * its affiliates is strictly prohibited.
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
  */
 
 #ifndef __NVGSTDS_CONFIG_PARSER_H__
 #define  __NVGSTDS_CONFIG_PARSER_H__
-
-#include <gst/gst.h>
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif
 
+#include <gst/gst.h>
 #include "deepstream_config.h"
 #include "deepstream_sources.h"
 #include "deepstream_preprocess.h"
@@ -29,7 +38,6 @@ extern "C"
 #include "deepstream_gie.h"
 #include "deepstream_sinks.h"
 #include "deepstream_osd.h"
-#include "deepstream_segvisual.h"
 #include "deepstream_sources.h"
 #include "deepstream_dsanalytics.h"
 #include "deepstream_dsexample.h"
@@ -44,23 +52,17 @@ extern "C"
 #define CONFIG_GROUP_SOURCE_LIST_URI_LIST "list"
 /** this vector is one to one mapped with the uri-list/list */
 #define CONFIG_GROUP_SOURCE_LIST_SENSOR_ID_LIST "sensor-id-list"
-#define CONFIG_GROUP_SOURCE_LIST_SENSOR_NAME_LIST "sensor-name-list"
 
 /** additional configs to support nvmultiurisrcbin usage */
 #define CONFIG_GROUP_SOURCE_LIST_USE_NVMULTIURISRCBIN "use-nvmultiurisrcbin"
-#define CONFIG_GROUP_SOURCE_LIST_STREAM_NAME_DISPLAY "stream-name-display"
 #define CONFIG_GROUP_SOURCE_LIST_MAX_BATCH_SIZE "max-batch-size"
 #define CONFIG_GROUP_SOURCE_LIST_HTTP_IP "http-ip"
 #define CONFIG_GROUP_SOURCE_LIST_HTTP_PORT "http-port"
-#define CONFIG_GROUP_SOURCE_EXTRACT_SEI_TYPE5_DATA "extract-sei-type5-data"
-#define CONFIG_GROUP_SOURCE_SEI_UUID "sei-uuid"
-#define CONFIG_GROUP_SOURCE_LIST_LOW_LATENCY_MODE "low-latency-mode"
 
 #define CONFIG_GROUP_SOURCE_ALL "source-attr-all"
 
 #define CONFIG_GROUP_SOURCE "source"
 #define CONFIG_GROUP_OSD "osd"
-#define CONFIG_GROUP_SEGVISUAL "segvisual"
 #define CONFIG_GROUP_PREPROCESS "pre-process"
 #define CONFIG_GROUP_SECONDARY_PREPROCESS "secondary-pre-process"
 #define CONFIG_GROUP_PRIMARY_GIE "primary-gie"
@@ -135,7 +137,7 @@ parse_labels_file (NvDsGieConfig *config);
  * @return true if parsed successfully.
  */
 gboolean
-parse_dewarper (NvDsDewarperConfig * config, GKeyFile * key_file, gchar *cfg_file_path, gchar * group);
+parse_dewarper (NvDsDewarperConfig * config, GKeyFile * key_file, gchar *cfg_file_path);
 
 /**
  * Function to read properties of source element from configuration file.
@@ -150,16 +152,6 @@ parse_dewarper (NvDsDewarperConfig * config, GKeyFile * key_file, gchar *cfg_fil
 gboolean
 parse_source (NvDsSourceConfig * config, GKeyFile * key_file,
     gchar * group, gchar * cfg_file_path);
-
-/**
- * Function to read properties of NvSegVisual element from configuration file.
- *
- * @param[in] config pointer to @ref NvDsSegVisualConfig
- * @param[in] key_file pointer to file having key value pairs.
- *
- * @return true if parsed successfully.
- */
-gboolean parse_segvisual (NvDsSegVisualConfig * config, GKeyFile * key_file);
 
 /**
  * Function to read properties of OSD element from configuration file.
@@ -183,7 +175,7 @@ gboolean parse_osd (NvDsOSDConfig * config, GKeyFile * key_file);
  * @return true if parsed successfully.
  */
 gboolean
-parse_preprocess (NvDsPreProcessConfig * config, GKeyFile * key_file,
+parse_preprocess (NvDsPreProcessConfig * config, GKeyFile * key_file, 
     gchar * group, gchar * cfg_file_path);
 
 /**

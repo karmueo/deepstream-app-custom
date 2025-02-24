@@ -1,13 +1,23 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  *
- * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
- * property and proprietary rights in and to this material, related
- * documentation and any modifications thereto. Any use, reproduction,
- * disclosure or distribution of this material and related documentation
- * without an express license agreement from NVIDIA CORPORATION or
- * its affiliates is strictly prohibited.
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
  */
 
 #include <string.h>
@@ -153,17 +163,6 @@ create_camera_source_bin (NvDsSourceConfig * config, NvDsSrcBin * bin)
       gst_bin_add_many (GST_BIN (bin->bin), bin->src_elem, bin->cap_filter1,
           nvvidconv1, nvvidconv2, bin->cap_filter, NULL);
     } else {
-#if defined(__aarch64__) && !defined(AARCH64_IS_SBSA)
-      /* For Jetson, with copy-hw=1 and memory-type=nvbuf-mem-surface-array,
-         cudaMemcopy fail is observed. This is a WAR till root cause is fixed */
-      if (config->type == NV_DS_SOURCE_CAMERA_V4L2) {
-        g_object_set (G_OBJECT (nvvidconv2), "copy-hw", 2, NULL);
-      } else {
-        if (config->nvvideoconvert_copy_hw) {
-          g_object_set(G_OBJECT(nvvidconv2), "copy-hw", config->nvvideoconvert_copy_hw, NULL);
-        }
-      }
-#endif
       gst_bin_add_many (GST_BIN (bin->bin), bin->src_elem, bin->cap_filter1,
           nvvidconv2, bin->cap_filter, NULL);
     }
@@ -365,7 +364,7 @@ restart_stream_buf_prob (GstPad * pad, GstPadProbeInfo * info, gpointer u_data)
     }
 
     if (GST_EVENT_TYPE (event) == GST_EVENT_SEGMENT) {
-      GstSegment *segment = NULL;
+      GstSegment *segment;
 
       gst_event_parse_segment (event, (const GstSegment **) &segment);
       segment->base = bin->accumulated_base;
@@ -397,12 +396,6 @@ decodebin_child_added (GstChildProxy * child_proxy, GObject * object,
 {
   NvDsSrcBin *bin = (NvDsSrcBin *) user_data;
   NvDsSourceConfig *config = bin->config;
-  struct cudaDeviceProp prop = {0};
-  cudaGetDeviceProperties (&prop, config->gpu_id);
-  if (cudaGetDeviceProperties (&prop,
-          config->gpu_id) != cudaSuccess) {
-    NVGSTDS_ERR_MSG_V ("Failed to get properties for GPU %d", config->gpu_id);
-  }
   if (g_strrstr (name, "decodebin") == name) {
     g_signal_connect (G_OBJECT (object), "child-added",
         G_CALLBACK (decodebin_child_added), user_data);
@@ -431,6 +424,9 @@ decodebin_child_added (GstChildProxy * child_proxy, GObject * object,
       g_object_set (object, "skip-frames", 2, NULL);
     g_object_set (object, "disable-dvfs", TRUE, NULL);
   }
+  if (g_strstr_len (name, -1, "nvjpegdec") == name) {
+    g_object_set (object, "DeepStream", TRUE, NULL);
+  }
   if (g_strstr_len (name, -1, "nvv4l2decoder") == name) {
     if (config->low_latency_mode)
       g_object_set (object, "low-latency-mode", TRUE, NULL);
@@ -453,12 +449,6 @@ decodebin_child_added (GstChildProxy * child_proxy, GObject * object,
     }
     g_object_set (object, "drop-frame-interval", config->drop_frame_interval,
         NULL);
-    /* extract-sei-type5-data is a valid parameter for nvv4l2decoder
-       on x86 and ARM_SBSA */
-    if (!prop.integrated) {
-      g_object_set (object, "extract-sei-type5-data", config->extract_sei_type5_data,
-         NULL);
-    }
     g_object_set (object, "num-extra-surfaces", config->num_extra_surfaces,
         NULL);
 
@@ -729,8 +719,7 @@ watch_source_status (gpointer data)
           } else {
             send_event_element = src_bin->cap_filter1;
           }
-          gst_element_send_event (GST_ELEMENT (send_event_element),
-              gst_event_new_flush_start ());
+
           gst_element_send_event (GST_ELEMENT (send_event_element),
               gst_event_new_flush_stop (TRUE));
           if (!gst_element_send_event (GST_ELEMENT (send_event_element),
@@ -783,8 +772,7 @@ watch_source_status (gpointer data)
           } else {
             send_event_element = src_bin->cap_filter1;
           }
-          gst_element_send_event (GST_ELEMENT (send_event_element),
-              gst_event_new_flush_start ());
+
           gst_element_send_event (GST_ELEMENT (send_event_element),
               gst_event_new_flush_stop (TRUE));
           if (!gst_element_send_event (GST_ELEMENT (send_event_element),
@@ -815,7 +803,7 @@ static gboolean
 watch_source_async_state_change (gpointer data)
 {
   NvDsSrcBin *src_bin = (NvDsSrcBin *) data;
-  GstState state = GST_STATE_NULL, pending = GST_STATE_NULL;
+  GstState state, pending;
   GstStateChangeReturn ret;
 
   ret = gst_element_get_state (src_bin->bin, &state, &pending, 0);
@@ -1029,15 +1017,6 @@ create_rtsp_src_bin (NvDsSourceConfig * config, NvDsSrcBin * bin)
       NVGSTDS_ERR_MSG_V ("Could not create element 'nvvidconv_elem'");
       goto done;
     }
-    g_object_set (G_OBJECT (bin->nvvidconv), "gpu-id", config->gpu_id,
-        "nvbuf-memory-type", config->nvbuf_memory_type, NULL);
-
-#if defined(__aarch64__) && !defined(AARCH64_IS_SBSA)
-  /* For Jetson, with copy-hw=1 and memory-type=nvbuf-mem-surface-array,
-     cudaMemcopy fail is observed. This is a WAR till root cause is fixed */
-    g_object_set (G_OBJECT (bin->nvvidconv), "copy-hw", 2, NULL);
-#endif
-
     if (config->video_format) {
       caps = gst_caps_new_simple ("video/x-raw", "format", G_TYPE_STRING, config->video_format, NULL);
     } else {
@@ -1350,15 +1329,6 @@ create_uridecode_src_bin (NvDsSourceConfig * config, NvDsSrcBin * bin)
     goto done;
   }
 
-  g_object_set (G_OBJECT (bin->nvvidconv), "gpu-id", config->gpu_id,
-        "nvbuf-memory-type", config->nvbuf_memory_type, NULL);
-
-#if defined(__aarch64__) && !defined(AARCH64_IS_SBSA)
-  /* For Jetson, with copy-hw=1 and memory-type=nvbuf-mem-surface-array,
-     cudaMemcopy fail is observed. This is a WAR till root cause is fixed */
-    g_object_set (G_OBJECT (bin->nvvidconv), "copy-hw", 2, NULL);
-#endif
-
   if (config->video_format) {
     caps = gst_caps_new_simple ("video/x-raw", "format", G_TYPE_STRING, config->video_format, NULL);
   } else {
@@ -1591,6 +1561,11 @@ create_multi_source_bin (guint num_sub_bins, NvDsSourceConfig * configs,
       goto done;
     }
 
+    if (configs->dewarper_config.enable) {
+      g_object_set (G_OBJECT (bin->sub_bins[i].dewarper_bin.nvdewarper),
+          "source-id", configs[i].source_id, NULL);
+    }
+
     bin->num_bins++;
   }
   NVGSTDS_BIN_ADD_GHOST_PAD (bin->bin, bin->streammux, "src");
@@ -1622,12 +1597,8 @@ set_properties_nvuribin (GstElement * element_, NvDsSourceConfig const *config)
   if (config->gpu_id)
     g_object_set (element_, "gpu-id", config->gpu_id, NULL);
   g_object_set (element_, "cudadec-memtype", config->cuda_memory_type, NULL);
-  g_object_set (element_, "low-latency-mode", config->low_latency_mode, NULL);
   if (config->drop_frame_interval)
     g_object_set (element_, "drop-frame-interval", config->drop_frame_interval,
-        NULL);
-  if (config->extract_sei_type5_data)
-    g_object_set (element_, "extract-sei-type5-data", config->extract_sei_type5_data,
         NULL);
   if (config->select_rtp_protocol)
     g_object_set (element_, "select-rtp-protocol", config->select_rtp_protocol,
@@ -1645,12 +1616,9 @@ set_properties_nvuribin (GstElement * element_, NvDsSourceConfig const *config)
   if (config->smart_rec_def_duration)
     g_object_set (element_, "smart-rec-default-duration",
         config->smart_rec_def_duration, NULL);
-  if (config->rtsp_reconnect_interval_sec){
+  if (config->rtsp_reconnect_interval_sec)
     g_object_set (element_, "rtsp-reconnect-interval",
         config->rtsp_reconnect_interval_sec, NULL);
-    g_object_set (element_, "rtsp-reconnect-attempts",
-        config->rtsp_reconnect_attempts, NULL);
-  }
   if (config->latency)
     g_object_set (element_, "latency", config->latency, NULL);
   if (config->udp_buffer_size)
@@ -1715,7 +1683,7 @@ gboolean
 reset_source_pipeline (gpointer data)
 {
   NvDsSrcBin *src_bin = (NvDsSrcBin *) data;
-  GstState state = GST_STATE_NULL, pending = GST_STATE_NULL;
+  GstState state, pending;
   GstStateChangeReturn ret;
 
   g_mutex_lock (&src_bin->bin_lock);
@@ -1729,8 +1697,6 @@ reset_source_pipeline (gpointer data)
   } else {
     send_event_element = src_bin->cap_filter1;
   }
-  gst_element_send_event (GST_ELEMENT (send_event_element),
-      gst_event_new_flush_start ());
   gst_element_send_event (GST_ELEMENT (send_event_element),
       gst_event_new_flush_stop (TRUE));
   if (gst_element_set_state (src_bin->bin,

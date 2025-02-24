@@ -1,13 +1,23 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+ * Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
  *
- * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
- * property and proprietary rights in and to this material, related
- * documentation and any modifications thereto. Any use, reproduction,
- * disclosure or distribution of this material and related documentation
- * without an express license agreement from NVIDIA CORPORATION or
- * its affiliates is strictly prohibited.
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
  */
 
 #include "deepstream_common.h"
@@ -84,12 +94,9 @@ create_dsexample_bin (NvDsDsExampleConfig * config, NvDsDsExampleBin * bin)
       "full-frame", config->full_frame,
       "processing-width", config->processing_width,
       "processing-height", config->processing_height,
-      "unique-id", config->unique_id,
-      "gpu-id", config->gpu_id,
-      "blur-objects", config->blur_objects, NULL);
-  if (config->batch_size) {
-    g_object_set (G_OBJECT (bin->elem_dsexample), "batch-size", config->batch_size, NULL);
-  }
+      "blur-objects", config->blur_objects,
+      "unique-id", config->unique_id, "gpu-id", config->gpu_id, NULL);
+
   g_object_set (G_OBJECT (bin->pre_conv), "gpu-id", config->gpu_id, NULL);
 
   g_object_set (G_OBJECT (bin->pre_conv), "nvbuf-memory-type",

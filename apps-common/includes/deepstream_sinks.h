@@ -1,13 +1,23 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  *
- * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
- * property and proprietary rights in and to this material, related
- * documentation and any modifications thereto. Any use, reproduction,
- * disclosure or distribution of this material and related documentation
- * without an express license agreement from NVIDIA CORPORATION or
- * its affiliates is strictly prohibited.
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
  */
 
 #ifndef __NVGSTDS_SINKS_H__
@@ -17,12 +27,12 @@
 #define IS_TEGRA
 #endif
 
-#include <gst/gst.h>
-
 #ifdef __cplusplus
 extern "C"
 {
 #endif
+
+#include <gst/gst.h>
 
 typedef enum
 {
@@ -69,7 +79,6 @@ typedef struct
   NvDsContainerType container;
   NvDsEncoderType codec;
   NvDsEncHwSwType enc_type;
-  guint compute_hw;
   gint bitrate;
   guint profile;
   gint sync;
@@ -81,7 +90,6 @@ typedef struct
   guint iframeinterval;
   guint copy_meta;
   NvDsEncOutputIOMode output_io_mode;
-  gint sw_preset;
 } NvDsSinkEncoderConfig;
 
 typedef struct
@@ -114,7 +122,6 @@ typedef struct
   gboolean  multiple_payloads;
   gboolean  conv_msg2p_new_api;
   guint     conv_frame_interval;
-  gboolean  conv_dummy_payload;
   /** Broker settings */
   gchar*    proto_lib;
   gchar*    conn_str;
@@ -124,7 +131,6 @@ typedef struct
   gboolean  disable_msgconv;
   gint sync;
   gboolean  new_api;
-  guint broker_sleep_time;
 } NvDsSinkMsgConvBrokerConfig;
 
 typedef struct

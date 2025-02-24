@@ -1,52 +1,41 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+ * Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
  *
- * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
- * property and proprietary rights in and to this material, related
- * documentation and any modifications thereto. Any use, reproduction,
- * disclosure or distribution of this material and related documentation
- * without an express license agreement from NVIDIA CORPORATION or
- * its affiliates is strictly prohibited.
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
  */
 
 #ifndef __NVGSTDS_PERF_H__
 #define __NVGSTDS_PERF_H__
-
-#include <gst/gst.h>
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif
 
+#include <gst/gst.h>
 #include "deepstream_config.h"
-
-typedef struct
-{
-  guint source_id;
-  gchar const* uri;
-  gchar const* sensor_id;
-  gchar const* sensor_name;
-}NvDsFPSSensorInfo;
-
-typedef struct
-{
-  guint source_id;
-  char *stream_name;
-  gchar const* sensor_id;
-  gchar const* sensor_name;
-} NvDsAppSourceDetail;
 
 typedef struct
 {
   gdouble fps[MAX_SOURCE_BINS];
   gdouble fps_avg[MAX_SOURCE_BINS];
   guint num_instances;
-  NvDsAppSourceDetail source_detail[MAX_SOURCE_BINS];
-  guint active_source_size;
-  gboolean stream_name_display;
-  gboolean use_nvmultiurisrcbin;
 } NvDsAppPerfStruct;
 
 typedef void (*perf_callback) (gpointer ctx, NvDsAppPerfStruct * str);
@@ -74,9 +63,6 @@ typedef struct
   gulong fps_measure_probe_id;
   NvDsInstancePerfStruct instance_str[MAX_SOURCE_BINS];
   guint dewarper_surfaces_per_frame;
-  GHashTable *FPSInfoHash;
-  gboolean stream_name_display;
-  gboolean use_nvmultiurisrcbin;
 } NvDsAppPerfStructInt;
 
 gboolean enable_perf_measurement (NvDsAppPerfStructInt *str,

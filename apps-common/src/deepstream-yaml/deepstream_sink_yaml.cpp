@@ -1,13 +1,23 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+ * Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
  *
- * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
- * property and proprietary rights in and to this material, related
- * documentation and any modifications thereto. Any use, reproduction,
- * disclosure or distribution of this material and related documentation
- * without an express license agreement from NVIDIA CORPORATION or
- * its affiliates is strictly prohibited.
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
  */
 
 #include "deepstream_common.h"
@@ -27,9 +37,6 @@ parse_sink_yaml (NvDsSinkSubBinConfig *config, std::string group_str, gchar * cf
 
   config->encoder_config.rtsp_port = 8554;
   config->encoder_config.udp_port = 5000;
-  config->encoder_config.codec = NV_DS_ENCODER_H264;
-  config->encoder_config.container = NV_DS_CONTAINER_MP4;
-  config->encoder_config.compute_hw = 0;
   config->render_config.qos = FALSE;
   config->link_to_demux = FALSE;
   config->msg_conv_broker_config.new_api = FALSE;
@@ -72,9 +79,6 @@ parse_sink_yaml (NvDsSinkSubBinConfig *config, std::string group_str, gchar * cf
     } else if (paramKey == "codec") {
       config->encoder_config.codec =
           (NvDsEncoderType) itr->second.as<int>();
-    } else if (paramKey == "compute-hw") {
-      config->encoder_config.compute_hw =
-          itr->second.as<int>();
     } else if (paramKey == "enc-type") {
       config->encoder_config.enc_type =
           (NvDsEncHwSwType) itr->second.as<int>();
@@ -90,7 +94,7 @@ parse_sink_yaml (NvDsSinkSubBinConfig *config, std::string group_str, gchar * cf
     } else if (paramKey == "output-file") {
       std::string temp = itr->second.as<std::string>();
       config->encoder_config.output_file_path = (char*) malloc(sizeof(char) * 1024);
-      std::strncpy (config->encoder_config.output_file_path, temp.c_str(), 1023);
+      std::strncpy (config->encoder_config.output_file_path, temp.c_str(), 1024);
     } else if (paramKey == "source-id") {
       config->source_id =
           itr->second.as<guint>();
@@ -125,27 +129,26 @@ parse_sink_yaml (NvDsSinkSubBinConfig *config, std::string group_str, gchar * cf
                paramKey == "debug-payload-dir" ||
                paramKey == "multiple-payloads" ||
                paramKey == "msg-conv-msg2p-new-api" ||
-               paramKey == "msg-conv-frame-interval" ||
-               paramKey == "msg-conv-dummy-payload") {
+               paramKey == "msg-conv-frame-interval") {
       ret = parse_msgconv_yaml (&config->msg_conv_broker_config, group_str, cfg_file_path);
       if (!ret)
         goto done;
     } else if (paramKey == "msg-broker-proto-lib") {
       std::string temp = itr->second.as<std::string>();
       config->msg_conv_broker_config.proto_lib = (char*) malloc(sizeof(char) * 1024);
-      std::strncpy (config->msg_conv_broker_config.proto_lib, temp.c_str(), 1023);
+      std::strncpy (config->msg_conv_broker_config.proto_lib, temp.c_str(), 1024);
     } else if (paramKey == "msg-broker-conn-str") {
       std::string temp = itr->second.as<std::string>();
       config->msg_conv_broker_config.conn_str = (char*) malloc(sizeof(char) * 1024);
-      std::strncpy (config->msg_conv_broker_config.conn_str, temp.c_str(), 1023);
+      std::strncpy (config->msg_conv_broker_config.conn_str, temp.c_str(), 1024);
     } else if (paramKey == "topic") {
       std::string temp = itr->second.as<std::string>();
       config->msg_conv_broker_config.topic = (char*) malloc(sizeof(char) * 1024);
-      std::strncpy (config->msg_conv_broker_config.topic, temp.c_str(), 1023);
+      std::strncpy (config->msg_conv_broker_config.topic, temp.c_str(), 1024);
     } else if (paramKey == "msg-broker-config") {
       std::string temp = itr->second.as<std::string>();
       char* str = (char*) malloc(sizeof(char) * 1024);
-      std::strncpy (str, temp.c_str(), 1023);
+      std::strncpy (str, temp.c_str(), 1024);
       config->msg_conv_broker_config.broker_config_file_path = (char*) malloc(sizeof(char) * 1024);
       if (!get_absolute_file_path_yaml (cfg_file_path, str,
               config->msg_conv_broker_config.broker_config_file_path)) {

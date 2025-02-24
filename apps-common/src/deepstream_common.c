@@ -1,13 +1,23 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2019 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+ * Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
  *
- * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
- * property and proprietary rights in and to this material, related
- * documentation and any modifications thereto. Any use, reproduction,
- * disclosure or distribution of this material and related documentation
- * without an express license agreement from NVIDIA CORPORATION or
- * its affiliates is strictly prohibited.
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
  */
 
 #include <gst/gst.h>
@@ -72,7 +82,7 @@ link_element_to_streammux_sink_pad (GstElement * streammux, GstElement * elem,
     strcpy (pad_name, "sink_%u");
   }
 
-  mux_sink_pad = gst_element_request_pad_simple (streammux, pad_name);
+  mux_sink_pad = gst_element_get_request_pad (streammux, pad_name);
   if (!mux_sink_pad) {
     NVGSTDS_ERR_MSG_V ("Failed to get sink pad from streammux");
     goto done;
@@ -156,7 +166,7 @@ link_element_to_demux_src_pad (GstElement * demux, GstElement * elem,
   g_snprintf (pad_name, 16, "src_%u", index);
   pad_name[15] = '\0';
 
-  demux_src_pad = gst_element_request_pad_simple (demux, pad_name);
+  demux_src_pad = gst_element_get_request_pad (demux, pad_name);
   if (!demux_src_pad) {
     NVGSTDS_ERR_MSG_V ("Failed to get sink pad from demux");
     goto done;

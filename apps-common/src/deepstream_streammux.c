@@ -1,13 +1,23 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  *
- * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
- * property and proprietary rights in and to this material, related
- * documentation and any modifications thereto. Any use, reproduction,
- * disclosure or distribution of this material and related documentation
- * without an express license agreement from NVIDIA CORPORATION or
- * its affiliates is strictly prohibited.
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
  */
 
 #include "deepstream_common.h"
@@ -33,8 +43,6 @@ set_streammux_properties (NvDsStreammuxConfig * config, GstElement * element)
 
     g_object_set (G_OBJECT (element),
         "batched-push-timeout", config->batched_push_timeout, NULL);
-
-    g_object_set (G_OBJECT (element), "compute-hw", config->compute_hw, NULL);
 
     if (config->buffer_pool_size >= 4) {
       g_object_set (G_OBJECT (element),
@@ -81,15 +89,6 @@ set_streammux_properties (NvDsStreammuxConfig * config, GstElement * element)
       config->frame_num_reset_on_eos, NULL);
   g_object_set (G_OBJECT (element), "drop-pipeline-eos", config->no_pipeline_eos,
       NULL);
-
-  if (config->extract_sei_type5_data) {
-    g_object_set (G_OBJECT (element), "extract-sei-type5-data", config->extract_sei_type5_data,
-        NULL);
-  }
-  if (config->num_surface_per_frame > 1) {
-      g_object_set (G_OBJECT (element), "num-surfaces-per-frame",
-          config->num_surface_per_frame, NULL);
-  }
 
   ret = TRUE;
 

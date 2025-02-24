@@ -1,14 +1,25 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  *
- * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
- * property and proprietary rights in and to this material, related
- * documentation and any modifications thereto. Any use, reproduction,
- * disclosure or distribution of this material and related documentation
- * without an express license agreement from NVIDIA CORPORATION or
- * its affiliates is strictly prohibited.
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
  */
+
 
 #include <sys/types.h>
 #include <unistd.h>
@@ -249,8 +260,7 @@ create_msg_conv_broker_bin (NvDsSinkMsgConvBrokerConfig * config,
         "debug-payload-dir", config->debug_payload_dir,
         "multiple-payloads", config->multiple_payloads,
         "msg2p-newapi", config->conv_msg2p_new_api,
-        "frame-interval", config->conv_frame_interval,
-        "dummy-payload", config->conv_dummy_payload, NULL);
+        "frame-interval", config->conv_frame_interval, NULL);
 
   /* Create msg broker to send payload to server */
   g_snprintf (elem_name, sizeof (elem_name), "sink_sub_bin_sink%d", uid);
@@ -264,8 +274,7 @@ create_msg_conv_broker_bin (NvDsSinkMsgConvBrokerConfig * config,
       "topic", config->topic,
       "sync", config->sync, "async", FALSE,
       "config", config->broker_config_file_path,
-      "comp-id", config->broker_comp_id, "new-api", config->new_api,
-      "sleep-time", config->broker_sleep_time, NULL);
+      "comp-id", config->broker_comp_id, "new-api", config->new_api, NULL);
 
   gst_bin_add_many (GST_BIN (bin->bin),
       bin->queue, bin->transform, bin->sink, NULL);
@@ -336,13 +345,6 @@ create_encode_file_bin (NvDsSinkEncoderConfig * config, NvDsSinkBinSubBin * bin)
     NVGSTDS_ERR_MSG_V ("Failed to create '%s'", elem_name);
     goto done;
   }
-  g_object_set (G_OBJECT (bin->transform), "compute-hw", config->compute_hw, NULL);
-
-#if defined(__aarch64__) && !defined(AARCH64_IS_SBSA)
-  /* For Jetson, with copy-hw=1 and memory-type=nvbuf-mem-surface-array,
-     cudaMemcopy fail is observed. This is a WAR till root cause is fixed */
-  g_object_set (G_OBJECT (bin->transform), "copy-hw", 2, NULL);
-#endif
 
   g_snprintf (elem_name, sizeof (elem_name), "sink_sub_bin_cap_filter%d", uid);
   bin->cap_filter = gst_element_factory_make (NVDS_ELEM_CAPS_FILTER, elem_name);
@@ -350,38 +352,30 @@ create_encode_file_bin (NvDsSinkEncoderConfig * config, NvDsSinkBinSubBin * bin)
     NVGSTDS_ERR_MSG_V ("Failed to create '%s'", elem_name);
     goto done;
   }
+  if (config->codec == NV_DS_ENCODER_MPEG4
+      || config->enc_type == NV_DS_ENCODER_TYPE_SW)
+    caps = gst_caps_from_string ("video/x-raw, format=I420");
+  else
+    caps = gst_caps_from_string ("video/x-raw(memory:NVMM), format=I420");
+  g_object_set (G_OBJECT (bin->cap_filter), "caps", caps, NULL);
 
   g_snprintf (elem_name, sizeof (elem_name), "sink_sub_bin_encoder%d", uid);
   switch (config->codec) {
     case NV_DS_ENCODER_H264:
-      if (config->enc_type == NV_DS_ENCODER_TYPE_SW) {
+      if (config->enc_type == NV_DS_ENCODER_TYPE_SW)
         bin->encoder =
             gst_element_factory_make (NVDS_ELEM_ENC_H264_SW, elem_name);
-      } else {
+      else
         bin->encoder =
             gst_element_factory_make (NVDS_ELEM_ENC_H264_HW, elem_name);
-        if (!bin->encoder) {
-          NVGSTDS_INFO_MSG_V("Could not create HW encoder. Falling back to SW encoder");
-          bin->encoder =
-            gst_element_factory_make (NVDS_ELEM_ENC_H264_SW, elem_name);
-          config->enc_type = NV_DS_ENCODER_TYPE_SW;
-        }
-      }
       break;
     case NV_DS_ENCODER_H265:
-      if (config->enc_type == NV_DS_ENCODER_TYPE_SW) {
+      if (config->enc_type == NV_DS_ENCODER_TYPE_SW)
         bin->encoder =
             gst_element_factory_make (NVDS_ELEM_ENC_H265_SW, elem_name);
-      } else {
+      else
         bin->encoder =
             gst_element_factory_make (NVDS_ELEM_ENC_H265_HW, elem_name);
-        if (!bin->encoder) {
-          NVGSTDS_INFO_MSG_V("Could not create HW encoder. Falling back to SW encoder");
-          bin->encoder =
-            gst_element_factory_make (NVDS_ELEM_ENC_H265_SW, elem_name);
-          config->enc_type = NV_DS_ENCODER_TYPE_SW;
-        }
-      }
       break;
     case NV_DS_ENCODER_MPEG4:
       bin->encoder = gst_element_factory_make (NVDS_ELEM_ENC_MPEG4, elem_name);
@@ -393,13 +387,6 @@ create_encode_file_bin (NvDsSinkEncoderConfig * config, NvDsSinkBinSubBin * bin)
     NVGSTDS_ERR_MSG_V ("Failed to create '%s'", elem_name);
     goto done;
   }
-
-  if (config->codec == NV_DS_ENCODER_MPEG4
-      || config->enc_type == NV_DS_ENCODER_TYPE_SW)
-    caps = gst_caps_from_string ("video/x-raw, format=I420");
-  else
-    caps = gst_caps_from_string ("video/x-raw(memory:NVMM), format=I420");
-  g_object_set (G_OBJECT (bin->cap_filter), "caps", caps, NULL);
 
   NVGSTDS_ELEM_ADD_PROBE (probe_id,
       bin->encoder, "sink",
@@ -417,18 +404,16 @@ create_encode_file_bin (NvDsSinkEncoderConfig * config, NvDsSinkBinSubBin * bin)
       g_object_set (G_OBJECT (bin->encoder), "copy-meta", TRUE, NULL);
   }
 
-  if (config->enc_type == NV_DS_ENCODER_TYPE_HW) {
-    switch (config->output_io_mode) {
-      case NV_DS_ENCODER_OUTPUT_IO_MODE_MMAP:
-      default:
-        g_object_set (G_OBJECT (bin->encoder), "output-io-mode",
-                NV_DS_ENCODER_OUTPUT_IO_MODE_MMAP, NULL);
-        break;
-      case NV_DS_ENCODER_OUTPUT_IO_MODE_DMABUF_IMPORT:
-        g_object_set (G_OBJECT (bin->encoder), "output-io-mode",
-                NV_DS_ENCODER_OUTPUT_IO_MODE_DMABUF_IMPORT, NULL);
-        break;
-    }
+  switch (config->output_io_mode) {
+    case NV_DS_ENCODER_OUTPUT_IO_MODE_MMAP:
+    default:
+      g_object_set (G_OBJECT (bin->encoder), "output-io-mode",
+              NV_DS_ENCODER_OUTPUT_IO_MODE_MMAP, NULL);
+      break;
+    case NV_DS_ENCODER_OUTPUT_IO_MODE_DMABUF_IMPORT:
+      g_object_set (G_OBJECT (bin->encoder), "output-io-mode",
+              NV_DS_ENCODER_OUTPUT_IO_MODE_DMABUF_IMPORT, NULL);
+      break;
   }
 
   if (config->enc_type == NV_DS_ENCODER_TYPE_HW) {
@@ -436,14 +421,12 @@ create_encode_file_bin (NvDsSinkEncoderConfig * config, NvDsSinkBinSubBin * bin)
     g_object_set (G_OBJECT (bin->encoder), "iframeinterval",
         config->iframeinterval, NULL);
     g_object_set (G_OBJECT (bin->encoder), "bitrate", bitrate, NULL);
-    g_object_set (G_OBJECT (bin->encoder), "gpu-id", config->gpu_id, NULL);
   } else {
     if (config->codec == NV_DS_ENCODER_MPEG4)
       g_object_set (G_OBJECT (bin->encoder), "bitrate", bitrate, NULL);
     else {
       //bitrate is in kbits/sec for software encoder x264enc and x265enc
       g_object_set (G_OBJECT (bin->encoder), "bitrate", bitrate / 1000, NULL);
-      g_object_set (G_OBJECT (bin->encoder), "speed-preset", config->sw_preset, NULL);
     }
   }
 
@@ -560,7 +543,6 @@ start_rtsp_streaming (guint rtsp_port_num, guint updsink_port_num,
   mounts = gst_rtsp_server_get_mount_points (server[server_count]);
 
   factory = gst_rtsp_media_factory_new ();
-  gst_rtsp_media_factory_set_shared (factory, TRUE);
   gst_rtsp_media_factory_set_launch (factory, udpsrc_pipeline);
 
   gst_rtsp_mount_points_add_factory (mounts, "/ds-test", factory);
@@ -613,67 +595,11 @@ create_udpsink_bin (NvDsSinkEncoderConfig * config, NvDsSinkBinSubBin * bin)
     NVGSTDS_ERR_MSG_V ("Failed to create '%s'", elem_name);
     goto done;
   }
-  g_object_set (G_OBJECT (bin->transform), "compute-hw", config->compute_hw, NULL);
-
-#if defined(__aarch64__) && !defined(AARCH64_IS_SBSA)
-    /* For Jetson, with copy-hw=1 and memory-type=nvbuf-mem-surface-array,
-       cudaMemcopy fail is observed. This is a WAR till root cause is fixed */
-    g_object_set (G_OBJECT (bin->transform), "copy-hw", 2, NULL);
-#endif
 
   g_snprintf (elem_name, sizeof (elem_name), "sink_sub_bin_cap_filter%d", uid);
   bin->cap_filter = gst_element_factory_make (NVDS_ELEM_CAPS_FILTER, elem_name);
   if (!bin->cap_filter) {
     NVGSTDS_ERR_MSG_V ("Failed to create '%s'", elem_name);
-    goto done;
-  }
-
-  g_snprintf (encode_name, sizeof (encode_name), "sink_sub_bin_encoder%d", uid);
-  g_snprintf (rtppay_name, sizeof (rtppay_name), "sink_sub_bin_rtppay%d", uid);
-
-  switch (config->codec) {
-    case NV_DS_ENCODER_H264:
-      bin->codecparse = gst_element_factory_make ("h264parse", "h264-parser");
-      g_object_set (G_OBJECT (bin->codecparse), "config-interval", -1, NULL);
-      bin->rtppay = gst_element_factory_make ("rtph264pay", rtppay_name);
-      if (config->enc_type == NV_DS_ENCODER_TYPE_SW) {
-        bin->encoder =
-            gst_element_factory_make (NVDS_ELEM_ENC_H264_SW, encode_name);
-      } else {
-        bin->encoder =
-            gst_element_factory_make (NVDS_ELEM_ENC_H264_HW, encode_name);
-        if (!bin->encoder) {
-          NVGSTDS_INFO_MSG_V("Could not create HW encoder. Falling back to SW encoder");
-          bin->encoder =
-            gst_element_factory_make (NVDS_ELEM_ENC_H264_SW, encode_name);
-          config->enc_type = NV_DS_ENCODER_TYPE_SW;
-        }
-      }
-      break;
-    case NV_DS_ENCODER_H265:
-      bin->codecparse = gst_element_factory_make ("h265parse", "h265-parser");
-      g_object_set (G_OBJECT (bin->codecparse), "config-interval", -1, NULL);
-      bin->rtppay = gst_element_factory_make ("rtph265pay", rtppay_name);
-      if (config->enc_type == NV_DS_ENCODER_TYPE_SW) {
-        bin->encoder =
-            gst_element_factory_make (NVDS_ELEM_ENC_H265_SW, encode_name);
-      } else {
-        bin->encoder =
-            gst_element_factory_make (NVDS_ELEM_ENC_H265_HW, encode_name);
-        if (!bin->encoder) {
-          NVGSTDS_INFO_MSG_V("Could not create HW encoder. Falling back to SW encoder");
-          bin->encoder =
-            gst_element_factory_make (NVDS_ELEM_ENC_H265_SW, encode_name);
-          config->enc_type = NV_DS_ENCODER_TYPE_SW;
-        }
-      }
-      break;
-    default:
-      goto done;
-  }
-
-  if (!bin->encoder) {
-    NVGSTDS_ERR_MSG_V ("Failed to create '%s'", encode_name);
     goto done;
   }
 
@@ -683,6 +609,41 @@ create_udpsink_bin (NvDsSinkEncoderConfig * config, NvDsSinkBinSubBin * bin)
     caps = gst_caps_from_string ("video/x-raw(memory:NVMM), format=I420");
 
   g_object_set (G_OBJECT (bin->cap_filter), "caps", caps, NULL);
+
+  g_snprintf (encode_name, sizeof (encode_name), "sink_sub_bin_encoder%d", uid);
+  g_snprintf (rtppay_name, sizeof (rtppay_name), "sink_sub_bin_rtppay%d", uid);
+
+  switch (config->codec) {
+    case NV_DS_ENCODER_H264:
+      bin->codecparse = gst_element_factory_make ("h264parse", "h264-parser");
+      g_object_set (G_OBJECT (bin->codecparse), "config-interval", -1, NULL);
+      bin->rtppay = gst_element_factory_make ("rtph264pay", rtppay_name);
+      if (config->enc_type == NV_DS_ENCODER_TYPE_SW)
+        bin->encoder =
+            gst_element_factory_make (NVDS_ELEM_ENC_H264_SW, encode_name);
+      else
+        bin->encoder =
+            gst_element_factory_make (NVDS_ELEM_ENC_H264_HW, encode_name);
+      break;
+    case NV_DS_ENCODER_H265:
+      bin->codecparse = gst_element_factory_make ("h265parse", "h265-parser");
+      g_object_set (G_OBJECT (bin->codecparse), "config-interval", -1, NULL);
+      bin->rtppay = gst_element_factory_make ("rtph265pay", rtppay_name);
+      if (config->enc_type == NV_DS_ENCODER_TYPE_SW)
+        bin->encoder =
+            gst_element_factory_make (NVDS_ELEM_ENC_H265_SW, encode_name);
+      else
+        bin->encoder =
+            gst_element_factory_make (NVDS_ELEM_ENC_H265_HW, encode_name);
+      break;
+    default:
+      goto done;
+  }
+
+  if (!bin->encoder) {
+    NVGSTDS_ERR_MSG_V ("Failed to create '%s'", encode_name);
+    goto done;
+  }
 
   NVGSTDS_ELEM_ADD_PROBE (probe_id,
       bin->encoder, "sink",
@@ -713,7 +674,6 @@ create_udpsink_bin (NvDsSinkEncoderConfig * config, NvDsSinkBinSubBin * bin)
     if (config->enc_type == NV_DS_ENCODER_TYPE_HW) {
       g_object_set (G_OBJECT (bin->encoder), "preset-level", 1, NULL);
       g_object_set (G_OBJECT (bin->encoder), "insert-sps-pps", 1, NULL);
-      g_object_set (G_OBJECT (bin->encoder), "gpu-id", config->gpu_id, NULL);
     }
   } else {
     g_object_set (G_OBJECT (bin->transform), "gpu-id", config->gpu_id, NULL);
@@ -726,8 +686,8 @@ create_udpsink_bin (NvDsSinkEncoderConfig * config, NvDsSinkBinSubBin * bin)
     goto done;
   }
 
-  g_object_set (G_OBJECT (bin->sink), "host", "127.0.0.1", "port",
-      config->udp_port, "async", FALSE, "sync", config->sync, NULL);
+  g_object_set (G_OBJECT (bin->sink), "host", "224.224.255.255", "port",
+      config->udp_port, "async", FALSE, "sync", 0, NULL);
 
   gst_bin_add_many (GST_BIN (bin->bin),
       bin->queue, bin->cap_filter, bin->transform,
@@ -827,7 +787,6 @@ create_sink_bin (guint num_sub_bins, NvDsSinkSubBinConfig * config_array,
           goto done;
         break;
       case NV_DS_SINK_UDPSINK:
-        config_array[i].encoder_config.sync = config_array[i].sync;
         if (!create_udpsink_bin (&config_array[i].encoder_config,
                 &bin->sub_bins[i]))
           goto done;

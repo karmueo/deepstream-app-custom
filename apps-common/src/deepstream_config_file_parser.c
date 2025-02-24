@@ -1,13 +1,23 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  *
- * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
- * property and proprietary rights in and to this material, related
- * documentation and any modifications thereto. Any use, reproduction,
- * disclosure or distribution of this material and related documentation
- * without an express license agreement from NVIDIA CORPORATION or
- * its affiliates is strictly prohibited.
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
  */
 
 #include "deepstream_common.h"
@@ -39,7 +49,6 @@ GST_DEBUG_CATEGORY (APP_CFG_PARSER_CAT);
 #define CONFIG_GROUP_SOURCE_NUM_DECODE_SURFACES "num-decode-surfaces"
 #define CONFIG_GROUP_SOURCE_NUM_EXTRA_SURFACES "num-extra-surfaces"
 #define CONFIG_GROUP_SOURCE_DROP_FRAME_INTERVAL "drop-frame-interval"
-#define CONFIG_GROUP_SOURCE_EXTRACT_SEI_TYPE5_DATA "extract-sei-type5-data"
 #define CONFIG_GROUP_SOURCE_CAMERA_ID "camera-id"
 #define CONFIG_GROUP_SOURCE_ID "source-id"
 #define CONFIG_GROUP_SOURCE_SELECT_RTP_PROTOCOL "select-rtp-protocol"
@@ -57,13 +66,8 @@ GST_DEBUG_CATEGORY (APP_CFG_PARSER_CAT);
 #define CONFIG_GROUP_SOURCE_ALSA_DEVICE "alsa-device"
 #define CONFIG_GROUP_SOURCE_UDP_BUFFER_SIZE "udp-buffer-size"
 #define CONFIG_GROUP_SOURCE_VIDEO_FORMAT "video-format"
-#if defined(__aarch64__) && !defined(AARCH64_IS_SBSA)
-/* copy-hw as VIC applicable only for Jetson */
-#define CONFIG_GROUP_SOURCE_NVVIDEOCONVERT_COPY_HW "copy-hw"
-#endif
 
 #define CONFIG_GROUP_STREAMMUX_ENABLE_PADDING "enable-padding"
-#define CONFIG_GROUP_STREAMMUX_COMPUTE_HW "compute-hw"
 #define CONFIG_GROUP_STREAMMUX_WIDTH "width"
 #define CONFIG_GROUP_STREAMMUX_HEIGHT "height"
 #define CONFIG_GROUP_STREAMMUX_BUFFER_POOL_SIZE "buffer-pool-size"
@@ -79,11 +83,7 @@ GST_DEBUG_CATEGORY (APP_CFG_PARSER_CAT);
 #define CONFIG_GROUP_STREAMMUX_MAX_LATENCY "max-latency"
 #define CONFIG_GROUP_STREAMMUX_ASYNC_PROCESS "async-process"
 #define CONFIG_GROUP_STREAMMUX_DROP_PIPELINE_EOS "drop-pipeline-eos"
-#define CONFIG_GROUP_STREAMMUX_NUM_SURFACES_PER_FRAME "num-surfaces-per-frame"
-#define CONFIG_GROUP_STREAMMUX_EXTRACT_SEI_TYPE5_DATA "extract-sei-type5-data"
-#define CONFIG_GROUP_SEGVISUAL_WIDTH "width"
-#define CONFIG_GROUP_SEGVISUAL_HEIGHT "height"
-#define CONFIG_GROUP_SEGVISUAL_BATCH_SIZE "batch-size"
+
 #define CONFIG_GROUP_OSD_MODE "process-mode"
 #define CONFIG_GROUP_OSD_BORDER_WIDTH "border-width"
 #define CONFIG_GROUP_OSD_BORDER_COLOR "border-color"
@@ -104,7 +104,6 @@ GST_DEBUG_CATEGORY (APP_CFG_PARSER_CAT);
 #define CONFIG_GROUP_DEWARPER_CONFIG_FILE "config-file"
 #define CONFIG_GROUP_DEWARPER_SOURCE_ID "source-id"
 #define CONFIG_GROUP_DEWARPER_NUM_SURFACES_PER_FRAME "num-surfaces-per-frame"
-#define CONFIG_GROUP_DEWARPER_NUM_OUTPUT_BUFFERS "num-output-buffers"
 
 #define CONFIG_GROUP_PREPROCESS_CONFIG_FILE "config-file"
 
@@ -134,15 +133,14 @@ GST_DEBUG_CATEGORY (APP_CFG_PARSER_CAT);
 #define CONFIG_GROUP_TRACKER_SURFACE_TYPE "tracker-surface-type"
 #define CONFIG_GROUP_TRACKER_LL_CONFIG_FILE "ll-config-file"
 #define CONFIG_GROUP_TRACKER_LL_LIB_FILE "ll-lib-file"
+#define CONFIG_GROUP_TRACKER_ENABLE_BATCH_PROCESS "enable-batch-process"
+#define CONFIG_GROUP_TRACKER_ENABLE_PAST_FRAME "enable-past-frame"
 #define CONFIG_GROUP_TRACKER_TRACKING_SURFACE_TYPE "tracking-surface-type"
 #define CONFIG_GROUP_TRACKER_DISPLAY_TRACKING_ID "display-tracking-id"
 #define CONFIG_GROUP_TRACKER_TRACKING_ID_RESET_MODE "tracking-id-reset-mode"
 #define CONFIG_GROUP_TRACKER_INPUT_TENSOR_META "input-tensor-meta"
 #define CONFIG_GROUP_TRACKER_TENSOR_META_GIE_ID "tensor-meta-gie-id"
 #define CONFIG_GROUP_TRACKER_COMPUTE_HW "compute-hw"
-#define CONFIG_GROUP_TRACKER_USER_META_POOL_SIZE "user-meta-pool-size"
-#define CONFIG_GROUP_TRACKER_SUB_BATCHES "sub-batches"
-#define CONFIG_GROUP_TRACKER_SUB_BATCH_ERR_RECOVERY_TRIAL_CNT "sub-batch-err-recovery-trial-cnt"
 
 #define CONFIG_GROUP_SINK_TYPE "type"
 #define CONFIG_GROUP_SINK_WIDTH "width"
@@ -157,7 +155,6 @@ GST_DEBUG_CATEGORY (APP_CFG_PARSER_CAT);
 #define CONFIG_GROUP_SINK_IFRAMEINTERVAL "iframeinterval"
 #define CONFIG_GROUP_SINK_COPY_META "copy-meta"
 #define CONFIG_GROUP_SINK_OUTPUT_IO_MODE "output-io-mode"
-#define CONFIG_GROUP_SINK_SW_PRESET "sw-preset"
 #define CONFIG_GROUP_SINK_OUTPUT_FILE "output-file"
 #define CONFIG_GROUP_SINK_SOURCE_ID "source-id"
 #define CONFIG_GROUP_SINK_RTSP_PORT "rtsp-port"
@@ -168,7 +165,6 @@ GST_DEBUG_CATEGORY (APP_CFG_PARSER_CAT);
 #define CONFIG_GROUP_SINK_PLANE_ID "plane-id"
 #define CONFIG_GROUP_SINK_SET_MODE "set-mode"
 #define CONFIG_GROUP_SINK_ONLY_FOR_DEMUX "link-to-demux"
-#define CONFIG_GROUP_SINK_COMPUTE_HW "compute-hw"
 
 #define CONFIG_GROUP_SINK_MSG_CONV_CONFIG "msg-conv-config"
 #define CONFIG_GROUP_SINK_MSG_CONV_PAYLOAD_TYPE "msg-conv-payload-type"
@@ -178,7 +174,6 @@ GST_DEBUG_CATEGORY (APP_CFG_PARSER_CAT);
 #define CONFIG_GROUP_SINK_MSG_CONV_MULTIPLE_PAYLOADS "multiple-payloads"
 #define CONFIG_GROUP_SINK_MSG_CONV_MSG2P_NEW_API "msg-conv-msg2p-new-api"
 #define CONFIG_GROUP_SINK_MSG_CONV_FRAME_INTERVAL "msg-conv-frame-interval"
-#define CONFIG_GROUP_SINK_MSG_CONV_DUMMY_PAYLOAD "msg-conv-dummy-payload"
 
 #define CONFIG_GROUP_SINK_MSG_BROKER_PROTO_LIB "msg-broker-proto-lib"
 #define CONFIG_GROUP_SINK_MSG_BROKER_CONN_STR "msg-broker-conn-str"
@@ -187,7 +182,6 @@ GST_DEBUG_CATEGORY (APP_CFG_PARSER_CAT);
 #define CONFIG_GROUP_SINK_MSG_BROKER_COMP_ID "msg-broker-comp-id"
 #define CONFIG_GROUP_SINK_MSG_BROKER_DISABLE_MSG_CONVERTER "disable-msgconv"
 #define CONFIG_GROUP_SINK_MSG_BROKER_NEW_API "new-api"
-#define CONFIG_GROUP_SINK_MSG_BROKER_SLEEP_TIME "sleep-time"
 
 #define CONFIG_GROUP_MSG_CONSUMER_CONFIG "config-file"
 #define CONFIG_GROUP_MSG_CONSUMER_PROTO_LIB "proto-lib"
@@ -201,7 +195,6 @@ GST_DEBUG_CATEGORY (APP_CFG_PARSER_CAT);
 #define CONFIG_GROUP_TILED_DISPLAY_HEIGHT "height"
 #define CONFIG_GROUP_TILED_COMPUTE_HW "compute-hw"
 #define CONFIG_GROUP_TILED_DISPLAY_BUFFER_POOL_SIZE "buffer-pool-size"
-#define CONFIG_GROUP_TILED_DISPLAY_SQUARE_SEQ_GRID "square-seq-grid"
 
 #define CONFIG_GROUP_DSANALYTICS_CONFIG_FILE "config-file"
 #define CONFIG_GROUP_IMG_SAVE_OUTPUT_FOLDER_PATH "output-folder-path"
@@ -229,7 +222,6 @@ GST_DEBUG_CATEGORY (APP_CFG_PARSER_CAT);
 #define CONFIG_GROUP_DSEXAMPLE_BLUR_OBJECTS "blur-objects"
 #define CONFIG_GROUP_DSEXAMPLE_UNIQUE_ID "unique-id"
 #define CONFIG_GROUP_DSEXAMPLE_GPU_ID "gpu-id"
-#define CONFIG_GROUP_DSEXAMPLE_BATCH_SIZE "batch-size"
 
 #define CHECK_ERROR(error) \
     if (error) { \
@@ -239,10 +231,6 @@ GST_DEBUG_CATEGORY (APP_CFG_PARSER_CAT);
 
 #define N_DECODE_SURFACES 16
 #define N_EXTRA_SURFACES 1
-
-#define SEG_OUTPUT_WIDTH 1280
-#define SEG_OUTPUT_HEIGHT 720
-
 gchar *
 get_absolute_file_path (gchar * cfg_file_path, gchar * file_path)
 {
@@ -657,21 +645,7 @@ parse_source (NvDsSourceConfig * config, GKeyFile * key_file, gchar * group,
           g_key_file_get_integer (key_file, group,
           CONFIG_GROUP_SOURCE_SMART_RECORD_INTERVAL, &error);
       CHECK_ERROR (error);
-    } else if (!g_strcmp0(*key, CONFIG_GROUP_SOURCE_EXTRACT_SEI_TYPE5_DATA)) {
-        config->extract_sei_type5_data =
-            g_key_file_get_integer(key_file, CONFIG_GROUP_SOURCE,
-            CONFIG_GROUP_SOURCE_EXTRACT_SEI_TYPE5_DATA, &error);
-        CHECK_ERROR(error);
-    }
-#if defined(__aarch64__) && !defined(AARCH64_IS_SBSA)
-    else if (!g_strcmp0(*key, CONFIG_GROUP_SOURCE_NVVIDEOCONVERT_COPY_HW)) {
-        config->nvvideoconvert_copy_hw =
-            g_key_file_get_integer(key_file, group,
-            CONFIG_GROUP_SOURCE_NVVIDEOCONVERT_COPY_HW, &error);
-        CHECK_ERROR(error);
-    }
-#endif
-    else {
+    } else {
       NVGSTDS_WARN_MSG_V ("Unknown key '%s' for group [%s]", *key, group);
     }
   }
@@ -709,12 +683,7 @@ parse_streammux (NvDsStreammuxConfig * config, GKeyFile * key_file,
   config->async_process = TRUE;
   config->no_pipeline_eos = FALSE;
   for (key = keys; *key; key++) {
-    if (!g_strcmp0 (*key, CONFIG_GROUP_STREAMMUX_COMPUTE_HW)) {
-      config->compute_hw =
-          g_key_file_get_integer (key_file, CONFIG_GROUP_STREAMMUX,
-          CONFIG_GROUP_STREAMMUX_COMPUTE_HW, &error);
-      CHECK_ERROR (error);
-    } else if (!g_strcmp0 (*key, CONFIG_GROUP_STREAMMUX_WIDTH)) {
+    if (!g_strcmp0 (*key, CONFIG_GROUP_STREAMMUX_WIDTH)) {
       config->pipeline_width =
           g_key_file_get_integer (key_file, CONFIG_GROUP_STREAMMUX,
           CONFIG_GROUP_STREAMMUX_WIDTH, &error);
@@ -806,18 +775,7 @@ parse_streammux (NvDsStreammuxConfig * config, GKeyFile * key_file,
           g_key_file_get_boolean (key_file, CONFIG_GROUP_STREAMMUX,
           CONFIG_GROUP_STREAMMUX_DROP_PIPELINE_EOS, &error);
       CHECK_ERROR (error);
-    } else if (!g_strcmp0(*key, CONFIG_GROUP_STREAMMUX_NUM_SURFACES_PER_FRAME)) {
-        config->num_surface_per_frame =
-            g_key_file_get_integer(key_file, CONFIG_GROUP_STREAMMUX,
-            CONFIG_GROUP_STREAMMUX_NUM_SURFACES_PER_FRAME, &error);
-        CHECK_ERROR(error);
-    } else if (!g_strcmp0(*key, CONFIG_GROUP_STREAMMUX_EXTRACT_SEI_TYPE5_DATA)) {
-        config->extract_sei_type5_data =
-            g_key_file_get_integer(key_file, CONFIG_GROUP_STREAMMUX,
-            CONFIG_GROUP_STREAMMUX_EXTRACT_SEI_TYPE5_DATA, &error);
-        CHECK_ERROR(error);
-    }
-    else {
+    } else {
       NVGSTDS_WARN_MSG_V ("Unknown key '%s' for group [%s]", *key,
           CONFIG_GROUP_STREAMMUX);
     }
@@ -932,82 +890,9 @@ parse_dsexample (NvDsDsExampleConfig * config, GKeyFile * key_file)
           g_key_file_get_integer (key_file, CONFIG_GROUP_DSEXAMPLE,
           CONFIG_NVBUF_MEMORY_TYPE, &error);
       CHECK_ERROR (error);
-    } else if (!g_strcmp0 (*key, CONFIG_GROUP_DSEXAMPLE_BATCH_SIZE)) {
-      config->batch_size =
-          g_key_file_get_integer (key_file, CONFIG_GROUP_DSEXAMPLE,
-          CONFIG_GROUP_DSEXAMPLE_BATCH_SIZE, &error);
-      CHECK_ERROR (error);
     } else {
       NVGSTDS_WARN_MSG_V ("Unknown key '%s' for group [%s]", *key,
           CONFIG_GROUP_DSEXAMPLE);
-    }
-  }
-
-  ret = TRUE;
-done:
-  if (error) {
-    g_error_free (error);
-  }
-  if (keys) {
-    g_strfreev (keys);
-  }
-  if (!ret) {
-    NVGSTDS_ERR_MSG_V ("%s failed", __func__);
-  }
-  return ret;
-}
-
-gboolean
-parse_segvisual (NvDsSegVisualConfig * config, GKeyFile * key_file)
-{
-  gboolean ret = FALSE;
-  gchar **keys = NULL;
-  gchar **key = NULL;
-  GError *error = NULL;
-
-  /** Default values */
-  config->height = SEG_OUTPUT_HEIGHT;
-  config->width = SEG_OUTPUT_WIDTH;
-  config->gpu_id = 0;
-  config->max_batch_size = 1;
-  config->nvbuf_memory_type = 0;
-
-  keys = g_key_file_get_keys (key_file, CONFIG_GROUP_SEGVISUAL, NULL, &error);
-  CHECK_ERROR (error);
-  for (key = keys; *key; key++) {
-    if (!g_strcmp0 (*key, CONFIG_GROUP_ENABLE)) {
-      config->enable =
-          g_key_file_get_integer (key_file, CONFIG_GROUP_SEGVISUAL,
-          CONFIG_GROUP_ENABLE, &error);
-      CHECK_ERROR (error);
-    } else if (!g_strcmp0 (*key, CONFIG_GROUP_SEGVISUAL_WIDTH)) {
-      config->width =
-          g_key_file_get_integer (key_file, CONFIG_GROUP_SEGVISUAL,
-          CONFIG_GROUP_SEGVISUAL_WIDTH, &error);
-      CHECK_ERROR (error);
-    } else if (!g_strcmp0 (*key, CONFIG_GROUP_SEGVISUAL_HEIGHT)) {
-      config->height =
-          g_key_file_get_integer (key_file, CONFIG_GROUP_SEGVISUAL,
-          CONFIG_GROUP_SEGVISUAL_HEIGHT, &error);
-      CHECK_ERROR (error);
-    } else if (!g_strcmp0 (*key, CONFIG_GROUP_SEGVISUAL_BATCH_SIZE)) {
-      config->max_batch_size =
-          g_key_file_get_integer (key_file, CONFIG_GROUP_SEGVISUAL,
-          CONFIG_GROUP_SEGVISUAL_BATCH_SIZE, &error);
-      CHECK_ERROR (error);
-    } else if (!g_strcmp0 (*key, CONFIG_NVBUF_MEMORY_TYPE)) {
-      config->nvbuf_memory_type =
-          g_key_file_get_integer (key_file, CONFIG_GROUP_SEGVISUAL,
-          CONFIG_NVBUF_MEMORY_TYPE, &error);
-      CHECK_ERROR (error);
-    } else if (!g_strcmp0 (*key, CONFIG_GPU_ID)) {
-      config->gpu_id =
-          g_key_file_get_integer (key_file, CONFIG_GROUP_SEGVISUAL,
-          CONFIG_GPU_ID, &error);
-      CHECK_ERROR (error);
-    } else {
-      NVGSTDS_WARN_MSG_V ("Unknown key '%s' for group [%s]", *key,
-          CONFIG_GROUP_SEGVISUAL);
     }
   }
 
@@ -1037,7 +922,6 @@ parse_osd (NvDsOSDConfig * config, GKeyFile * key_file)
   config->draw_text = TRUE;
   config->draw_bbox = TRUE;
   config->draw_mask = FALSE;
-  config->mode = MODE_GPU;
 
   keys = g_key_file_get_keys (key_file, CONFIG_GROUP_OSD, NULL, &error);
   CHECK_ERROR (error);
@@ -1063,7 +947,7 @@ parse_osd (NvDsOSDConfig * config, GKeyFile * key_file)
           CONFIG_GROUP_OSD_TEXT_SIZE, &error);
       CHECK_ERROR (error);
     } else if (!g_strcmp0 (*key, CONFIG_GROUP_OSD_TEXT_COLOR)) {
-      gsize length = 0;
+      gsize length;
       gdouble *list = g_key_file_get_double_list (key_file, CONFIG_GROUP_OSD,
           CONFIG_GROUP_OSD_TEXT_COLOR, &length, &error);
       CHECK_ERROR (error);
@@ -1077,7 +961,7 @@ parse_osd (NvDsOSDConfig * config, GKeyFile * key_file)
       config->text_color.blue = list[2];
       config->text_color.alpha = list[3];
     } else if (!g_strcmp0 (*key, CONFIG_GROUP_OSD_TEXT_BG_COLOR)) {
-      gsize length = 0;
+      gsize length;
       gdouble *list = g_key_file_get_double_list (key_file, CONFIG_GROUP_OSD,
           CONFIG_GROUP_OSD_TEXT_BG_COLOR, &length, &error);
       CHECK_ERROR (error);
@@ -1130,7 +1014,7 @@ parse_osd (NvDsOSDConfig * config, GKeyFile * key_file)
           CONFIG_NVBUF_MEMORY_TYPE, &error);
       CHECK_ERROR (error);
     } else if (!g_strcmp0 (*key, CONFIG_GROUP_OSD_CLOCK_COLOR)) {
-      gsize length = 0;
+      gsize length;
       gdouble *list = g_key_file_get_double_list (key_file, CONFIG_GROUP_OSD,
           CONFIG_GROUP_OSD_CLOCK_COLOR, &length, &error);
       CHECK_ERROR (error);
@@ -1185,60 +1069,48 @@ done:
 
 gboolean
 parse_dewarper (NvDsDewarperConfig * config, GKeyFile * key_file,
-    gchar * cfg_file_path, gchar * dewarper)
+    gchar * cfg_file_path)
 {
   gboolean ret = FALSE;
   gchar **keys = NULL;
   gchar **key = NULL;
   GError *error = NULL;
-  //gchar *dewarper = g_strdup_printf("dewarper%d", config->source_id);
 
-  keys = g_key_file_get_keys (key_file, dewarper, NULL, &error);
+  keys = g_key_file_get_keys (key_file, CONFIG_GROUP_DEWARPER, NULL, &error);
   CHECK_ERROR (error);
   for (key = keys; *key; key++) {
     if (!g_strcmp0 (*key, CONFIG_GROUP_ENABLE)) {
       config->enable =
-          g_key_file_get_integer (key_file, dewarper,
+          g_key_file_get_integer (key_file, CONFIG_GROUP_DEWARPER,
           CONFIG_GROUP_ENABLE, &error);
       CHECK_ERROR (error);
     } else if (!g_strcmp0 (*key, CONFIG_GPU_ID)) {
       config->gpu_id =
-          g_key_file_get_integer (key_file, dewarper,
+          g_key_file_get_integer (key_file, CONFIG_GROUP_DEWARPER,
           CONFIG_GPU_ID, &error);
       CHECK_ERROR (error);
     } else if (!g_strcmp0 (*key, CONFIG_GROUP_DEWARPER_CONFIG_FILE)) {
       config->config_file = get_absolute_file_path (cfg_file_path,
           g_key_file_get_string (key_file,
-              dewarper,
+              CONFIG_GROUP_DEWARPER,
               CONFIG_GROUP_DEWARPER_CONFIG_FILE, &error));
       CHECK_ERROR (error);
     } else if (!g_strcmp0 (*key, CONFIG_NVBUF_MEMORY_TYPE)) {
       config->nvbuf_memory_type =
-          g_key_file_get_integer (key_file, dewarper,
+          g_key_file_get_integer (key_file, CONFIG_GROUP_DEWARPER,
           CONFIG_NVBUF_MEMORY_TYPE, &error);
       CHECK_ERROR (error);
     } else if (!g_strcmp0 (*key, CONFIG_GROUP_DEWARPER_NUM_SURFACES_PER_FRAME)) {
       config->num_surfaces_per_frame =
-          g_key_file_get_integer (key_file, dewarper,
+          g_key_file_get_integer (key_file, CONFIG_GROUP_DEWARPER,
           CONFIG_GROUP_DEWARPER_NUM_SURFACES_PER_FRAME, &error);
-      CHECK_ERROR (error);
-    } else if (!g_strcmp0 (*key, CONFIG_GROUP_DEWARPER_SOURCE_ID)) {
-      guint source_id =
-          g_key_file_get_integer (key_file, dewarper,
-          CONFIG_GROUP_DEWARPER_SOURCE_ID, &error);
-      config->source_id = source_id;
-      CHECK_ERROR (error);
-    } else if (!g_strcmp0 (*key, CONFIG_GROUP_DEWARPER_NUM_OUTPUT_BUFFERS)) {
-      config->num_out_buffers =
-          g_key_file_get_integer (key_file, dewarper,
-          CONFIG_GROUP_DEWARPER_NUM_OUTPUT_BUFFERS, &error);
       CHECK_ERROR (error);
     } else {
       NVGSTDS_WARN_MSG_V ("Unknown key '%s' for group [%s]", *key,
-          dewarper);
+          CONFIG_GROUP_DEWARPER);
     }
   }
-  //g_free(dewarper);
+
   ret = TRUE;
 done:
   if (error) {
@@ -1329,7 +1201,7 @@ parse_gie (NvDsGieConfig * config, GKeyFile * key_file, gchar * group,
           CONFIG_GROUP_GIE_INPUT_TENSOR_META, &error);
       CHECK_ERROR (error);
     } else if (!g_strcmp0 (*key, CONFIG_GROUP_GIE_CLASS_IDS_FOR_OPERATION)) {
-      gsize length = 0;
+      gsize length;
       config->list_operate_on_class_ids =
           g_key_file_get_integer_list (key_file, group,
           CONFIG_GROUP_GIE_CLASS_IDS_FOR_OPERATION, &length, &error);
@@ -1405,7 +1277,7 @@ parse_gie (NvDsGieConfig * config, GKeyFile * key_file, gchar * group,
             sizeof (CONFIG_GROUP_GIE_BBOX_BORDER_COLOR) - 1)) {
       NvOSD_ColorParams *clr_params;
       gchar *key1 = *key + sizeof (CONFIG_GROUP_GIE_BBOX_BORDER_COLOR) - 1;
-      gchar *endptr = NULL;
+      gchar *endptr;
       gint64 class_index = -1;
 
       /* Check if the key is specified for a particular class or for all classes.
@@ -1424,7 +1296,7 @@ parse_gie (NvDsGieConfig * config, GKeyFile * key_file, gchar * group,
         }
       }
 
-      gsize length = 0;
+      gsize length;
       gdouble *list = g_key_file_get_double_list (key_file, group,
           *key, &length, &error);
       CHECK_ERROR (error);
@@ -1453,7 +1325,7 @@ parse_gie (NvDsGieConfig * config, GKeyFile * key_file, gchar * group,
             sizeof (CONFIG_GROUP_GIE_BBOX_BG_COLOR) - 1)) {
       NvOSD_ColorParams *clr_params;
       gchar *key1 = *key + sizeof (CONFIG_GROUP_GIE_BBOX_BG_COLOR) - 1;
-      gchar *endptr = NULL;
+      gchar *endptr;
       gint64 class_index = -1;
 
       /* Check if the key is specified for a particular class or for all classes.
@@ -1472,7 +1344,7 @@ parse_gie (NvDsGieConfig * config, GKeyFile * key_file, gchar * group,
         }
       }
 
-      gsize length = 0;
+      gsize length;
       gdouble *list = g_key_file_get_double_list (key_file, group,
           *key, &length, &error);
       CHECK_ERROR (error);
@@ -1552,14 +1424,13 @@ parse_tracker (NvDsTrackerConfig * config, GKeyFile * key_file,
   keys = g_key_file_get_keys (key_file, CONFIG_GROUP_TRACKER, NULL, &error);
   CHECK_ERROR (error);
 
+  config->enable_batch_process = TRUE;
   config->display_tracking_id = TRUE;
+  config->enable_past_frame = FALSE;
   config->tracking_id_reset_mode = 0;
   config->input_tensor_meta = FALSE;
   config->input_tensor_gie_id = 0;
   config->compute_hw = 0;
-  config->user_meta_pool_size = 32;
-  config->sub_batches = NULL;
-  config->sub_batch_err_recovery_trial_cnt = 0;
 
   for (key = keys; *key; key++) {
     if (!g_strcmp0 (*key, CONFIG_GROUP_ENABLE)) {
@@ -1588,39 +1459,25 @@ parse_tracker (NvDsTrackerConfig * config, GKeyFile * key_file,
           CONFIG_GROUP_TRACKER_SURFACE_TYPE, &error);
       CHECK_ERROR (error);
     } else if (!g_strcmp0 (*key, CONFIG_GROUP_TRACKER_LL_CONFIG_FILE)) {
-      gchar* temp = g_key_file_get_string (key_file,
+      config->ll_config_file = get_absolute_file_path (cfg_file_path,
+          g_key_file_get_string (key_file,
               CONFIG_GROUP_TRACKER,
-              CONFIG_GROUP_TRACKER_LL_CONFIG_FILE, &error);
+              CONFIG_GROUP_TRACKER_LL_CONFIG_FILE, &error));
       CHECK_ERROR (error);
-      gchar **configFileList;
-      gchar *single_config_file_path;
-      configFileList = g_strsplit (temp, ";", 0);
-      gchar *temp_list1 = NULL, *temp_list2 = NULL;
-      if (g_strv_length (configFileList) == 1)
-      {
-        // These is a single config file
-        config->ll_config_file = get_absolute_file_path (cfg_file_path, temp);
-      }
-      else
-      {
-        single_config_file_path = get_absolute_file_path (cfg_file_path, configFileList[0]);
-        temp_list1 = g_strconcat (single_config_file_path, ";", NULL);
-        g_free(single_config_file_path);
-        for(int i = 1; i < (int)g_strv_length (configFileList); i++)
-        {
-          single_config_file_path = get_absolute_file_path (cfg_file_path, configFileList[i]);
-          temp_list2 = g_strconcat (temp_list1, single_config_file_path, ";", NULL);
-          g_free(temp_list1); g_free(single_config_file_path);
-          temp_list1 = temp_list2;
-        }
-        config->ll_config_file = temp_list1;
-      }
-      temp = NULL;
-      configFileList = NULL;
     } else if (!g_strcmp0 (*key, CONFIG_GROUP_TRACKER_LL_LIB_FILE)) {
       config->ll_lib_file = get_absolute_file_path (cfg_file_path,
           g_key_file_get_string (key_file,
               CONFIG_GROUP_TRACKER, CONFIG_GROUP_TRACKER_LL_LIB_FILE, &error));
+      CHECK_ERROR (error);
+    } else if (!g_strcmp0 (*key, CONFIG_GROUP_TRACKER_ENABLE_BATCH_PROCESS)) {
+      config->enable_batch_process =
+          g_key_file_get_integer (key_file, CONFIG_GROUP_TRACKER,
+          CONFIG_GROUP_TRACKER_ENABLE_BATCH_PROCESS, &error);
+      CHECK_ERROR (error);
+    } else if (!g_strcmp0 (*key, CONFIG_GROUP_TRACKER_ENABLE_PAST_FRAME)) {
+      config->enable_past_frame =
+          g_key_file_get_integer (key_file, CONFIG_GROUP_TRACKER,
+          CONFIG_GROUP_TRACKER_ENABLE_PAST_FRAME, &error);
       CHECK_ERROR (error);
     } else if (!g_strcmp0 (*key, CONFIG_GROUP_TRACKER_TRACKING_SURFACE_TYPE)) {
       config->tracking_surface_type =
@@ -1655,21 +1512,6 @@ parse_tracker (NvDsTrackerConfig * config, GKeyFile * key_file,
         g_key_file_get_integer (key_file, CONFIG_GROUP_TRACKER,
             CONFIG_GROUP_TRACKER_COMPUTE_HW, &error);
       CHECK_ERROR (error);
-    } else if (!g_strcmp0 (*key, CONFIG_GROUP_TRACKER_USER_META_POOL_SIZE)) {
-      config->user_meta_pool_size =
-        g_key_file_get_integer (key_file, CONFIG_GROUP_TRACKER,
-            CONFIG_GROUP_TRACKER_USER_META_POOL_SIZE, &error);
-      CHECK_ERROR (error);
-    } else if (!g_strcmp0 (*key, CONFIG_GROUP_TRACKER_SUB_BATCHES)) {
-      config->sub_batches =
-        g_key_file_get_string (key_file, CONFIG_GROUP_TRACKER,
-            CONFIG_GROUP_TRACKER_SUB_BATCHES, &error);
-      CHECK_ERROR (error);
-    } else if (!g_strcmp0 (*key, CONFIG_GROUP_TRACKER_SUB_BATCH_ERR_RECOVERY_TRIAL_CNT)) {
-      config->sub_batch_err_recovery_trial_cnt =
-        g_key_file_get_integer (key_file, CONFIG_GROUP_TRACKER,
-            CONFIG_GROUP_TRACKER_SUB_BATCH_ERR_RECOVERY_TRIAL_CNT, &error);
-      CHECK_ERROR (error);
     }
     else {
       NVGSTDS_WARN_MSG_V ("Unknown key '%s' for group [%s]", *key,
@@ -1702,9 +1544,6 @@ parse_sink (NvDsSinkSubBinConfig * config, GKeyFile * key_file, gchar * group,
 
   config->encoder_config.rtsp_port = 8554;
   config->encoder_config.udp_port = 5000;
-  config->encoder_config.codec = NV_DS_ENCODER_H264;
-  config->encoder_config.container = NV_DS_CONTAINER_MP4;
-  config->encoder_config.compute_hw = 0;
   config->render_config.qos = FALSE;
   config->render_config.color_range = -1;
   config->render_config.set_mode = -1;
@@ -1785,11 +1624,6 @@ parse_sink (NvDsSinkSubBinConfig * config, GKeyFile * key_file, gchar * group,
           (NvDsEncOutputIOMode) g_key_file_get_integer (key_file, group,
           CONFIG_GROUP_SINK_OUTPUT_IO_MODE, &error);
       CHECK_ERROR (error);
-    } else if (!g_strcmp0 (*key, CONFIG_GROUP_SINK_SW_PRESET)) {
-      config->encoder_config.sw_preset =
-          g_key_file_get_integer (key_file, group,
-          CONFIG_GROUP_SINK_SW_PRESET, &error);
-      CHECK_ERROR (error);
     } else if (!g_strcmp0 (*key, CONFIG_GROUP_SINK_BITRATE)) {
       config->encoder_config.bitrate =
           g_key_file_get_integer (key_file, group,
@@ -1850,10 +1684,6 @@ parse_sink (NvDsSinkSubBinConfig * config, GKeyFile * key_file, gchar * group,
           g_key_file_get_integer (key_file, group,
           CONFIG_GROUP_SINK_SET_MODE, &error);
       CHECK_ERROR (error);
-    } else if (!g_strcmp0 (*key, CONFIG_GROUP_SINK_COMPUTE_HW)) {
-      config->encoder_config.compute_hw =
-          g_key_file_get_integer (key_file, group, CONFIG_GROUP_SINK_COMPUTE_HW, &error);
-      CHECK_ERROR (error);
     } else if (!g_strcmp0 (*key, CONFIG_GPU_ID)) {
       config->encoder_config.gpu_id = config->render_config.gpu_id =
           g_key_file_get_integer (key_file, group, CONFIG_GPU_ID, &error);
@@ -1865,8 +1695,7 @@ parse_sink (NvDsSinkSubBinConfig * config, GKeyFile * key_file, gchar * group,
         !g_strcmp0 (*key, CONFIG_GROUP_SINK_MSG_CONV_DEBUG_PAYLOAD_DIR) ||
         !g_strcmp0 (*key, CONFIG_GROUP_SINK_MSG_CONV_MULTIPLE_PAYLOADS) ||
         !g_strcmp0 (*key, CONFIG_GROUP_SINK_MSG_CONV_MSG2P_NEW_API) ||
-        !g_strcmp0 (*key, CONFIG_GROUP_SINK_MSG_CONV_FRAME_INTERVAL)||
-        !g_strcmp0 (*key, CONFIG_GROUP_SINK_MSG_CONV_DUMMY_PAYLOAD)) {
+        !g_strcmp0 (*key, CONFIG_GROUP_SINK_MSG_CONV_FRAME_INTERVAL)) {
       ret =
           parse_msgconv (&config->msg_conv_broker_config, key_file, group,
           cfg_file_path);
@@ -1908,11 +1737,6 @@ parse_sink (NvDsSinkSubBinConfig * config, GKeyFile * key_file, gchar * group,
       config->msg_conv_broker_config.new_api =
           g_key_file_get_boolean (key_file, group,
           CONFIG_GROUP_SINK_MSG_BROKER_NEW_API, &error);
-      CHECK_ERROR (error);
-    } else if (!g_strcmp0 (*key, CONFIG_GROUP_SINK_MSG_BROKER_SLEEP_TIME)) {
-      config->msg_conv_broker_config.broker_sleep_time =
-          g_key_file_get_integer (key_file, group,
-          CONFIG_GROUP_SINK_MSG_BROKER_SLEEP_TIME, &error);
       CHECK_ERROR (error);
     } else {
       NVGSTDS_WARN_MSG_V ("Unknown key '%s' for group [%s]", *key, group);
@@ -1989,11 +1813,6 @@ parse_tiled_display (NvDsTiledDisplayConfig * config, GKeyFile * key_file)
       config->buffer_pool_size =
           g_key_file_get_integer (key_file, CONFIG_GROUP_TILED_DISPLAY,
           CONFIG_GROUP_TILED_DISPLAY_BUFFER_POOL_SIZE, &error);
-      CHECK_ERROR (error);
-    } else if (!g_strcmp0 (*key, CONFIG_GROUP_TILED_DISPLAY_SQUARE_SEQ_GRID)) {
-      config->square_seq_grid =
-          g_key_file_get_boolean (key_file, CONFIG_GROUP_TILED_DISPLAY,
-          CONFIG_GROUP_TILED_DISPLAY_SQUARE_SEQ_GRID, &error);
       CHECK_ERROR (error);
     } else {
       NVGSTDS_WARN_MSG_V ("Unknown key '%s' for group [%s]", *key,
@@ -2073,11 +1892,6 @@ parse_msgconv (NvDsSinkMsgConvBrokerConfig * config, GKeyFile * key_file,
           g_key_file_get_integer (key_file, group,
           CONFIG_GROUP_SINK_MSG_CONV_FRAME_INTERVAL, &error);
       CHECK_ERROR (error);
-    } else if (!g_strcmp0 (*key, CONFIG_GROUP_SINK_MSG_CONV_DUMMY_PAYLOAD)) {
-      config->conv_dummy_payload =
-          g_key_file_get_boolean (key_file, group,
-          CONFIG_GROUP_SINK_MSG_CONV_DUMMY_PAYLOAD, &error);
-      CHECK_ERROR (error);
     }
   }
 
@@ -2135,7 +1949,7 @@ parse_msgconsumer (NvDsMsgConsumerConfig * config, GKeyFile * key_file,
       CHECK_ERROR (error);
     } else if (!g_strcmp0 (*key,
             CONFIG_GROUP_MSG_CONSUMER_SUBSCRIBE_TOPIC_LIST)) {
-      gsize length = 0;
+      gsize length;
       guint i;
       gchar **topicList;
 
@@ -2145,7 +1959,6 @@ parse_msgconsumer (NvDsMsgConsumerConfig * config, GKeyFile * key_file,
       CHECK_ERROR (error);
       if (length < 1) {
         NVGSTDS_ERR_MSG_V ("%s at least one topic must be provided", __func__);
-	g_strfreev (topicList);
         goto done;
       }
       if (config->topicList)

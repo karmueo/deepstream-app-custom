@@ -1,13 +1,23 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+ * Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
  *
- * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
- * property and proprietary rights in and to this material, related
- * documentation and any modifications thereto. Any use, reproduction,
- * disclosure or distribution of this material and related documentation
- * without an express license agreement from NVIDIA CORPORATION or
- * its affiliates is strictly prohibited.
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
  */
 
 #include "deepstream_common.h"
@@ -26,7 +36,7 @@ parse_gie_yaml (NvDsGieConfig *config, std::string group_str, gchar *cfg_file_pa
   gboolean ret = FALSE;
   YAML::Node configyml = YAML::LoadFile(cfg_file_path);
   char *group = (char*) malloc(sizeof(char) * 1024);
-  std::strncpy (group, group_str.c_str(), 1023);
+  std::strncpy (group, group_str.c_str(), 1024);
 
   if (configyml[group_str]["enable"]) {
     gboolean val = configyml[group_str]["enable"].as<gboolean>();
@@ -65,7 +75,7 @@ parse_gie_yaml (NvDsGieConfig *config, std::string group_str, gchar *cfg_file_pa
     } else if (paramKey == "model-engine-file") {
       std::string temp = itr->second.as<std::string>();
       char* str = (char*) malloc(sizeof(char) * 1024);
-      std::strncpy (str, temp.c_str(), 1023);
+      std::strncpy (str, temp.c_str(), 1024);
       config->model_engine_file_path = (char*) malloc(sizeof(char) * 1024);
       if (!get_absolute_file_path_yaml (cfg_file_path, str,
             config->model_engine_file_path)) {
@@ -79,7 +89,7 @@ parse_gie_yaml (NvDsGieConfig *config, std::string group_str, gchar *cfg_file_pa
     } else if (paramKey == "audio-transform") {
       std::string temp = itr->second.as<std::string>();
       config->audio_transform = (char*) malloc(sizeof(char) * 1024);
-      std::strncpy (config->audio_transform, temp.c_str(), 1023);
+      std::strncpy (config->audio_transform, temp.c_str(), 1024);
     } else if (paramKey == "audio-framesize") {
       config->frame_size = itr->second.as<guint>();
       config->is_frame_size_set = TRUE;
@@ -92,7 +102,7 @@ parse_gie_yaml (NvDsGieConfig *config, std::string group_str, gchar *cfg_file_pa
     } else if (paramKey == "labelfile-path") {
       std::string temp = itr->second.as<std::string>();
       char* str = (char*) malloc(sizeof(char) * 1024);
-      std::strncpy (str, temp.c_str(), 1023);
+      std::strncpy (str, temp.c_str(), 1024);
       config->label_file_path = (char*) malloc(sizeof(char) * 1024);
       if (!get_absolute_file_path_yaml (cfg_file_path, str,
             config->label_file_path)) {
@@ -104,7 +114,7 @@ parse_gie_yaml (NvDsGieConfig *config, std::string group_str, gchar *cfg_file_pa
     } else if (paramKey == "config-file") {
       std::string temp = itr->second.as<std::string>();
       char* str = (char*) malloc(sizeof(char) * 1024);
-      std::strncpy (str, temp.c_str(), 1023);
+      std::strncpy (str, temp.c_str(), 1024);
       config->config_file_path = (char*) malloc(sizeof(char) * 1024);
       if (!get_absolute_file_path_yaml (cfg_file_path, str,
             config->config_file_path)) {
@@ -112,7 +122,6 @@ parse_gie_yaml (NvDsGieConfig *config, std::string group_str, gchar *cfg_file_pa
         g_free (str);
         goto done;
       }
-      g_free (str);
     } else if (paramKey == "interval") {
       config->interval = itr->second.as<guint>();
       config->is_interval_set = TRUE;
@@ -192,7 +201,7 @@ parse_gie_yaml (NvDsGieConfig *config, std::string group_str, gchar *cfg_file_pa
     } else if (paramKey == "infer-raw-output-dir") {
       std::string temp = itr->second.as<std::string>();
       char* str = (char*) malloc(sizeof(char) * 1024);
-      std::strncpy (str, temp.c_str(), 1023);
+      std::strncpy (str, temp.c_str(), 1024);
       config->raw_output_directory = (char*) malloc(sizeof(char) * 1024);
       if (!get_absolute_file_path_yaml (cfg_file_path, str,
             config->raw_output_directory)) {
@@ -200,7 +209,6 @@ parse_gie_yaml (NvDsGieConfig *config, std::string group_str, gchar *cfg_file_pa
         g_free (str);
         goto done;
       }
-      g_free (str);
     } else if (paramKey == "gpu-id") {
       config->gpu_id = itr->second.as<guint>();
       config->is_gpu_id_set = TRUE;
@@ -219,20 +227,12 @@ parse_gie_yaml (NvDsGieConfig *config, std::string group_str, gchar *cfg_file_pa
     cout << "Config file not provided for group " << group_str << endl;
     goto done;
   }
+  g_free (group);
 
   ret = TRUE;
-
-  if (group) {
-    g_free (group);
-    group = NULL;
-  }
 done:
   if (!ret) {
     cout <<  __func__ << " failed" << endl;
-  }
-  if (group) {
-    g_free (group);
-    group = NULL;
   }
   return ret;
 }
