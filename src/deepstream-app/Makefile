@@ -40,7 +40,7 @@ OBJS:= $(SRCS:.c=.o)
 OBJS:= $(OBJS:.cpp=.o)
 
 CFLAGS+= -I./ -I../../apps-common/includes \
-		 -I../../../includes -DDS_VERSION_MINOR=1 -DDS_VERSION_MAJOR=5 \
+		 -I /opt/nvidia/deepstream/deepstream/sources/includes -DDS_VERSION_MINOR=1 -DDS_VERSION_MAJOR=5 \
 		 -I /usr/local/cuda-$(CUDA_VER)/include
 
 CFLAGS += -g
