@@ -2,8 +2,12 @@
 *.so
 *.mp4
 
+src/deepstream-test1
+src/deepstream-test4
 src/deepstream-test5
 src/deepstream-image-meta-test
 src/deepstream-app/deepstream-app
+src/deepstream-opencv-test
+src/gst-dsexample
 
 .vscode
