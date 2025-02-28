@@ -16,11 +16,20 @@
 #include "nvds_version.h"
 #include <string.h>
 #include <unistd.h>
+#include <time.h>
 #include <termios.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
+#include "nvdsmeta_schema.h"
+
+#ifdef EN_DEBUG
+#define LOGD(...) printf(__VA_ARGS__)
+#else
+#define LOGD(...)
+#endif
 
 #define MAX_INSTANCES 128
+#define MAX_TIME_STAMP_LEN (64)
 #define APP_TITLE "DeepStream"
 
 #define DEFAULT_X_WINDOW_WIDTH 1920
@@ -71,11 +80,380 @@ GOptionEntry entries[] = {
 };
 
 /**
+ * @brief  Thread which handles the model-update OTA functionlity
+ *         1) Adds watch on the changes made in the provided ota-override-file,
+ *            if changes are detected, validate the model-update change request,
+ *            intiate model-update OTA process
+ *         2) Frame drops / frames without inference should NOT be detected in
+ *            this on-the-fly model update process
+ *         3) In case of model update OTA fails, error message will be printed
+ *            on the console and pipeline continues to run with older
+ *            model configuration
+ * @param  gpointer [IN] Pointer to OTAInfo structure
+ * @param  gpointer [OUT] Returns NULL in case of thread exits
+ */
+gpointer ota_handler_thread(gpointer data);
+
+static gpointer
+meta_copy_func(gpointer data, gpointer user_data)
+{
+    NvDsUserMeta *user_meta = (NvDsUserMeta *)data;
+    NvDsEventMsgMeta *srcMeta = (NvDsEventMsgMeta *)user_meta->user_meta_data;
+    NvDsEventMsgMeta *dstMeta = NULL;
+
+    dstMeta = (NvDsEventMsgMeta *)g_memdup2(srcMeta, sizeof(NvDsEventMsgMeta));
+
+    if (srcMeta->ts)
+        dstMeta->ts = g_strdup(srcMeta->ts);
+
+    if (srcMeta->objSignature.size > 0)
+    {
+        dstMeta->objSignature.signature = (gdouble *)g_memdup2(srcMeta->objSignature.signature,
+                                                               srcMeta->objSignature.size);
+        dstMeta->objSignature.size = srcMeta->objSignature.size;
+    }
+
+    if (srcMeta->objectId)
+    {
+        dstMeta->objectId = g_strdup(srcMeta->objectId);
+    }
+
+    if (srcMeta->sensorStr)
+    {
+        dstMeta->sensorStr = g_strdup(srcMeta->sensorStr);
+    }
+
+    if (srcMeta->extMsgSize > 0)
+    {
+        if (srcMeta->objType == NVDS_OBJECT_TYPE_VEHICLE)
+        {
+            NvDsVehicleObject *srcObj = (NvDsVehicleObject *)srcMeta->extMsg;
+            NvDsVehicleObject *obj =
+                (NvDsVehicleObject *)g_malloc0(sizeof(NvDsVehicleObject));
+            if (srcObj->type)
+                obj->type = g_strdup(srcObj->type);
+            if (srcObj->make)
+                obj->make = g_strdup(srcObj->make);
+            if (srcObj->model)
+                obj->model = g_strdup(srcObj->model);
+            if (srcObj->color)
+                obj->color = g_strdup(srcObj->color);
+            if (srcObj->license)
+                obj->license = g_strdup(srcObj->license);
+            if (srcObj->region)
+                obj->region = g_strdup(srcObj->region);
+
+            dstMeta->extMsg = obj;
+            dstMeta->extMsgSize = sizeof(NvDsVehicleObject);
+        }
+        else if (srcMeta->objType == NVDS_OBJECT_TYPE_PERSON)
+        {
+            NvDsPersonObject *srcObj = (NvDsPersonObject *)srcMeta->extMsg;
+            NvDsPersonObject *obj =
+                (NvDsPersonObject *)g_malloc0(sizeof(NvDsPersonObject));
+
+            obj->age = srcObj->age;
+
+            if (srcObj->gender)
+                obj->gender = g_strdup(srcObj->gender);
+            if (srcObj->cap)
+                obj->cap = g_strdup(srcObj->cap);
+            if (srcObj->hair)
+                obj->hair = g_strdup(srcObj->hair);
+            if (srcObj->apparel)
+                obj->apparel = g_strdup(srcObj->apparel);
+
+            dstMeta->extMsg = obj;
+            dstMeta->extMsgSize = sizeof(NvDsPersonObject);
+        }
+    }
+
+    return dstMeta;
+}
+
+static void
+meta_free_func(gpointer data, gpointer user_data)
+{
+    NvDsUserMeta *user_meta = (NvDsUserMeta *)data;
+    NvDsEventMsgMeta *srcMeta = (NvDsEventMsgMeta *)user_meta->user_meta_data;
+    user_meta->user_meta_data = NULL;
+
+    if (srcMeta->ts)
+    {
+        g_free(srcMeta->ts);
+    }
+
+    if (srcMeta->objSignature.size > 0)
+    {
+        g_free(srcMeta->objSignature.signature);
+        srcMeta->objSignature.size = 0;
+    }
+
+    if (srcMeta->objectId)
+    {
+        g_free(srcMeta->objectId);
+    }
+
+    if (srcMeta->sensorStr)
+    {
+        g_free(srcMeta->sensorStr);
+    }
+
+    if (srcMeta->extMsgSize > 0)
+    {
+        if (srcMeta->objType == NVDS_OBJECT_TYPE_VEHICLE)
+        {
+            NvDsVehicleObject *obj = (NvDsVehicleObject *)srcMeta->extMsg;
+            if (obj->type)
+                g_free(obj->type);
+            if (obj->color)
+                g_free(obj->color);
+            if (obj->make)
+                g_free(obj->make);
+            if (obj->model)
+                g_free(obj->model);
+            if (obj->license)
+                g_free(obj->license);
+            if (obj->region)
+                g_free(obj->region);
+        }
+        else if (srcMeta->objType == NVDS_OBJECT_TYPE_PERSON)
+        {
+            NvDsPersonObject *obj = (NvDsPersonObject *)srcMeta->extMsg;
+
+            if (obj->gender)
+                g_free(obj->gender);
+            if (obj->cap)
+                g_free(obj->cap);
+            if (obj->hair)
+                g_free(obj->hair);
+            if (obj->apparel)
+                g_free(obj->apparel);
+        }
+        g_free(srcMeta->extMsg);
+        srcMeta->extMsg = NULL;
+        srcMeta->extMsgSize = 0;
+    }
+    g_free(srcMeta);
+}
+
+/**
+ * @brief 生成符合RFC3339标准的时间戳。
+ *
+ * @param buf 用于存储生成的时间戳的缓冲区。
+ * @param buf_size 缓冲区的大小。
+ */
+static void
+generate_ts_rfc3339(char *buf, int buf_size)
+{
+    time_t tloc;
+    struct tm tm_log;
+    struct timespec ts;
+    char strmsec[6]; //.nnnZ\0
+
+    clock_gettime(CLOCK_REALTIME, &ts);
+    memcpy(&tloc, (void *)(&ts.tv_sec), sizeof(time_t));
+    gmtime_r(&tloc, &tm_log);
+    strftime(buf, buf_size, "%Y-%m-%dT%H:%M:%S", &tm_log);
+    int ms = ts.tv_nsec / 1000000;
+    g_snprintf(strmsec, sizeof(strmsec), ".%.3dZ", ms);
+    strncat(buf, strmsec, buf_size);
+}
+
+/**
+ * @brief 生成事件消息元数据
+ *
+ * @param appCtx 应用程序上下文
+ * @param data 传递的NvDsEventMsgMeta指针,输出
+ * @param class_id 类别ID
+ * @param useTs 是否使用时间戳
+ * @param ts 时间戳
+ * @param src_uri 源URI
+ * @param stream_id 流ID
+ * @param sensor_id 传感器ID
+ * @param obj_params 对象元数据参数
+ * @param scaleW 宽度缩放比例
+ * @param scaleH 高度缩放比例
+ * @param frame_meta 帧元数据
+ */
+static void
+generate_event_msg_meta(AppCtx *appCtx,
+                        gpointer data,
+                        gint class_id,
+                        gboolean useTs,
+                        GstClockTime ts,
+                        gchar *src_uri,
+                        gint stream_id,
+                        guint sensor_id,
+                        NvDsObjectMeta *obj_params,
+                        float scaleW,
+                        float scaleH,
+                        NvDsFrameMeta *frame_meta)
+{
+    NvDsEventMsgMeta *meta = (NvDsEventMsgMeta *)data;
+    GstClockTime ts_generated = 0;
+
+    meta->objType = NVDS_OBJECT_TYPE_UNKNOWN; /**< object unknown */
+    /* The sensor_id is parsed from the source group name which has the format
+     * [source<sensor-id>]. */
+    meta->sensorId = sensor_id;
+    meta->placeId = sensor_id;
+    meta->moduleId = sensor_id;
+    meta->frameId = frame_meta->frame_num;
+    meta->ts = (gchar *)g_malloc0(MAX_TIME_STAMP_LEN + 1);
+    meta->objectId = (gchar *)g_malloc0(MAX_LABEL_SIZE);
+
+    strncpy(meta->objectId, obj_params->obj_label, MAX_LABEL_SIZE);
+
+    /** INFO: This API is called once for every 30 frames (now) */
+    // 生成符合RFC3339标准的时间戳。
+    generate_ts_rfc3339(meta->ts, MAX_TIME_STAMP_LEN);
+
+    /**
+     * Valid attributes in the metadata sent over nvmsgbroker:
+     * a) Sensor ID (shall be configured in nvmsgconv config file)
+     * b) bbox info (meta->bbox) <- obj_params->rect_params (attr_info have sgie info)
+     * c) tracking ID (meta->trackingId) <- obj_params->object_id
+     * 通过 nvmsgbroker 发送的元数据中的有效属性：
+     * a) 传感器 ID（应在 nvmsgconv 配置文件中配置）
+     * b) bbox 信息（meta->bbox）<- obj_params->rect_params（attr_info 有 sgie 信息）
+     * c) 跟踪 ID（meta->trackingId）<- obj_params->object_id
+     */
+
+    /** bbox - 分辨率由 nvinfer 缩放到了 streammux 提供的分辨率
+     * 因此必须将其缩放回原始流分辨率
+     */
+
+    meta->bbox.left = obj_params->rect_params.left * scaleW;
+    meta->bbox.top = obj_params->rect_params.top * scaleH;
+    meta->bbox.width = obj_params->rect_params.width * scaleW;
+    meta->bbox.height = obj_params->rect_params.height * scaleH;
+
+    /** tracking ID */
+    meta->trackingId = obj_params->object_id;
+
+    /** 使用 nvmultiurisrcbin REST API 添加流时的传感器 ID */
+    NvDsSensorInfo *sensorInfo = get_sensor_info(appCtx, stream_id);
+    if (sensorInfo)
+    {
+        /** 此数据流是使用REST API添加的；我们有传感器信息！ */
+        LOGD("this stream [%d:%s] was added using REST API; we have Sensor Info\n",
+             sensorInfo->source_id, sensorInfo->sensor_id);
+        meta->sensorStr = g_strdup(sensorInfo->sensor_id);
+    }
+
+    (void)ts_generated;
+
+    meta->type = NVDS_EVENT_MOVING;
+    meta->objType = NVDS_OBJECT_TYPE_UNKNOWN;
+    meta->objClassId = class_id;
+}
+
+/**
+ * 所有推理（主要+次要）完成后调用的回调函数。
+ * 在这里可以修改元数据。
+ */
+static void
+bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
+                                     NvDsBatchMeta *batch_meta, guint index)
+{
+    NvDsObjectMeta *obj_meta = NULL;
+    GstClockTime buffer_pts = 0;
+    guint32 stream_id = 0;
+
+    for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame != NULL;
+         l_frame = l_frame->next)
+    {
+        NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)l_frame->data;
+        stream_id = frame_meta->source_id;
+
+        GList *l;
+        for (l = frame_meta->obj_meta_list; l != NULL; l = l->next)
+        {
+            obj_meta = (NvDsObjectMeta *)(l->data);
+
+            /**
+             * 仅在此回调在 tiler 之后启用
+             * 注意：缩放回代码注释
+             * 现在 bbox_generated_probe_after_analytics() 是在分析之后
+             * （例如 pgie、tracker 或 sgie）
+             * 并且在 tiler 之前，没有插件会缩放元数据，并且将
+             * 对应于 nvstreammux 分辨率
+             */
+            float scaleW = 0;
+            float scaleH = 0;
+            /* 消息发送频率
+             * 此处消息每30帧发送一次给第一个对象。
+             */
+            buffer_pts = frame_meta->buf_pts;
+            if (!appCtx->config.streammux_config.pipeline_width || !appCtx->config.streammux_config.pipeline_height)
+            {
+                g_print("invalid pipeline params\n");
+                return;
+            }
+            LOGD("stream %d==source_frame_width:%d [%d X %d]\n", frame_meta->source_id,
+                 frame_meta->pad_index, frame_meta->source_frame_width,
+                 frame_meta->source_frame_height);
+            scaleW =
+                (float)frame_meta->source_frame_width /
+                appCtx->config.streammux_config.pipeline_width;
+            scaleH =
+                (float)frame_meta->source_frame_height /
+                appCtx->config.streammux_config.pipeline_height;
+
+            /** 为每个检测对象生成 NvDsEventMsgMeta */
+            NvDsEventMsgMeta *msg_meta =
+                (NvDsEventMsgMeta *)g_malloc0(sizeof(NvDsEventMsgMeta));
+            generate_event_msg_meta(appCtx,
+                                    msg_meta,
+                                    obj_meta->class_id,
+                                    TRUE,
+                                    /**< useTs NOTE: Pass FALSE for files without base-timestamp in URI */
+                                    buffer_pts,
+                                    appCtx->config.multi_source_config[stream_id].uri,
+                                    stream_id,
+                                    appCtx->config.multi_source_config[stream_id].camera_id,
+                                    obj_meta,
+                                    scaleW,
+                                    scaleH,
+                                    frame_meta);
+            NvDsUserMeta *user_event_meta =
+                nvds_acquire_user_meta_from_pool(batch_meta);
+            if (user_event_meta)
+            {
+                /*
+                 * Since generated event metadata has custom objects for
+                 * Vehicle / Person which are allocated dynamically, we are
+                 * setting copy and free function to handle those fields when
+                 * metadata copy happens between two components.
+                 * 由于生成的事件元数据具有动态分配的车辆/人员自定义对象，我们
+                 * 设置了复制和释放函数来处理这些字段，以便在两个组件之间进行元数据复制时使用
+                 */
+                user_event_meta->user_meta_data = (void *)msg_meta;
+                user_event_meta->base_meta.batch_meta = batch_meta;
+                user_event_meta->base_meta.meta_type = NVDS_EVENT_MSG_META;
+                user_event_meta->base_meta.copy_func =
+                    (NvDsMetaCopyFunc)meta_copy_func;
+                user_event_meta->base_meta.release_func =
+                    (NvDsMetaReleaseFunc)meta_free_func;
+                nvds_add_user_meta_to_frame(frame_meta, user_event_meta);
+            }
+            else
+            {
+                g_print("Error in attaching event meta to buffer\n");
+            }
+        }
+    }
+}
+
+/**
  * Callback function to be called once all inferences (Primary + Secondary)
  * are done. This is opportunity to modify content of the metadata.
  * e.g. Here Person is being replaced with Man/Woman and corresponding counts
  * are being maintained. It should be modified according to network classes
  * or can be removed altogether if not required.
+ * 所有推理（主要+次要）完成后调用的回调函数。
+ * 在这是可以修改元数据内容。
  */
 static void
 all_bbox_generated(AppCtx *appCtx, GstBuffer *buf,
@@ -516,6 +894,8 @@ nvds_x_event_thread(gpointer data)
  * callback function to add application specific metadata.
  * Here it demonstrates how to display the URI of source in addition to
  * the text generated after inference.
+ * 该回调函数用于添加应用程序特定的元数据。
+ * 这里演示了如何显示源的URI以及推理后生成的文本。
  */
 static gboolean
 overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
@@ -581,8 +961,11 @@ recreate_pipeline_thread_func(gpointer arg)
     destroy_pipeline(appCtx);
 
     g_print("Recreate pipeline\n");
-    if (!create_pipeline(appCtx, NULL,
-                         all_bbox_generated, perf_cb, overlay_graphics))
+    if (!create_pipeline(appCtx,
+                         bbox_generated_probe_after_analytics,
+                         all_bbox_generated,
+                         perf_cb,
+                         overlay_graphics))
     {
         NVGSTDS_ERR_MSG_V("Failed to create pipeline");
         return_value = -1;
@@ -723,8 +1106,11 @@ int main(int argc, char *argv[])
 
     for (i = 0; i < num_instances; i++)
     {
-        if (!create_pipeline(appCtx[i], NULL,
-                             all_bbox_generated, perf_cb, overlay_graphics))
+        if (!create_pipeline(appCtx[i],
+                             bbox_generated_probe_after_analytics,
+                             all_bbox_generated,
+                             perf_cb,
+                             overlay_graphics))
         {
             NVGSTDS_ERR_MSG_V("Failed to create pipeline");
             return_value = -1;

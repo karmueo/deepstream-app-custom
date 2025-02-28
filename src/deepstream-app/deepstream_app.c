@@ -933,6 +933,11 @@ component_id_compare_func(gconstpointer a, gconstpointer b)
  * different type / class of objects.
  * It also demonstrates how to join the different labels(PGIE + SGIEs)
  * of an object to form a single string.
+ * 处理附加元数据的函数。这只是为了演示
+ * 如果不需要，可以删除。
+ * 这里演示了如何使用不同颜色和大小的边界框
+ * 对不同类型/类别的对象。
+ * 它还演示了如何将对象的不同标签（PGIE + SGIEs）连接成一个字符串。
  */
 static void
 process_meta(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
@@ -1069,9 +1074,9 @@ process_meta(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
 }
 
 /**
- * Function which processes the inferred buffer and its metadata.
- * It also gives opportunity to attach application specific
- * metadata (e.g. clock, analytics output etc.).
+ * 处理推理缓冲区及其元数据的函数。
+ * 它还提供了附加应用程序特定元数据的机会
+ * （例如时钟、分析输出等）。
  */
 static void
 process_buffer(GstBuffer *buf, AppCtx *appCtx, guint index)
@@ -1090,6 +1095,8 @@ process_buffer(GstBuffer *buf, AppCtx *appCtx, guint index)
 
     /* Opportunity to modify the processed metadata or do analytics based on
      * type of object e.g. maintaining count of particular type of car.
+     * 这里会调用all_bbox_generated_cb回调函数，这个函数的实现在deepstream_app_main.c中
+     * 在这个回调函数中可以修改处理后的元数据或基于检测结果进行分析
      */
     if (appCtx->all_bbox_generated_cb)
     {
@@ -1098,7 +1105,7 @@ process_buffer(GstBuffer *buf, AppCtx *appCtx, guint index)
     // data->bbox_list_size = 0;
 
     /*
-     * callback to attach application specific additional metadata.
+     * 回调函数以附加特定于应用程序的附加元数据。
      */
     if (appCtx->overlay_graphics_cb)
     {
@@ -1186,6 +1193,8 @@ gie_primary_processing_done_buf_prob(GstPad *pad, GstPadProbeInfo *info,
 /**
  * Probe function to get results after all inferences(Primary + Secondary)
  * are done. This will be just before OSD or sink (in case OSD is disabled).
+ * 探针函数在所有推理（主要+次要）完成后获取结果。
+ * 这将是在OSD或sink（如果OSD被禁用的情况下）之前。
  */
 static GstPadProbeReturn
 gie_processing_done_buf_prob(GstPad *pad, GstPadProbeInfo *info,
@@ -1409,6 +1418,8 @@ done:
  * of streams. These components work on single buffer. If tiling is being
  * used then single instance will be created otherwise < N > such instances
  * will be created for < N > streams
+ * 函数用于向管道添加依赖于流数量的组件。
+ * 这些组件在单个缓冲区上工作。如果使用平铺，则将创建单个实例，否则将为 <N> 个流创建 <N> 个此类实例。
  */
 static gboolean
 create_processing_instance(AppCtx *appCtx, guint index)
@@ -1451,6 +1462,7 @@ create_processing_instance(AppCtx *appCtx, guint index)
     NVGSTDS_BIN_ADD_GHOST_PAD(instance_bin->bin, last_elem, "sink");
     if (config->osd_config.enable)
     {
+        // 在osd的输入pad上添加一个探针，此处已经得到了所有的bbox信息
         NVGSTDS_ELEM_ADD_PROBE(instance_bin->all_bbox_buffer_probe_id,
                                instance_bin->osd_bin.nvosd, "sink",
                                gie_processing_done_buf_prob, GST_PAD_PROBE_TYPE_BUFFER, instance_bin);
@@ -1475,6 +1487,7 @@ done:
  * Function to create common elements(Primary infer, tracker, secondary infer)
  * of the pipeline. These components operate on muxed data from all the
  * streams. So they are independent of number of streams in the pipeline.
+ * 创建pipeline的常用元素（主推理、跟踪器、次推理）函数。这些组件在所有流的复用数据上操作。因此，它们独立于pipeline中的流数量。
  */
 static gboolean
 create_common_elements(NvDsConfig *config, NvDsPipeline *pipeline,
