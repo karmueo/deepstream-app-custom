@@ -102,7 +102,7 @@ nvbuf-memory-type=0
 config-file=config_infer_primary_yoloV11.txt
 
 [tracker]
-enable=1
+enable=0
 # For NvDCF and NvDeepSORT tracker, tracker-width and tracker-height must be a multiple of 32, respectively
 tracker-width=960
 tracker-height=544

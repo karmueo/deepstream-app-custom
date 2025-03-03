@@ -79,21 +79,6 @@ GOptionEntry entries[] = {
     {NULL},
 };
 
-/**
- * @brief  Thread which handles the model-update OTA functionlity
- *         1) Adds watch on the changes made in the provided ota-override-file,
- *            if changes are detected, validate the model-update change request,
- *            intiate model-update OTA process
- *         2) Frame drops / frames without inference should NOT be detected in
- *            this on-the-fly model update process
- *         3) In case of model update OTA fails, error message will be printed
- *            on the console and pipeline continues to run with older
- *            model configuration
- * @param  gpointer [IN] Pointer to OTAInfo structure
- * @param  gpointer [OUT] Returns NULL in case of thread exits
- */
-gpointer ota_handler_thread(gpointer data);
-
 static gpointer
 meta_copy_func(gpointer data, gpointer user_data)
 {
