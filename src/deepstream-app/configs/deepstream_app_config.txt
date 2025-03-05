@@ -22,6 +22,10 @@ rtsp-reconnect-interval-sec=30
 rtsp-reconnect-attempts=10
 latency=2000
 
+[pre-process]
+enable=1
+config-file=config_preprocess.txt
+
 [sink0]
 enable=1
 type=4
@@ -99,6 +103,7 @@ enable=1
 gpu-id=0
 gie-unique-id=1
 nvbuf-memory-type=0
+input-tensor-meta=1
 config-file=config_infer_primary_yoloV11.txt
 
 [tracker]
@@ -111,6 +116,7 @@ ll-lib-file=/opt/nvidia/deepstream/deepstream/lib/libnvds_nvmultiobjecttracker.s
 # ll-config-file=/opt/nvidia/deepstream/deepstream/samples/configs/deepstream-app/config_tracker_IOU.yml
 # ll-config-file=/opt/nvidia/deepstream/deepstream/samples/configs/deepstream-app/config_tracker_NvSORT.yml
 ll-config-file=config_tracker_NvDCF_perf.yml
+# config_tracker_NvDCF_perf.yml
 # ll-config-file=/opt/nvidia/deepstream/deepstream/samples/configs/deepstream-app/config_tracker_NvDCF_accuracy.yml
 # ll-config-file=/opt/nvidia/deepstream/deepstream/samples/configs/deepstream-app/config_tracker_NvDeepSORT.yml
 gpu-id=0

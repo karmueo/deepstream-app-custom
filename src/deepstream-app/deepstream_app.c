@@ -1134,6 +1134,7 @@ gie_primary_processing_done_buf_prob(GstPad *pad, GstPadProbeInfo *info,
 
     write_kitti_output(appCtx, batch_meta);
 
+#ifdef ENABLE_JPEG_SAVE
     GstMapInfo inmap = GST_MAP_INFO_INIT;
     if (!gst_buffer_map(buf, &inmap, GST_MAP_READ))
     {
@@ -1186,6 +1187,7 @@ gie_primary_processing_done_buf_prob(GstPad *pad, GstPadProbeInfo *info,
             break;
         }
     }
+#endif
 
     return GST_PAD_PROBE_OK;
 }

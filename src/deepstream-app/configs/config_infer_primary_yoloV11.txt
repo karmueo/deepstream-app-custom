@@ -2,8 +2,8 @@
 gpu-id=0
 net-scale-factor=0.0039215697906911373
 model-color-format=0
-onnx-file=../models/yolov11_ir_drones_p2_single_target.pt.onnx
-model-engine-file=../models/yolov11_ir_drones_p2_single_target.pt.onnx_b1_gpu0_fp32.engine
+onnx-file=../models/yolov11_ir_drones_p2_single_target.onnx
+model-engine-file=../../model_b1_gpu0_fp32.engine
 #int8-calib-file=calib.table
 labelfile-path=labels.txt
 batch-size=1
@@ -24,5 +24,5 @@ engine-create-func-name=NvDsInferYoloCudaEngineGet
 
 [class-attrs-all]
 nms-iou-threshold=0.45
-pre-cluster-threshold=0.25
+pre-cluster-threshold=0.2
 topk=300
