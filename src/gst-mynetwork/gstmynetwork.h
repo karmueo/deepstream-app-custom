@@ -3,26 +3,27 @@
 
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
 
 #define PACKAGE "_mynetwork"
 #define VERSION "1.0"
 #define LICENSE "Proprietary"
 #define DESCRIPTION "My plugin for Deepstream Network"
-#define BINARY_PACKAGE "NVIDIA DeepStream 3rdparty IP integration plugin"
-#define URL "http://nvidia.com/"
+#define BINARY_PACKAGE "NVIDIA DeepStream 3rdparty plugin"
+#define URL "https://github.com/karmueo/"
 
 G_BEGIN_DECLS
 
 typedef struct _GstmynetworkClass GstmynetworkClass;
 typedef struct _Gstmynetwork Gstmynetwork;
+typedef struct _SendData SendData;
+typedef struct _BboxInfo BboxInfo;
 
 #define GST_TYPE_MYNETWORK (gst_mynetwork_get_type())
 #define GST_MYNETWORK(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_MYNETWORK, Gstmynetwork))
-
-// G_DECLARE_FINAL_TYPE(Gstmynetwork,
-//                      gst_mynetwork,
-//                      GST, _MYNETWORK,
-//                      GstElement)
 
 struct _Gstmynetwork
 {
@@ -32,12 +33,32 @@ struct _Gstmynetwork
 
     guint gpu_id;
 
-    gboolean silent;
+    int sockfd;
+    sockaddr_in multicast_addr;
 };
 
 struct _GstmynetworkClass
 {
     GstBaseSinkClass parent_class;
+};
+
+struct _BboxInfo
+{
+    float left;
+    float top;
+    float width;
+    float height;
+};
+
+#pragma pack(1)
+struct _SendData
+{
+    BboxInfo detect_info;
+    gint class_id;
+    guint64 object_id;
+    gfloat confidence;
+    guint64 ntp_timestamp;
+    guint source_id;
 };
 
 GType gst_mynetwork_get_type(void);

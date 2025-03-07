@@ -25,6 +25,7 @@
 #include "nvbufsurface.h"
 #include "gstmynetwork.h"
 #include "cuda_runtime_api.h"
+#include <math.h>
 
 /* enable to write transformed cvmat to files */
 /* #define DSEXAMPLE_DEBUG */
@@ -130,10 +131,33 @@ gst_mynetwork_class_init(GstmynetworkClass *klass)
  * 初始化实例结构
  */
 static void
-gst_mynetwork_init(Gstmynetwork *filter)
+gst_mynetwork_init(Gstmynetwork *self)
 {
     // 初始化一些参数
-    /////////////////
+    self->gpu_id = 0;
+
+    // 创建UDP Socket
+    self->sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (self->sockfd < 0)
+    {
+        GST_ERROR("Failed to create socket");
+        return;
+    }
+
+    // 设置组播地址
+    memset(&self->multicast_addr, 0, sizeof(self->multicast_addr));
+    self->multicast_addr.sin_family = AF_INET;
+    self->multicast_addr.sin_addr.s_addr = inet_addr("239.255.255.250");
+    self->multicast_addr.sin_port = htons(5000);
+
+    // 设置TTL（可选）
+    int ttl = 32;
+    if (setsockopt(self->sockfd, IPPROTO_IP, IP_MULTICAST_TTL,
+                   &ttl, sizeof(ttl)) < 0)
+    {
+        GST_WARNING("Failed to set multicast TTL");
+    }
+
     /* This quark is required to identify NvDsMeta when iterating through
      * the buffer metadatas */
     if (!_dsmeta_quark)
@@ -155,6 +179,8 @@ gst_mynetwork_render(GstBaseSink *sink, GstBuffer *buf)
     NvDsObjectMeta *obj_meta = NULL;
     NvBufSurface *surface = NULL;
     GstMapInfo in_map_info;
+    SendData send_data;
+    float obj2center_distance = 9999;
 
     memset(&in_map_info, 0, sizeof(in_map_info));
     if (!gst_buffer_map(buf, &in_map_info, GST_MAP_READ))
@@ -170,6 +196,13 @@ gst_mynetwork_render(GstBaseSink *sink, GstBuffer *buf)
          l_frame = l_frame->next)
     {
         frame_meta = (NvDsFrameMeta *)(l_frame->data);
+        // 获取源分辨率
+        guint source_width = frame_meta->source_frame_width;
+        guint source_height = frame_meta->source_frame_height;
+        // 计算视频中心点坐标
+        float center_x = source_width / 2;
+        float center_y = source_height / 2;
+
         NvOSD_RectParams rect_params;
 
         for (l_obj = frame_meta->obj_meta_list; l_obj != NULL;
@@ -178,12 +211,29 @@ gst_mynetwork_render(GstBaseSink *sink, GstBuffer *buf)
             obj_meta = (NvDsObjectMeta *)(l_obj->data);
             if ((obj_meta->class_id >= 0))
             {
-                g_print("frame_num=%d, obj_meta->class_id=%d, obj_meta->object_id=%ld\n",
-                        frame_meta->frame_num, obj_meta->class_id, obj_meta->object_id);
+                // 计算目标的中心坐标
+                float obj_center_x = obj_meta->rect_params.left + obj_meta->rect_params.width / 2;
+                float obj_center_y = obj_meta->rect_params.top + obj_meta->rect_params.height / 2;
+                // 计算目标与视频中心的距离
+                float distance = fabs(obj_center_x - center_x) + fabs(obj_center_y - center_y);
+                if (distance < obj2center_distance)
+                {
+                    obj2center_distance = distance;
+                    memset(&send_data, 0, sizeof(send_data));
+                    send_data.class_id = obj_meta->class_id;
+                    send_data.confidence = obj_meta->confidence;
+                    send_data.ntp_timestamp = frame_meta->ntp_timestamp;
+                    send_data.source_id = frame_meta->source_id;
+                    send_data.detect_info.left = obj_meta->rect_params.left;
+                    send_data.detect_info.top = obj_meta->rect_params.top;
+                    send_data.detect_info.width = obj_meta->rect_params.width;
+                    send_data.detect_info.height = obj_meta->rect_params.height;
+                }
             }
         }
+        sendto(self->sockfd, &send_data, sizeof(send_data), 0,
+               (struct sockaddr *)&self->multicast_addr, sizeof(self->multicast_addr));
     }
-    g_print("gst_mynetwork_transform_ip\n");
 error:
 
     nvds_set_output_system_timestamp(buf, GST_ELEMENT_NAME(self));
@@ -257,6 +307,12 @@ void gst_mynetwork_get_property(GObject *object, guint property_id,
 void gst_mynetwork_finalize(GObject *object)
 {
     Gstmynetwork *self = GST_MYNETWORK(object);
+
+    if (self->sockfd >= 0)
+    {
+        close(self->sockfd);
+        self->sockfd = -1;
+    }
 
     GST_DEBUG_OBJECT(self, "finalize");
 
