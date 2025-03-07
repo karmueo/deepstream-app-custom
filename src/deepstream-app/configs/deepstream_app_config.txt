@@ -44,7 +44,7 @@ profile=4
 udp-buffer-size=100000
 
 [sink1]
-enable=1
+enable=0
 #Type - 1=FakeSink 2=EglSink 3=File 4=UDPSink 5=nvdrmvideosink 6=MsgConvBroker
 type=6
 msg-conv-config=dstest5_msgconv_sample_config.txt
@@ -59,6 +59,11 @@ msg-broker-conn-str=127.0.0.1;6379;dddd
 topic=dddd
 #Optional:
 #msg-broker-config=../../deepstream-test4/cfg_kafka.txt
+
+[sink2]
+enable=1
+#Type - 1=FakeSink 2=EglSink 3=File 4=UDPSink 5=nvdrmvideosink 6=MsgConvBroker 7=MyNetwork
+type=7
 
 [message-converter]
 enable=0
@@ -102,9 +107,13 @@ nvbuf-memory-type=0
 enable=1
 gpu-id=0
 gie-unique-id=1
+#(0): nvinfer - Default inference plugin based on Tensorrt
+#(1): nvinferserver - inference plugin based on Tensorrt-Inference-Server
+plugin-type=0
 nvbuf-memory-type=0
 input-tensor-meta=1
 config-file=config_infer_primary_yoloV11.txt
+# config-file=config_infer_plan_engine_primary.txt
 
 [tracker]
 enable=0

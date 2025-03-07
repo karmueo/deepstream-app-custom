@@ -1,4 +1,4 @@
-CUDA_VER?=
+CUDA_VER?=12.6
 ifeq ($(CUDA_VER),)
   $(error "CUDA_VER is not set")
 endif
@@ -33,6 +33,9 @@ PKGS:= gstreamer-1.0 gstreamer-base-1.0 gstreamer-video-1.0
 
 CFLAGS+=$(shell pkg-config --cflags $(PKGS))
 LIBS+=$(shell pkg-config --libs $(PKGS))
+
+CFLAGS += -g
+CXXFLAGS += -g
 
 all: $(LIB)
 

@@ -132,6 +132,7 @@ extern "C"
     NvDsDsAnalyticsConfig dsanalytics_config;
     NvDsDsExampleConfig dsexample_config;
     NvDsSinkMsgConvBrokerConfig msg_conv_config;
+    NvDsMyNetworkConfig mynetwork_config;
     NvDsImageSave image_save_config;
 
     /** To support nvmultiurisrcbin */
