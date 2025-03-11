@@ -45,6 +45,8 @@ CFLAGS+= -I./ -I../../apps-common/includes \
 
 CFLAGS += -g
 CXXFLAGS += -g
+# CFLAGS+= -DENABLE_JPEG_SAVE
+# CXXFLAGS += -DENABLE_JPEG_SAVE
 
 LIBS:= -L/usr/local/cuda-$(CUDA_VER)/lib64/ -lcudart
 

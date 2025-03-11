@@ -1152,10 +1152,12 @@ gie_primary_processing_done_buf_prob(GstPad *pad, GstPadProbeInfo *info,
          l_frame = l_frame->next)
     {
         NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)(l_frame->data);
-        if ((frame_meta->buf_pts - last_pts) > 60 * GST_SECOND || last_pts == 0)
+        if ((frame_meta->buf_pts - last_pts) > 1 * GST_SECOND || last_pts == 0)
         {
+            guint num_rects = 0;
             for (l_obj = frame_meta->obj_meta_list; l_obj != NULL; l_obj = l_obj->next)
             {
+                num_rects++;
                 obj_meta = (NvDsObjectMeta *)(l_obj->data);
                 /* Conditions that user needs to set to encode the detected objects of
                  * interest. Here, by default all the detected objects are encoded.
@@ -1164,21 +1166,25 @@ gie_primary_processing_done_buf_prob(GstPad *pad, GstPadProbeInfo *info,
                 if ((obj_meta->class_id >= 0))
                 {
                     NvDsObjEncUsrArgs frameData = {0};
-                    /* Preset */
-                    frameData.isFrame = 1;
+                    // frameData.isFrame = 1;
                     /* To be set by user */
                     frameData.saveImg = 1;
-                    frameData.attachUsrMeta = 0;
+                    frameData.attachUsrMeta = TRUE;
                     /* Set if Image scaling Required */
                     frameData.scaleImg = FALSE;
                     frameData.scaledWidth = 0;
                     frameData.scaledHeight = 0;
                     /* Quality */
-                    frameData.quality = 80;
+                    frameData.quality = 100;
+                    frameData.objNum = num_rects;
                     /* Set to calculate time taken to encode JPG image. */
                     frameData.calcEncodeTime = 0;
                     /*Main Function Call */
-                    nvds_obj_enc_process((gpointer)appCtx->obj_ctx_handle, &frameData, ip_surf, NULL, frame_meta);
+                    nvds_obj_enc_process((gpointer)appCtx->obj_ctx_handle,
+                                         &frameData,
+                                         ip_surf,
+                                         obj_meta,
+                                         frame_meta);
                     last_pts = frame_meta->buf_pts;
                     break;
                 }
