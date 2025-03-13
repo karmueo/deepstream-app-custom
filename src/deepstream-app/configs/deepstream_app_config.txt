@@ -116,8 +116,48 @@ input-tensor-meta=0
 config-file=config_infer_primary_yoloV11.txt
 # config-file=config_infer_plan_engine_primary.txt
 
-[tracker]
+[secondary-pre-process0]
+enable=0
+operate-on-gie-id=1
+config-file=config_preprocess_sgie.txt
+
+#[secondary-gie0]
+#enable=1
+##(0): nvinfer; (1): nvinferserver
+#plugin-type=1
+#input-tensor-meta=1
+## nvinferserserver's gpu-id can only set from its own config-file
+#gpu-id=0
+#batch-size=8
+#gie-unique-id=4
+#operate-on-gie-id=1
+#operate-on-class-ids=0;1;2
+#config-file=config_infer_secondary_plan_engine_preprocess.txt
+
+# 通过triton调用模型
+[secondary-gie0]
 enable=1
+#(0): nvinfer; (1): nvinferserver
+plugin-type=1
+gpu-id=0
+batch-size=8
+gie-unique-id=4
+operate-on-gie-id=1
+operate-on-class-ids=0;
+config-file=config_infer_secondary_plan_engine.txt
+
+## 直接调用模型
+#[secondary-gie0]
+#enable=1
+#gpu-id=0
+#batch-size=8
+#gie-unique-id=4
+#operate-on-gie-id=1
+#operate-on-class-ids=0;
+#config-file=config_infer_secondary_classify.txt
+
+[tracker]
+enable=0
 # For NvDCF and NvDeepSORT tracker, tracker-width and tracker-height must be a multiple of 32, respectively
 tracker-width=1920
 tracker-height=1088
