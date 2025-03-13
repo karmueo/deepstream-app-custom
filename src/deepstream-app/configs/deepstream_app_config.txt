@@ -134,27 +134,27 @@ config-file=config_preprocess_sgie.txt
 #operate-on-class-ids=0;1;2
 #config-file=config_infer_secondary_plan_engine_preprocess.txt
 
-# 通过triton调用模型
-[secondary-gie0]
-enable=1
-#(0): nvinfer; (1): nvinferserver
-plugin-type=1
-gpu-id=0
-batch-size=8
-gie-unique-id=4
-operate-on-gie-id=1
-operate-on-class-ids=0;
-config-file=config_infer_secondary_plan_engine.txt
-
-## 直接调用模型
+## 通过triton调用模型
 #[secondary-gie0]
 #enable=1
+##(0): nvinfer; (1): nvinferserver
+#plugin-type=1
 #gpu-id=0
 #batch-size=8
 #gie-unique-id=4
 #operate-on-gie-id=1
 #operate-on-class-ids=0;
-#config-file=config_infer_secondary_classify.txt
+#config-file=config_infer_secondary_plan_engine.txt
+
+# 直接调用模型
+[secondary-gie0]
+enable=1
+gpu-id=0
+batch-size=8
+gie-unique-id=4
+operate-on-gie-id=1
+operate-on-class-ids=0;
+config-file=config_infer_secondary_classify.txt
 
 [tracker]
 enable=0
