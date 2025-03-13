@@ -14,7 +14,7 @@ nvbuf-memory-type=0
 [source0]
 enable=1
 type=4
-uri=rtsp://192.168.1.193:25544/live/test
+uri=rtsp://47.96.225.165:10554/rtp/shT4On0X2Tt/34020000006121133900/live
 num-sources=1
 gpu-id=0
 cudadec-memtype=0
