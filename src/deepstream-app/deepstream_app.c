@@ -536,6 +536,57 @@ write_kitti_output(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
     }
 }
 
+static void
+change_gieoutput(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
+{
+    // 遍历每一帧
+    for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame != NULL;
+         l_frame = l_frame->next)
+    {
+        NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)l_frame->data;
+
+        // 获取当前帧的宽度和高度（用于边界检查）
+        const gint frame_width = frame_meta->source_frame_width;
+        const gint frame_height = frame_meta->source_frame_height;
+
+        // 遍历每个检测到的对象
+        for (NvDsMetaList *l_obj = frame_meta->obj_meta_list; l_obj != NULL;
+             l_obj = l_obj->next)
+        {
+            NvDsObjectMeta *obj_meta = (NvDsObjectMeta *)l_obj->data;
+
+            // 2. 获取原始矩形参数
+            NvOSD_RectParams *rect = &obj_meta->rect_params;
+            float original_width = rect->width;
+            float original_height = rect->height;
+
+            // 3. 计算原矩形中心点
+            float center_x = rect->left + original_width / 2.0f;
+            float center_y = rect->top + original_height / 2.0f;
+
+            // 4. 膨胀一倍后的尺寸
+            float new_width = original_width * 2.0f;
+            float new_height = original_height * 2.0f;
+
+            // 5. 调整左上角坐标（保持中心点不变）
+            float new_left = center_x - new_width / 2.0f;
+            float new_top = center_y - new_height / 2.0f;
+
+            // 6. 边界检查（防止超出图像范围）
+            new_left = CLAMP(new_left, 0.0f, frame_width - 1.0f);
+            new_top = CLAMP(new_top, 0.0f, frame_height - 1.0f);
+            new_width = CLAMP(new_width, 0.0f, frame_width - new_left);
+            new_height = CLAMP(new_height, 0.0f, frame_height - new_top);
+
+            // 7. 更新矩形参数
+            rect->left = new_left;
+            rect->top = new_top;
+            rect->width = new_width;
+            rect->height = new_height;
+        }
+    }
+}
+
 /**
  * Function to dump past frame objs in kitti format.
  */
@@ -1132,7 +1183,9 @@ gie_primary_processing_done_buf_prob(GstPad *pad, GstPadProbeInfo *info,
         return GST_PAD_PROBE_OK;
     }
 
-    write_kitti_output(appCtx, batch_meta);
+    // write_kitti_output(appCtx, batch_meta);
+    // 把检测框碰撞一倍
+    // change_gieoutput(appCtx, batch_meta);
 
 #ifdef ENABLE_JPEG_SAVE
     GstMapInfo inmap = GST_MAP_INFO_INIT;
