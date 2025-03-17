@@ -25,7 +25,7 @@ infer_config {
   }
 
   postprocess {
-    labelfile_path: "/workspaces/Deepstream_template/deepstream/triton_model/Secondary_Classify/labels.txt"
+    labelfile_path: "../../../triton_model/Secondary_Classify/labels.txt"
     classification {
       threshold: 0.51
     }

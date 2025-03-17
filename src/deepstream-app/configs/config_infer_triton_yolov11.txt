@@ -26,7 +26,7 @@ infer_config {
   }
 
   postprocess {
-    labelfile_path: "/workspaces/Deepstream_template/deepstream/triton_model/Primary_Detect/labels.txt"
+    labelfile_path: "../../../triton_model/Primary_Detect/labels.txt"
     detection {
       num_detected_classes: 1
       custom_parse_bbox_func: "NvDsInferYoloEfficientNMS"

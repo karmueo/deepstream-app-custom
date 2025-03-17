@@ -14,7 +14,8 @@ nvbuf-memory-type=0
 [source0]
 enable=1
 type=4
-uri=rtsp://192.168.1.193:25544/live/test
+uri=rtsp://47.96.225.165:10554/rtp/shT4On0X2Tt/34020000006121133900/live
+#rtsp://192.168.1.193:25544/live/test
 num-sources=1
 gpu-id=0
 cudadec-memtype=0
@@ -43,6 +44,7 @@ height=1080
 profile=4
 udp-buffer-size=100000
 
+# redis
 [sink1]
 enable=0
 #Type - 1=FakeSink 2=EglSink 3=File 4=UDPSink 5=nvdrmvideosink 6=MsgConvBroker
@@ -60,6 +62,7 @@ topic=dddd
 #Optional:
 #msg-broker-config=../../deepstream-test4/cfg_kafka.txt
 
+# 自定义的udp组播
 [sink2]
 enable=0
 #Type - 1=FakeSink 2=EglSink 3=File 4=UDPSink 5=nvdrmvideosink 6=MsgConvBroker 7=MyNetwork
@@ -129,10 +132,10 @@ gie-unique-id=1
 nvbuf-memory-type=0
 config-file=config_infer_triton_yolov11.txt
 
-[secondary-pre-process0]
-enable=0
-operate-on-gie-id=1
-config-file=config_preprocess_sgie.txt
+# [secondary-pre-process0]
+# enable=0
+# operate-on-gie-id=1
+# config-file=config_preprocess_sgie.txt
 
 #[secondary-gie0]
 #enable=1
@@ -147,27 +150,27 @@ config-file=config_preprocess_sgie.txt
 #operate-on-class-ids=0;1;2
 #config-file=config_infer_secondary_plan_engine_preprocess.txt
 
-## 通过triton调用模型
-#[secondary-gie0]
-#enable=1
-##(0): nvinfer; (1): nvinferserver
-#plugin-type=1
-#gpu-id=0
-#batch-size=8
-#gie-unique-id=4
-#operate-on-gie-id=1
-#operate-on-class-ids=0;
-#config-file=config_infer_secondary_plan_engine.txt
-
-# 直接调用模型
+# 通过triton调用模型
 [secondary-gie0]
 enable=1
+#(0): nvinfer; (1): nvinferserver
+plugin-type=1
 gpu-id=0
-batch-size=8
+batch-size=1
 gie-unique-id=4
 operate-on-gie-id=1
 operate-on-class-ids=0;
-config-file=config_infer_secondary_classify.txt
+config-file=config_infer_secondary_plan_engine.txt
+
+# 直接调用模型
+# [secondary-gie0]
+# enable=1
+# gpu-id=0
+# batch-size=8
+# gie-unique-id=4
+# operate-on-gie-id=1
+# operate-on-class-ids=0;
+# config-file=config_infer_secondary_classify.txt
 
 [tracker]
 enable=1

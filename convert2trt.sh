@@ -4,20 +4,20 @@
 
 # 输入参数
 # detection配置
-# ONNX_PATH="triton_model/Primary_Detect/1/yolov11_ir_drones_p2_single_target_end2end.onnx"  # 输入ONNX文件路径
-# ENGINE_PATH="triton_model/Primary_Detect/1/yolov11_ir_drones_p2_single_target_end2end.engine"           # 输出engine文件路径
-# MAX_BATCH=4                                      # 最大batch_size
-# HEIGHT=640
-# WIDTH=640
-# INPUT_NAME="images"
+ONNX_PATH="triton_model/Primary_Detect/1/yolov11_ir_drones_p2_single_target_end2end.onnx"  # 输入ONNX文件路径
+ENGINE_PATH="triton_model/Primary_Detect/1/yolov11_ir_drones_p2_single_target_end2end.engine"           # 输出engine文件路径
+MAX_BATCH=4                                      # 最大batch_size
+HEIGHT=640
+WIDTH=640
+INPUT_NAME="images"
 
 # 分类配置
-ONNX_PATH="triton_model/Secondary_Classify/1/efficientnet_110_with_softmax.onnx"  # 输入ONNX文件路径
-ENGINE_PATH="triton_model/Secondary_Classify/1/efficientnet_110_with_softmax.engine"           # 输出engine文件路径
-MAX_BATCH=8                                      # 最大batch_size
-HEIGHT=224
-WIDTH=224
-INPUT_NAME="input"
+# ONNX_PATH="triton_model/Secondary_Classify/1/efficientnet_110_with_softmax.onnx"  # 输入ONNX文件路径
+# ENGINE_PATH="triton_model/Secondary_Classify/1/efficientnet_110_with_softmax.engine"           # 输出engine文件路径
+# MAX_BATCH=8                                      # 最大batch_size
+# HEIGHT=224
+# WIDTH=224
+# INPUT_NAME="input"
 
 # 动态形状配置（min/opt/max batch）
 MIN_BATCH=1
