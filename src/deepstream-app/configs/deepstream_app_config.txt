@@ -14,14 +14,15 @@ nvbuf-memory-type=0
 [source0]
 enable=1
 type=4
-uri=rtsp://47.96.225.165:10554/rtp/shT4On0X2Tt/34020000006121133900/live
+uri=rtsp://192.168.1.193:25544/live/test
 #rtsp://192.168.1.193:25544/live/test
 num-sources=1
 gpu-id=0
 cudadec-memtype=0
 rtsp-reconnect-interval-sec=30
-rtsp-reconnect-attempts=10
+rtsp-reconnect-attempts=-1
 latency=2000
+select-rtp-protocol=4
 
 [pre-process]
 enable=0
