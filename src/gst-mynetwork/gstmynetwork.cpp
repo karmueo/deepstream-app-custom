@@ -26,12 +26,15 @@
 #include "gstmynetwork.h"
 #include "cuda_runtime_api.h"
 #include <math.h>
+#include <map>
+#include <cstdio>
 
 /* enable to write transformed cvmat to files */
 /* #define DSEXAMPLE_DEBUG */
 /* 启用将转换后的 cvmat 写入文件 */
 /* #define DSEXAMPLE_DEBUG */
 static GQuark _dsmeta_quark = 0;
+static DetectAnalysis _detctAnalysis = {0};
 
 GST_DEBUG_CATEGORY_STATIC(gst_mynetwork_debug);
 #define GST_CAT_DEFAULT gst_mynetwork_debug
@@ -119,6 +122,8 @@ gst_mynetwork_class_init(GstmynetworkClass *klass)
                                          "Process a infer mst network on objects / full frame",
                                          "ShenChangli "
                                          "@ karmueo@163.com");
+
+    _detctAnalysis.minPixel = 9999;
 }
 
 /* initialize the new element
@@ -177,6 +182,7 @@ gst_mynetwork_render(GstBaseSink *sink, GstBuffer *buf)
     NvDsFrameMeta *frame_meta = NULL;
     NvDsMetaList *l_obj = NULL;
     NvDsObjectMeta *obj_meta = NULL;
+    NvDsObjectMeta *center_obj_meta = NULL;
     NvBufSurface *surface = NULL;
     GstMapInfo in_map_info;
     SendData send_data;
@@ -192,10 +198,17 @@ gst_mynetwork_render(GstBaseSink *sink, GstBuffer *buf)
     surface = (NvBufSurface *)in_map_info.data;
 
     batch_meta = gst_buffer_get_nvds_batch_meta(buf);
+    // 记录每一帧的信息
+    // 帧号
+    // 目标大类和配置文件中的大类如果一致则+1
+    // 目标小类和配置文件中的小类如果一致则+1
+    // 目标最小像素数
+    // 目标平均像素数
     for (l_frame = batch_meta->frame_meta_list; l_frame != NULL;
          l_frame = l_frame->next)
     {
         frame_meta = (NvDsFrameMeta *)(l_frame->data);
+        _detctAnalysis.frameNum = frame_meta->frame_num + 1;
         // 获取源分辨率
         guint source_width = frame_meta->source_frame_width;
         guint source_height = frame_meta->source_frame_height;
@@ -228,11 +241,77 @@ gst_mynetwork_render(GstBaseSink *sink, GstBuffer *buf)
                     send_data.detect_info.top = obj_meta->rect_params.top;
                     send_data.detect_info.width = obj_meta->rect_params.width;
                     send_data.detect_info.height = obj_meta->rect_params.height;
+                    center_obj_meta = obj_meta;
                 }
             }
         }
+
+        if (center_obj_meta != nullptr)
+        {
+            // 统计检测识别
+            // 寻找map中是否有该类别
+            std::map<guint16, guint>::iterator it = _detctAnalysis.primaryClassCountMap.find(center_obj_meta->class_id);
+            if (it != _detctAnalysis.primaryClassCountMap.end())
+            {
+                // 如果找到了，就+1
+                it->second++;
+            }
+            else
+            {
+                // 如果没找到，就插入一个新的
+                _detctAnalysis.primaryClassCountMap.insert(std::pair<guint16, guint>(center_obj_meta->class_id, 1));
+            }
+
+            for (NvDsMetaList *l_class = center_obj_meta->classifier_meta_list; l_class != NULL;
+                 l_class = l_class->next)
+            {
+                NvDsClassifierMeta *cmeta = (NvDsClassifierMeta *)l_class->data;
+                for (NvDsMetaList *l_label = cmeta->label_info_list; l_label != NULL;
+                     l_label = l_label->next)
+                {
+                    NvDsLabelInfo *label = (NvDsLabelInfo *)l_label->data;
+                    std::map<guint16, guint>::iterator it = _detctAnalysis.secondaryClassCountMap.find(label->result_class_id);
+                    if (it != _detctAnalysis.secondaryClassCountMap.end())
+                    {
+                        // 如果找到了，就+1
+                        it->second++;
+                    }
+                    else
+                    {
+                        // 如果没找到，就插入一个新的
+                        _detctAnalysis.secondaryClassCountMap.insert(std::pair<guint16, guint>(label->result_class_id, 1));
+                    }
+                }
+            }
+
+            // 记录最像素数和平均像素数
+            guint16 pixel = obj_meta->rect_params.width * obj_meta->rect_params.height;
+            if (pixel < _detctAnalysis.minPixel)
+            {
+                _detctAnalysis.minPixel = pixel;
+            }
+            guint totalObjNum = _detctAnalysis.primaryClassCountMap.size();
+            _detctAnalysis.meanPixel = (_detctAnalysis.meanPixel * (totalObjNum - 1) + pixel) / totalObjNum;
+        }
+
         sendto(self->sockfd, &send_data, sizeof(send_data), 0,
                (struct sockaddr *)&self->multicast_addr, sizeof(self->multicast_addr));
+
+        // 把_detctAnalysis写入日志
+        // 为了更方便定位，添加标志
+        GST_INFO("<===================================");
+        GST_INFO("frameNum: %lu", _detctAnalysis.frameNum);
+        for (std::map<guint16, guint>::iterator it = _detctAnalysis.primaryClassCountMap.begin(); it != _detctAnalysis.primaryClassCountMap.end(); it++)
+        {
+            GST_INFO("primaryClassCountMap: %d, %d", it->first, it->second);
+        }
+        for (std::map<guint16, guint>::iterator it = _detctAnalysis.secondaryClassCountMap.begin(); it != _detctAnalysis.secondaryClassCountMap.end(); it++)
+        {
+            GST_INFO("secondaryClassCountMap: %d, %d", it->first, it->second);
+        }
+        GST_INFO("minPixel: %d", _detctAnalysis.minPixel);
+        GST_INFO("meanPixel: %d", _detctAnalysis.meanPixel);
+        GST_INFO("===================================>");
     }
 error:
 

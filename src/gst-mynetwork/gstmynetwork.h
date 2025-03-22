@@ -7,6 +7,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <map>
 
 #define PACKAGE "_mynetwork"
 #define VERSION "1.0"
@@ -21,6 +22,7 @@ typedef struct _GstmynetworkClass GstmynetworkClass;
 typedef struct _Gstmynetwork Gstmynetwork;
 typedef struct _SendData SendData;
 typedef struct _BboxInfo BboxInfo;
+typedef struct _DetectAnalysis DetectAnalysis;
 
 #define GST_TYPE_MYNETWORK (gst_mynetwork_get_type())
 #define GST_MYNETWORK(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_MYNETWORK, Gstmynetwork))
@@ -59,6 +61,18 @@ struct _SendData
     gfloat confidence;
     guint64 ntp_timestamp;
     guint source_id;
+};
+
+// 统计信息结构体
+struct _DetectAnalysis
+{
+    guint64 frameNum;
+    std::map<guint16, guint> primaryClassCountMap;
+    std::map<guint16, guint> secondaryClassCountMap;
+    // 目标最小像素值
+    guint16 minPixel;
+    // 平均像素值
+    guint16 meanPixel;
 };
 
 GType gst_mynetwork_get_type(void);

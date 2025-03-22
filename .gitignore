@@ -16,3 +16,4 @@ src/gst-dsexample
 
 *.onnx
 *.engine
+*.log
