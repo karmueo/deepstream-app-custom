@@ -7,11 +7,8 @@ import tritonclient.grpc as grpc_client
 from torchvision import transforms
 
 
-idx_to_class = {0: "unkonw",
-                1: "kite",
-                2: "plane",
-                3: "bird",
-                4: "drone"}
+idx_to_class = {1: "bird",
+                0: "drone"}
 
 
 def preprocess_image(image_path, input_size=224):
@@ -76,7 +73,7 @@ def print_results(probs, top_k=5):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Triton Client Test')
-    parser.add_argument('--image', type=str, default='src/deepstream-app/186_0_1_target_70x32.jpg', help='测试图片路径')
+    parser.add_argument('--image', type=str, default='drone_test.jpg', help='测试图片路径')
     parser.add_argument('--model', type=str, default='Secondary_Classify', 
                        help='模型名称（与config.pbtxt一致）')
     parser.add_argument('--protocol', choices=['grpc', 'http'], default='grpc',

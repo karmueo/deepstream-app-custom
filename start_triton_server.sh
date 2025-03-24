@@ -3,5 +3,5 @@
 /opt/tritonserver/bin/tritonserver \
     --model-repository=./triton_model \
     --disable-auto-complete-config \
-    --log-verbose=0 \
-    > triton.log 2>&1 &
+    --log-verbose=1 #\
+    # > triton.log 2>&1 &

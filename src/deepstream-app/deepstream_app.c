@@ -565,18 +565,18 @@ change_gieoutput(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
             float center_y = rect->top + original_height / 2.0f;
 
             // 4. 膨胀一倍后的尺寸
-            float new_width = original_width * 2.0f;
-            float new_height = original_height * 2.0f;
+            float new_width = original_width * 1.2f;
+            float new_height = original_height * 1.2f;
 
             // 5. 调整左上角坐标（保持中心点不变）
             float new_left = center_x - new_width / 2.0f;
             float new_top = center_y - new_height / 2.0f;
 
             // 6. 边界检查（防止超出图像范围）
-            new_left = CLAMP(new_left, 0.0f, frame_width - 1.0f);
-            new_top = CLAMP(new_top, 0.0f, frame_height - 1.0f);
-            new_width = CLAMP(new_width, 0.0f, frame_width - new_left);
-            new_height = CLAMP(new_height, 0.0f, frame_height - new_top);
+            // new_left = CLAMP(new_left, 0.0f, frame_width - 1.0f);
+            // new_top = CLAMP(new_top, 0.0f, frame_height - 1.0f);
+            // new_width = CLAMP(new_width, 0.0f, frame_width - new_left);
+            // new_height = CLAMP(new_height, 0.0f, frame_height - new_top);
 
             // 7. 更新矩形参数
             rect->left = new_left;
@@ -1185,7 +1185,7 @@ gie_primary_processing_done_buf_prob(GstPad *pad, GstPadProbeInfo *info,
 
     // write_kitti_output(appCtx, batch_meta);
     // 把检测框碰撞一倍
-    // change_gieoutput(appCtx, batch_meta);
+    change_gieoutput(appCtx, batch_meta);
 
 #ifdef ENABLE_JPEG_SAVE
     GstMapInfo inmap = GST_MAP_INFO_INIT;

@@ -21,7 +21,7 @@ gpu-id=0
 cudadec-memtype=0
 rtsp-reconnect-interval-sec=30
 rtsp-reconnect-attempts=-1
-latency=2000
+latency=200
 select-rtp-protocol=4
 
 [pre-process]
@@ -65,7 +65,7 @@ topic=dddd
 
 # 自定义的udp组播
 [sink2]
-enable=0
+enable=1
 #Type - 1=FakeSink 2=EglSink 3=File 4=UDPSink 5=nvdrmvideosink 6=MsgConvBroker 7=MyNetwork
 type=7
 
@@ -99,7 +99,7 @@ nvbuf-memory-type=0
 
 [streammux]
 gpu-id=0
-live-source=0
+live-source=1
 batch-size=1
 batched-push-timeout=40000
 width=1920
@@ -108,30 +108,30 @@ enable-padding=0
 nvbuf-memory-type=0
 
 # 直接推理
-#[primary-gie]
-#enable=1
-#gpu-id=0
-#gie-unique-id=1
-##(0): nvinfer - Default inference plugin based on Tensorrt
-##(1): nvinferserver - inference plugin based on Tensorrt-Inference-Server
-#plugin-type=0
-#nvbuf-memory-type=0
-#input-tensor-meta=0
-## input-tensor-meta=1
-#config-file=config_infer_primary_yoloV11.txt
-
-# 通过triton调用模型
 [primary-gie]
 enable=1
 gpu-id=0
+gie-unique-id=1
 #(0): nvinfer - Default inference plugin based on Tensorrt
 #(1): nvinferserver - inference plugin based on Tensorrt-Inference-Server
-plugin-type=1
-batch-size=1
-interval=0
-gie-unique-id=1
+plugin-type=0
 nvbuf-memory-type=0
-config-file=config_infer_triton_yolov11.txt
+input-tensor-meta=0
+# input-tensor-meta=1
+config-file=config_infer_primary_yoloV11.txt
+
+# 通过triton调用模型
+# [primary-gie]
+# enable=1
+# gpu-id=0
+# #(0): nvinfer - Default inference plugin based on Tensorrt
+# #(1): nvinferserver - inference plugin based on Tensorrt-Inference-Server
+# plugin-type=1
+# batch-size=1
+# interval=0
+# gie-unique-id=1
+# nvbuf-memory-type=0
+# config-file=config_infer_triton_yolov11.txt
 
 # [secondary-pre-process0]
 # enable=0
@@ -152,32 +152,32 @@ config-file=config_infer_triton_yolov11.txt
 #config-file=config_infer_secondary_plan_engine_preprocess.txt
 
 # 通过triton调用模型
+# [secondary-gie0]
+# enable=0
+# #(0): nvinfer; (1): nvinferserver
+# plugin-type=1
+# gpu-id=0
+# batch-size=1
+# gie-unique-id=4
+# operate-on-gie-id=1
+# operate-on-class-ids=0;
+# config-file=config_infer_secondary_plan_engine.txt
+
+# 直接调用模型
 [secondary-gie0]
 enable=1
-#(0): nvinfer; (1): nvinferserver
-plugin-type=1
 gpu-id=0
 batch-size=1
 gie-unique-id=4
 operate-on-gie-id=1
-operate-on-class-ids=0;
-config-file=config_infer_secondary_plan_engine.txt
-
-# 直接调用模型
-# [secondary-gie0]
-# enable=1
-# gpu-id=0
-# batch-size=8
-# gie-unique-id=4
-# operate-on-gie-id=1
-# operate-on-class-ids=0;
-# config-file=config_infer_secondary_classify.txt
+# operate-on-class-ids=0;1
+config-file=config_infer_secondary_classify.txt
 
 [tracker]
 enable=1
 # For NvDCF and NvDeepSORT tracker, tracker-width and tracker-height must be a multiple of 32, respectively
-tracker-width=1920
-tracker-height=1088
+tracker-width=960
+tracker-height=544
 ll-lib-file=/opt/nvidia/deepstream/deepstream/lib/libnvds_nvmultiobjecttracker.so
 # ll-config-file required to set different tracker types
 # ll-config-file=/opt/nvidia/deepstream/deepstream/samples/configs/deepstream-app/config_tracker_IOU.yml
@@ -188,6 +188,16 @@ ll-config-file=config_tracker_NvDCF_perf.yml
 # ll-config-file=/opt/nvidia/deepstream/deepstream/samples/configs/deepstream-app/config_tracker_NvDeepSORT.yml
 gpu-id=0
 display-tracking-id=1
+
+# # 自定义的单目标跟踪
+# [tracker]
+# enable=0
+# # For NvDCF and NvDeepSORT tracker, tracker-width and tracker-height must be a multiple of 32, respectively
+# tracker-width=960
+# tracker-height=544
+# ll-lib-file=/workspaces/Deepstream_template/deepstream/src/fDSST_plugin/lib/libfDSST.so
+# gpu-id=0
+# display-tracking-id=1
 
 [tests]
 file-loop=0

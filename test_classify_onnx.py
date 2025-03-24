@@ -5,14 +5,11 @@ from torchvision import transforms
 
 # 配置参数
 ONNX_PATH = 'src/deepstream-app/models/efficientnet_110_with_softmax.onnx'
-IMG_PATH = 'kite_test.jpg'          # 测试图片路径
+IMG_PATH = '65e6b871e4d546dcaaa75904681be1af.jpg'          # 测试图片路径
 INPUT_SIZE = 224                     # 与导出时一致
 
-idx_to_class = {0: "unkonw",
-                1: "kite",
-                2: "plane",
-                3: "bird",
-                4: "drone"}
+idx_to_class = {1: "bird",
+                0: "drone"}
 
 # 数据预处理（必须与训练完全一致！）
 
@@ -45,11 +42,11 @@ probabilities = torch.tensor(probabilities)
 
 # 后处理
 # probabilities = torch.softmax(torch.tensor(ort_outputs), dim=1)
-top5_probs, top5_ids = torch.topk(probabilities, 5)
+top5_probs, top5_ids = torch.topk(probabilities, 2)
 
 # 打印结果
 print('----- Predictions -----')
-for i in range(5):
+for i in range(2):
     class_name = idx_to_class[top5_ids[0][i].item()]
     prob = top5_probs[0][i].item() * 100
     print(f'{class_name:<25} {prob:.2f}%')

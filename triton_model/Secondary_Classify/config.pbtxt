@@ -1,6 +1,6 @@
 platform: "tensorrt_plan"
-max_batch_size: 8
-default_model_filename: "efficientnet_110_with_softmax.engine"
+max_batch_size: 1
+default_model_filename: "efficientnet_110_with_softmax.onnx_b1_fp16.engine"
 
 input [
   {
@@ -16,7 +16,7 @@ output [
   {
     name: "probabilities"  # 与导出时的output_names一致
     data_type: TYPE_FP32
-    dims: [ 5 ]
+    dims: [ 2 ]
   }
 ]
 

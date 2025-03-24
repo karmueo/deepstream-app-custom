@@ -1,1 +1,1 @@
-unkonw;kite;plane;bird;drone
+drone;bird

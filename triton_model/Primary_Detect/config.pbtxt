@@ -1,7 +1,7 @@
 name: "Primary_Detect"
 platform: "tensorrt_plan"
-max_batch_size: 4
-default_model_filename: "yolov11_ir_drones_p2_single_target_end2end.engine"
+max_batch_size: 1
+default_model_filename: "yolov11_ir_drones_p2_2classes_end2end.engine"
 input [
   {
     name: "images"
@@ -33,7 +33,7 @@ output [
 ]
 instance_group [
     {
-      count: 4
+      count: 1
       kind: KIND_GPU
       gpus: [ 0 ]
     }
