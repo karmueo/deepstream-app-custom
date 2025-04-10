@@ -212,6 +212,8 @@ void DeepTracker::updatePastFrameObjBatch(NvDsTargetMiscDataBatch *pastFrameObjB
             }
 
             pastFrameObjBatch->list[0].numFilled = 1;
+            pastFrameObjBatch->list[0].streamID = 0;
+            pastFrameObjBatch->list[0].surfaceStreamID = 0;
         }
         pastFrameObjBatch->numFilled = 1;
     }

@@ -32,7 +32,7 @@ NvMOTStatus NvMOT_Query(uint16_t customConfigFilePathSize,
     pQuery->outputReidTensor = false;  // 仅当低级跟踪器支持输出 reid 特性时设置为 true
     pQuery->reidFeatureSize = 256;     // Re-ID特征的大小，如果outputReidTensor为true，则为必需
 
-    std::cout << "[BYTETrack Initialized]" << std::endl;
+    std::cout << "[Track Initialized]" << std::endl;
     return NvMOTStatus_OK;
 }
 

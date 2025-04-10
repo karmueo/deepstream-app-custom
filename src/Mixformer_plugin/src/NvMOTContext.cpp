@@ -133,6 +133,10 @@ NvMOTStatus NvMOTContext::retrieveMiscData(const NvMOTProcessParams *params,
                                            NvMOTTrackerMiscData *pTrackerMiscData)
 {
     std::set<NvMOTStreamId> videoStreamIdList;
+    for (NvMOTStreamId streamInd = 0; streamInd < params->numFrames; streamInd++)
+    {
+        videoStreamIdList.insert(params->frameList[streamInd].streamID);
+    }
 
     for (NvMOTStreamId streamInd = 0; streamInd < params->numFrames; streamInd++)
     {

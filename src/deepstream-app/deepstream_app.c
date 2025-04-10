@@ -1296,9 +1296,9 @@ analytics_done_buf_prob(GstPad *pad, GstPadProbeInfo *info, gpointer u_data)
      */
     write_kitti_track_output(appCtx, batch_meta);
     write_kitti_past_track_output(appCtx, batch_meta);
-    write_reid_track_output(appCtx, batch_meta);
-    write_terminated_track_output(appCtx, batch_meta);
-    write_shadow_track_output(appCtx, batch_meta);
+    // write_reid_track_output(appCtx, batch_meta);
+    // write_terminated_track_output(appCtx, batch_meta);
+    // write_shadow_track_output(appCtx, batch_meta);
 
     if (appCtx->bbox_generated_post_analytics_cb)
     {

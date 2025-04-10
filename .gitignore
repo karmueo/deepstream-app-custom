@@ -12,6 +12,7 @@ src/deepstream-app/deepstream-app
 src/deepstream-opencv-test
 src/gst-dsexample
 src/deepstream-app/output
+src/gst-nvtracker
 
 .vscode
 
