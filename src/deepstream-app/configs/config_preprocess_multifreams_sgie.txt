@@ -44,29 +44,7 @@ scaling-pool-compute-hw=1
     # 6=NvBufSurfTransformInter_Default
 scaling-filter=0
     # custom library .so path having custom functionality
-custom-lib-path=/workspaces/Deepstream_template/deepstream/src/nvdspreprocess_lib/libcustom2d_preprocess.so
+custom-lib-path=/opt/nvidia/deepstream/deepstream/lib/gst-plugins/libcustom2d_preprocess.so
     # custom tensor preparation function name having predefined input/outputs
     # check the default custom library nvdspreprocess_lib for more info
 custom-tensor-preparation-function=CustomTensorPreparation
-
-[user-configs]
-# 归一化
-pixel-normalization-factor=0.003921568
-   # mean file path in ppm format
-#mean-file=
-   # array of offsets for each channel
-#offsets=
-
-
-[group-0]
-src-ids=-1
-#0:Car 1:Bicycle 2:Person 3:Roadsign
-operate-on-class-ids=0
-custom-input-transformation-function=CustomAsyncTransformation
-process-on-all-objects=1
-#roi-params-src-0=300;200;700;800;1300;300;600;700
-#roi-params-src-1=860;300;900;500;50;300;500;700
-#input-object-min-width=100
-#input-object-min-height=100
-#input-object-max-width=500
-#input-object-max-height=500

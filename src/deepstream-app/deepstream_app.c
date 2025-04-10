@@ -659,6 +659,9 @@ write_kitti_track_output(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
     gchar bbox_file[1024] = {0};
     FILE *bbox_params_dump_file = NULL;
 
+    // 给config.kitti_track_dir_path赋个临时的值
+    appCtx->config.kitti_track_dir_path = "output";
+
     if (!appCtx->config.kitti_track_dir_path)
         return;
 

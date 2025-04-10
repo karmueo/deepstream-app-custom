@@ -17,7 +17,7 @@ uint64_t time_last;
 double time_ms;
 #endif
 
-MixformerTRT::MixformerTRT(std::string &engine_name)
+MixformerTRT::MixformerTRT(const std::string &engine_name)
 {
     // deserialize engine
     this->deserialize_engine(engine_name);
@@ -51,7 +51,7 @@ MixformerTRT::~MixformerTRT()
     // cudaStreamDestroy(stream);
 }
 
-void MixformerTRT::deserialize_engine(std::string &engine_name)
+void MixformerTRT::deserialize_engine(const std::string &engine_name)
 {
     // create a model using the API directly and serialize it to a stream
     // char *trt_model_stream{nullptr};

@@ -11,6 +11,7 @@ src/deepstream-image-meta-test
 src/deepstream-app/deepstream-app
 src/deepstream-opencv-test
 src/gst-dsexample
+src/deepstream-app/output
 
 .vscode
 

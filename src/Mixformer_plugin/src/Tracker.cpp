@@ -23,11 +23,11 @@ NvMOTStatus NvMOT_Query(uint16_t customConfigFilePathSize,
     pQuery->memType = NVBUF_MEM_CUDA_UNIFIED;
     pQuery->batchMode = NvMOTBatchMode_Batch;          // batchMode must be set as NvMOTBatchMode_Batch
     pQuery->colorFormats[0] = NVBUF_COLOR_FORMAT_RGBA; // among {NVBUF_COLOR_FORMAT_NV12, NVBUF_COLOR_FORMAT_RGBA}
+    pQuery->supportPastFrame = true;
 
     pQuery->maxTargetsPerStream = MAX_TARGETS_PER_STREAM; // Max number of targets stored for each stream
 
     /** 可选配置以设置其他功能。 */
-    pQuery->supportPastFrame = false;  // 仅当低级跟踪器支持过去帧数据时设置为 true
     pQuery->maxShadowTrackingAge = 30; // 如果 supportPastFrame 为 true，则需要跟踪阴影的最大长度
     pQuery->outputReidTensor = false;  // 仅当低级跟踪器支持输出 reid 特性时设置为 true
     pQuery->reidFeatureSize = 256;     // Re-ID特征的大小，如果outputReidTensor为true，则为必需

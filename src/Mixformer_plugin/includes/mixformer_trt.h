@@ -147,7 +147,7 @@ private:
     void sample_target(const cv::Mat &im, cv::Mat &croped, DrBBox target_bb, float search_area_factor, int output_sz, float &resize_factor);
 
 public:
-    MixformerTRT(std::string &engine_name);
+    MixformerTRT(const std::string &engine_name);
 
     ~MixformerTRT(); // override
 
@@ -161,7 +161,7 @@ public:
     // config static
     Config cfg;
 
-    void deserialize_engine(std::string &engine_name);
+    void deserialize_engine(const std::string &engine_name);
 
     void infer(
         float *input_imt,
