@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  deepstream:
+    image: nvcr.io/nvidia/deepstream:7.1-gc-triton-devel
+    container_name: deepstream-container
+    network_mode: host  # 等效于 --net=host
+    runtime: nvidia     # 启用 NVIDIA GPU 支持
+    devices:
+      - "/dev/snd"      # 音频设备
+    volumes:
+      - "/tmp/.X11-unix:/tmp/.X11-unix"  # X11 显示套接字
+      - "$HOME/work/workspace:/workspace" # 挂载工作目录
+    environment:
+      - DISPLAY=${DISPLAY:-localhost:10.0}  # 从主机继承或默认 localhost:10.0
+      - GST_PLUGIN_PATH=/usr/local/lib/x86_64-linux-gnu/gstreamer-1.0
+      - HTTP_PROXY=http://192.168.1.110:7890
+      - HTTPS_PROXY=http://192.168.1.110:7890
+    privileged: true    # 特权模式
+    cap_add:
+      - SYS_PTRACE     # 允许 ptrace 调试
+    working_dir: /workspace  # 设置工作目录
+    healthcheck:
+      test: ["CMD-SHELL", "echo 'Alive' || exit 1"]  # 简单心跳检测
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    stdin_open: true  # 保持标准输入打开
+    tty: true         # 启用伪终端
