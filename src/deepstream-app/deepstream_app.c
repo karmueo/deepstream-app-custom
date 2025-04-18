@@ -1670,6 +1670,31 @@ create_common_elements(NvDsConfig *config, NvDsPipeline *pipeline,
         *sink_elem = pipeline->common_elements.dsanalytics_bin.bin;
     }
 
+    // 启用自定义的多帧目标识别插件
+    if (config->videorecognition_config.enable)
+    {
+        if (!create_dsvideorecognition_bin(&config->videorecognition_config,
+                                           &pipeline->common_elements.videorecognition_bin))
+        {
+            goto done;
+        }
+        gst_bin_add(GST_BIN(pipeline->pipeline), pipeline->common_elements.videorecognition_bin.bin);
+
+        if (!*src_elem)
+        {
+            *src_elem = pipeline->common_elements.videorecognition_bin.bin;
+        }
+        if (*sink_elem)
+        {
+            // 把videorecognition的输出src pad连接到上一个元素的sink pad输入
+            NVGSTDS_LINK_ELEMENT(pipeline->common_elements.videorecognition_bin.bin,
+                                 *sink_elem);
+        }
+
+        // 也就说，如果启用该插件，该插件的输入应该要连接到跟踪的输出
+        *sink_elem = pipeline->common_elements.videorecognition_bin.bin;
+    }
+
     if (config->tracker_config.enable)
     {
         if (!create_tracking_bin(&config->tracker_config,
@@ -1686,6 +1711,8 @@ create_common_elements(NvDsConfig *config, NvDsPipeline *pipeline,
         }
         if (*sink_elem)
         {
+            // 也就说，如果启用了自定义多帧目标识别的插件，会进入这里，把跟踪的输出连接到上一个元素的sink pad输入
+            // 也就是把跟踪的输出连接到videorecognition的输入
             NVGSTDS_LINK_ELEMENT(pipeline->common_elements.tracker_bin.bin,
                                  *sink_elem);
         }
@@ -2216,6 +2243,7 @@ create_pipeline(AppCtx *appCtx,
         // Set this bin as the last element
         last_elem = pipeline->dsexample_bin.bin;
     }
+
     // create and add common components to pipeline.
     if (!create_common_elements(config, pipeline, &tmp_elem1, &tmp_elem2,
                                 bbox_generated_post_analytics_cb))

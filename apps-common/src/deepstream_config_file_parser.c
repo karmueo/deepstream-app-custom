@@ -220,6 +220,7 @@ GST_DEBUG_CATEGORY(APP_CFG_PARSER_CAT);
 
 // Add group name for set of configs of dsexample element
 #define CONFIG_GROUP_DSEXAMPLE "ds-example"
+#define CONFIG_GROUP_VIDEORECOGNITION "videorecognition"
 // Refer to gst-dsexample element source code for the meaning of these
 // configs
 #define CONFIG_GROUP_DSEXAMPLE_FULL_FRAME "full-frame"
@@ -1114,6 +1115,77 @@ parse_dsexample(NvDsDsExampleConfig *config, GKeyFile *key_file)
         {
             NVGSTDS_WARN_MSG_V("Unknown key '%s' for group [%s]", *key,
                                CONFIG_GROUP_DSEXAMPLE);
+        }
+    }
+
+    ret = TRUE;
+done:
+    if (error)
+    {
+        g_error_free(error);
+    }
+    if (keys)
+    {
+        g_strfreev(keys);
+    }
+    if (!ret)
+    {
+        NVGSTDS_ERR_MSG_V("%s failed", __func__);
+    }
+    return ret;
+}
+
+gboolean
+parse_videorecognition(NvDsVideoRecognitionConfig *config, GKeyFile *key_file)
+{
+    gboolean ret = FALSE;
+    gchar **keys = NULL;
+    gchar **key = NULL;
+    GError *error = NULL;
+
+    keys = g_key_file_get_keys(key_file, CONFIG_GROUP_VIDEORECOGNITION, NULL, &error);
+    CHECK_ERROR(error);
+    for (key = keys; *key; key++)
+    {
+        if (!g_strcmp0(*key, CONFIG_GROUP_ENABLE))
+        {
+            config->enable =
+                g_key_file_get_integer(key_file, CONFIG_GROUP_VIDEORECOGNITION,
+                                       CONFIG_GROUP_ENABLE, &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "unique-id"))
+        {
+            config->unique_id =
+                g_key_file_get_integer(key_file, CONFIG_GROUP_VIDEORECOGNITION,
+                                       "unique-id", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "gpu-id"))
+        {
+            config->gpu_id =
+                g_key_file_get_integer(key_file, CONFIG_GROUP_VIDEORECOGNITION,
+                                       "gpu-id", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "nvbuf-memory-type"))
+        {
+            config->nvbuf_memory_type =
+                g_key_file_get_integer(key_file, CONFIG_GROUP_VIDEORECOGNITION,
+                                       "nvbuf-memory-type", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "batch-size"))
+        {
+            config->batch_size =
+                g_key_file_get_integer(key_file, CONFIG_GROUP_VIDEORECOGNITION,
+                                       "batch-size", &error);
+            CHECK_ERROR(error);
+        }
+        else
+        {
+            NVGSTDS_WARN_MSG_V("Unknown key '%s' for group [%s]", *key,
+                               CONFIG_GROUP_VIDEORECOGNITION);
         }
     }
 

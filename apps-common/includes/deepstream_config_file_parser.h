@@ -11,7 +11,7 @@
  */
 
 #ifndef __NVGSTDS_CONFIG_PARSER_H__
-#define  __NVGSTDS_CONFIG_PARSER_H__
+#define __NVGSTDS_CONFIG_PARSER_H__
 
 #include <gst/gst.h>
 
@@ -33,6 +33,7 @@ extern "C"
 #include "deepstream_sources.h"
 #include "deepstream_dsanalytics.h"
 #include "deepstream_dsexample.h"
+#include "deepstream_videorecognition.h"
 #include "deepstream_streammux.h"
 #include "deepstream_tracker.h"
 #include "deepstream_dewarper.h"
@@ -70,10 +71,11 @@ extern "C"
 #define CONFIG_GROUP_TILED_DISPLAY "tiled-display"
 #define CONFIG_GROUP_DSANALYTICS "nvds-analytics"
 #define CONFIG_GROUP_DSEXAMPLE "ds-example"
+#define CONFIG_GROUP_VIDEORECOGNITION "videorecognition"
 #define CONFIG_GROUP_STREAMMUX "streammux"
 #define CONFIG_GROUP_DEWARPER "dewarper"
-#define CONFIG_GROUP_MSG_CONVERTER  "message-converter"
-#define CONFIG_GROUP_MSG_CONSUMER  "message-consumer"
+#define CONFIG_GROUP_MSG_CONVERTER "message-converter"
+#define CONFIG_GROUP_MSG_CONSUMER "message-consumer"
 #define CONFIG_GROUP_IMG_SAVE "img-save"
 #define CONFIG_GROUP_AUDIO_TRANSFORM "audio-transform"
 #define CONFIG_GROUP_AUDIO_CLASSIFIER "audio-classifier"
@@ -113,212 +115,215 @@ extern "C"
 #define CONFIG_GROUP_SOURCE_SMART_RECORD_DURATION "smart-rec-duration"
 #define CONFIG_GROUP_SOURCE_SMART_RECORD_INTERVAL "smart-rec-interval"
 
-/**
- * Function to parse class label file. Parses the labels into a 2D-array of
- * strings. Refer the SDK documentation for format of the labels file.
- *
- * @param[in] config pointer to @ref NvDsGieConfig
- *
- * @return true if file parsed successfully else returns false.
- */
-gboolean
-parse_labels_file (NvDsGieConfig *config);
+    /**
+     * Function to parse class label file. Parses the labels into a 2D-array of
+     * strings. Refer the SDK documentation for format of the labels file.
+     *
+     * @param[in] config pointer to @ref NvDsGieConfig
+     *
+     * @return true if file parsed successfully else returns false.
+     */
+    gboolean
+    parse_labels_file(NvDsGieConfig *config);
 
-/**
- * Function to read properties of source element from configuration file.
- *
- * @param[in] config pointer to @ref NvDsDewarperConfig
- * @param[in] key_file pointer to file having key value pairs.
- * @param[in] group name of property group @ref CONFIG_GROUP_DEWARPER
- * @param[in] cfg_file_path path of configuration file.
- *
- * @return true if parsed successfully.
- */
-gboolean
-parse_dewarper (NvDsDewarperConfig * config, GKeyFile * key_file, gchar *cfg_file_path, gchar * group);
+    /**
+     * Function to read properties of source element from configuration file.
+     *
+     * @param[in] config pointer to @ref NvDsDewarperConfig
+     * @param[in] key_file pointer to file having key value pairs.
+     * @param[in] group name of property group @ref CONFIG_GROUP_DEWARPER
+     * @param[in] cfg_file_path path of configuration file.
+     *
+     * @return true if parsed successfully.
+     */
+    gboolean
+    parse_dewarper(NvDsDewarperConfig *config, GKeyFile *key_file, gchar *cfg_file_path, gchar *group);
 
-/**
- * Function to read properties of source element from configuration file.
- *
- * @param[in] config pointer to @ref NvDsSourceConfig
- * @param[in] key_file pointer to file having key value pairs.
- * @param[in] group name of property group @ref CONFIG_GROUP_SOURCE
- * @param[in] cfg_file_path path of configuration file.
- *
- * @return true if parsed successfully.
- */
-gboolean
-parse_source (NvDsSourceConfig * config, GKeyFile * key_file,
-    gchar * group, gchar * cfg_file_path);
+    /**
+     * Function to read properties of source element from configuration file.
+     *
+     * @param[in] config pointer to @ref NvDsSourceConfig
+     * @param[in] key_file pointer to file having key value pairs.
+     * @param[in] group name of property group @ref CONFIG_GROUP_SOURCE
+     * @param[in] cfg_file_path path of configuration file.
+     *
+     * @return true if parsed successfully.
+     */
+    gboolean
+    parse_source(NvDsSourceConfig *config, GKeyFile *key_file,
+                 gchar *group, gchar *cfg_file_path);
 
-/**
- * Function to read properties of NvSegVisual element from configuration file.
- *
- * @param[in] config pointer to @ref NvDsSegVisualConfig
- * @param[in] key_file pointer to file having key value pairs.
- *
- * @return true if parsed successfully.
- */
-gboolean parse_segvisual (NvDsSegVisualConfig * config, GKeyFile * key_file);
+    /**
+     * Function to read properties of NvSegVisual element from configuration file.
+     *
+     * @param[in] config pointer to @ref NvDsSegVisualConfig
+     * @param[in] key_file pointer to file having key value pairs.
+     *
+     * @return true if parsed successfully.
+     */
+    gboolean parse_segvisual(NvDsSegVisualConfig *config, GKeyFile *key_file);
 
-/**
- * Function to read properties of OSD element from configuration file.
- *
- * @param[in] config pointer to @ref NvDsOSDConfig
- * @param[in] key_file pointer to file having key value pairs.
- *
- * @return true if parsed successfully.
- */
-gboolean parse_osd (NvDsOSDConfig * config, GKeyFile * key_file);
+    /**
+     * Function to read properties of OSD element from configuration file.
+     *
+     * @param[in] config pointer to @ref NvDsOSDConfig
+     * @param[in] key_file pointer to file having key value pairs.
+     *
+     * @return true if parsed successfully.
+     */
+    gboolean parse_osd(NvDsOSDConfig *config, GKeyFile *key_file);
 
-/**
- * Function to read properties of nvdspreprocess element from configuration file.
- *
- * @param[in] config pointer to @ref NvDsPreProcessConfig
- * @param[in] key_file pointer to file having key value pairs.
- * @param[in] group name of property group @ref CONFIG_GROUP_PREPROCESS and
- *            @ref CONFIG_GROUP_SECONDARY_PREPROCESS
- * @param[in] cfg_file_path path of configuration file.
- *
- * @return true if parsed successfully.
- */
-gboolean
-parse_preprocess (NvDsPreProcessConfig * config, GKeyFile * key_file,
-    gchar * group, gchar * cfg_file_path);
+    /**
+     * Function to read properties of nvdspreprocess element from configuration file.
+     *
+     * @param[in] config pointer to @ref NvDsPreProcessConfig
+     * @param[in] key_file pointer to file having key value pairs.
+     * @param[in] group name of property group @ref CONFIG_GROUP_PREPROCESS and
+     *            @ref CONFIG_GROUP_SECONDARY_PREPROCESS
+     * @param[in] cfg_file_path path of configuration file.
+     *
+     * @return true if parsed successfully.
+     */
+    gboolean
+    parse_preprocess(NvDsPreProcessConfig *config, GKeyFile *key_file,
+                     gchar *group, gchar *cfg_file_path);
 
-/**
- * Function to read properties of infer element from configuration file.
- *
- * @param[in] config pointer to @ref NvDsGieConfig
- * @param[in] key_file pointer to file having key value pairs.
- * @param[in] group name of property group @ref CONFIG_GROUP_PRIMARY_GIE and
- *            @ref CONFIG_GROUP_SECONDARY_GIE
- * @param[in] cfg_file_path path of configuration file.
- *
- * @return true if parsed successfully.
- */
-gboolean
-parse_gie (NvDsGieConfig * config, GKeyFile * key_file, gchar * group,
-    gchar * cfg_file_path);
+    /**
+     * Function to read properties of infer element from configuration file.
+     *
+     * @param[in] config pointer to @ref NvDsGieConfig
+     * @param[in] key_file pointer to file having key value pairs.
+     * @param[in] group name of property group @ref CONFIG_GROUP_PRIMARY_GIE and
+     *            @ref CONFIG_GROUP_SECONDARY_GIE
+     * @param[in] cfg_file_path path of configuration file.
+     *
+     * @return true if parsed successfully.
+     */
+    gboolean
+    parse_gie(NvDsGieConfig *config, GKeyFile *key_file, gchar *group,
+              gchar *cfg_file_path);
 
-/**
- * Function to read properties of tracker element from configuration file.
- *
- * @param[in] config pointer to @ref NvDsTrackerConfig
- * @param[in] key_file pointer to file having key value pairs.
- * @param[in] cfg_file_path path of configuration file.
- *
- * @return true if parsed successfully.
- */
-gboolean
-parse_tracker (NvDsTrackerConfig * config, GKeyFile * key_file, gchar * cfg_file_path);
+    /**
+     * Function to read properties of tracker element from configuration file.
+     *
+     * @param[in] config pointer to @ref NvDsTrackerConfig
+     * @param[in] key_file pointer to file having key value pairs.
+     * @param[in] cfg_file_path path of configuration file.
+     *
+     * @return true if parsed successfully.
+     */
+    gboolean
+    parse_tracker(NvDsTrackerConfig *config, GKeyFile *key_file, gchar *cfg_file_path);
 
-/**
- * Function to read properties of sink element from configuration file.
- *
- * @param[in] config pointer to @ref NvDsSinkSubBinConfig
- * @param[in] key_file pointer to file having key value pairs.
- * @param[in] group name of property group @ref CONFIG_GROUP_SINK
- *
- * @return true if parsed successfully.
- */
-gboolean
-parse_sink (NvDsSinkSubBinConfig * config, GKeyFile * key_file, gchar * group, gchar * cfg_file_path);
+    /**
+     * Function to read properties of sink element from configuration file.
+     *
+     * @param[in] config pointer to @ref NvDsSinkSubBinConfig
+     * @param[in] key_file pointer to file having key value pairs.
+     * @param[in] group name of property group @ref CONFIG_GROUP_SINK
+     *
+     * @return true if parsed successfully.
+     */
+    gboolean
+    parse_sink(NvDsSinkSubBinConfig *config, GKeyFile *key_file, gchar *group, gchar *cfg_file_path);
 
-/**
- * Function to read properties of tiler element from configuration file.
- *
- * @param[in] config pointer to @ref NvDsTiledDisplayConfig
- * @param[in] key_file pointer to file having key value pairs.
- *
- * @return true if parsed successfully.
- */
-gboolean
-parse_tiled_display (NvDsTiledDisplayConfig * config, GKeyFile * key_file);
+    /**
+     * Function to read properties of tiler element from configuration file.
+     *
+     * @param[in] config pointer to @ref NvDsTiledDisplayConfig
+     * @param[in] key_file pointer to file having key value pairs.
+     *
+     * @return true if parsed successfully.
+     */
+    gboolean
+    parse_tiled_display(NvDsTiledDisplayConfig *config, GKeyFile *key_file);
 
-/**
- * Function to read properties of dsanalytics element from configuration file.
- *
- * @param[in] config pointer to @ref NvDsDsAnalyticsConfig
- * @param[in] key_file pointer to file having key value pairs.
- *
- * @return true if parsed successfully.
- */
-gboolean
-parse_dsanalytics (NvDsDsAnalyticsConfig * config, GKeyFile * key_file, gchar* cfg_file_path);
+    /**
+     * Function to read properties of dsanalytics element from configuration file.
+     *
+     * @param[in] config pointer to @ref NvDsDsAnalyticsConfig
+     * @param[in] key_file pointer to file having key value pairs.
+     *
+     * @return true if parsed successfully.
+     */
+    gboolean
+    parse_dsanalytics(NvDsDsAnalyticsConfig *config, GKeyFile *key_file, gchar *cfg_file_path);
 
-/**
- * Function to read properties of dsexample element from configuration file.
- *
- * @param[in] config pointer to @ref NvDsDsExampleConfig
- * @param[in] key_file pointer to file having key value pairs.
- *
- * @return true if parsed successfully.
- */
-gboolean
-parse_dsexample (NvDsDsExampleConfig * config, GKeyFile * key_file);
+    /**
+     * Function to read properties of dsexample element from configuration file.
+     *
+     * @param[in] config pointer to @ref NvDsDsExampleConfig
+     * @param[in] key_file pointer to file having key value pairs.
+     *
+     * @return true if parsed successfully.
+     */
+    gboolean
+    parse_dsexample(NvDsDsExampleConfig *config, GKeyFile *key_file);
 
-/**
- * Function to read properties of streammux element from configuration file.
- *
- * @param[in] config pointer to @ref NvDsStreammuxConfig
- * @param[in] key_file pointer to file having key value pairs.
- * @param[in] cfg_file_path path of configuration file.
- *
- * @return true if parsed successfully.
- */
-gboolean
-parse_streammux (NvDsStreammuxConfig * config, GKeyFile * key_file, gchar * cfg_file_path);
+    gboolean
+    parse_videorecognition(NvDsVideoRecognitionConfig *config, GKeyFile *key_file);
 
-/**
- * Function to read properties of message converter element from configuration file.
- *
- * @param[in] config pointer to @ref NvDsSinkMsgConvBrokerConfig
- * @param[in] key_file pointer to file having key value pairs.
- * @param[in] group name of property group @ref CONFIG_GROUP_MSG_CONVERTER
- * @param[in] cfg_file_path path of configuration file.
- *
- * @return true if parsed successfully.
- */
-gboolean
-parse_msgconv (NvDsSinkMsgConvBrokerConfig *config, GKeyFile *key_file, gchar *group, gchar *cfg_file_path);
+    /**
+     * Function to read properties of streammux element from configuration file.
+     *
+     * @param[in] config pointer to @ref NvDsStreammuxConfig
+     * @param[in] key_file pointer to file having key value pairs.
+     * @param[in] cfg_file_path path of configuration file.
+     *
+     * @return true if parsed successfully.
+     */
+    gboolean
+    parse_streammux(NvDsStreammuxConfig *config, GKeyFile *key_file, gchar *cfg_file_path);
 
-/**
- * Function to read properties of message consumer element from configuration file.
- *
- * @param[in] config pointer to @ref NvDsMsgConsumerConfig
- * @param[in] key_file pointer to file having key value pairs.
- * @param[in] group name of property group @ref CONFIG_GROUP_MSG_CONSUMER
- * @param[in] cfg_file_path path of configuration file.
- *
- * @return true if parsed successfully.
- */
-gboolean
-parse_msgconsumer (NvDsMsgConsumerConfig *config, GKeyFile *key_file, gchar *group, gchar *cfg_file_path);
+    /**
+     * Function to read properties of message converter element from configuration file.
+     *
+     * @param[in] config pointer to @ref NvDsSinkMsgConvBrokerConfig
+     * @param[in] key_file pointer to file having key value pairs.
+     * @param[in] group name of property group @ref CONFIG_GROUP_MSG_CONVERTER
+     * @param[in] cfg_file_path path of configuration file.
+     *
+     * @return true if parsed successfully.
+     */
+    gboolean
+    parse_msgconv(NvDsSinkMsgConvBrokerConfig *config, GKeyFile *key_file, gchar *group, gchar *cfg_file_path);
 
-/**
- * Function to read properties of image save from configuration file.
- *
- * @param[in] config pointer to @ref NvDsMsgConsumerConfig
- * @param[in] key_file pointer to file having key value pairs.
- * @param[in] group name of property group @ref CONFIG_GROUP_MSG_CONSUMER
- * @param[in] cfg_file_path path of configuration file.
- *
- * @return true if parsed successfully.
- */
-gboolean
-parse_image_save (NvDsImageSave *config, GKeyFile *key_file,
-                   gchar *group, gchar *cfg_file_path);
+    /**
+     * Function to read properties of message consumer element from configuration file.
+     *
+     * @param[in] config pointer to @ref NvDsMsgConsumerConfig
+     * @param[in] key_file pointer to file having key value pairs.
+     * @param[in] group name of property group @ref CONFIG_GROUP_MSG_CONSUMER
+     * @param[in] cfg_file_path path of configuration file.
+     *
+     * @return true if parsed successfully.
+     */
+    gboolean
+    parse_msgconsumer(NvDsMsgConsumerConfig *config, GKeyFile *key_file, gchar *group, gchar *cfg_file_path);
 
-/**
- * Utility function to convert relative path in configuration file
- * with absolute path.
- *
- * @param[in] cfg_file_path path of configuration file.
- * @param[in] file_path relative path of file.
- */
-gchar *
-get_absolute_file_path (gchar *cfg_file_path, gchar * file_path);
+    /**
+     * Function to read properties of image save from configuration file.
+     *
+     * @param[in] config pointer to @ref NvDsMsgConsumerConfig
+     * @param[in] key_file pointer to file having key value pairs.
+     * @param[in] group name of property group @ref CONFIG_GROUP_MSG_CONSUMER
+     * @param[in] cfg_file_path path of configuration file.
+     *
+     * @return true if parsed successfully.
+     */
+    gboolean
+    parse_image_save(NvDsImageSave *config, GKeyFile *key_file,
+                     gchar *group, gchar *cfg_file_path);
+
+    /**
+     * Utility function to convert relative path in configuration file
+     * with absolute path.
+     *
+     * @param[in] cfg_file_path path of configuration file.
+     * @param[in] file_path relative path of file.
+     */
+    gchar *
+    get_absolute_file_path(gchar *cfg_file_path, gchar *file_path);
 
 #ifdef __cplusplus
 }

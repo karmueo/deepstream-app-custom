@@ -791,6 +791,18 @@ parse_config_file(NvDsConfig *config, gchar *cfg_file_path)
             parse_err = !parse_dsexample(&config->dsexample_config, cfg_file);
         }
 
+        if (!g_strcmp0(*group, CONFIG_GROUP_VIDEORECOGNITION))
+        {
+            /**  set gpu_id for dsexample component using global_gpu_id(if available) */
+            if (config->global_gpu_id != -1)
+            {
+                config->videorecognition_config.gpu_id = config->global_gpu_id;
+            }
+            /** if gpu_id for dsexample component is present,
+             * it will override the value set using global_gpu_id in parse_dsexample function */
+            parse_err = !parse_videorecognition(&config->videorecognition_config, cfg_file);
+        }
+
         if (!g_strcmp0(*group, CONFIG_GROUP_MSG_CONVERTER))
         {
             parse_err =

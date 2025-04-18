@@ -1,0 +1,18 @@
+platform: "tensorrt_plan"
+max_batch_size: 1
+default_model_filename: "end2end.engine"
+
+input [
+    {
+      name: "input"
+      data_type: TYPE_FP32
+      dims: [ 250, 3, 224, 224 ]
+    }
+]
+output [
+    {
+      name: "output"
+      data_type: TYPE_FP32
+      dims: [ 400 ]
+    }
+]

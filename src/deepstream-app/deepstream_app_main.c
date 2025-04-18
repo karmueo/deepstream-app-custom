@@ -429,6 +429,18 @@ bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
             }
         }
     }
+
+    NvDsMetaList *l_user_meta = NULL;
+    NvDsUserMeta *user_meta = NULL;
+    for (l_user_meta = batch_meta->batch_user_meta_list; l_user_meta != NULL;
+         l_user_meta = l_user_meta->next)
+    {
+        user_meta = (NvDsUserMeta *)(l_user_meta->data);
+        if (user_meta->base_meta.meta_type == NVDS_PREPROCESS_BATCH_META)
+        {
+            g_print("Preprocess batch meta found\n");
+        }
+    }
 }
 
 /**

@@ -30,6 +30,7 @@
 #include "deepstream_tiled_display.h"
 #include "deepstream_dsanalytics.h"
 #include "deepstream_dsexample.h"
+#include "deepstream_videorecognition.h"
 #include "deepstream_tracker.h"
 #include "deepstream_secondary_gie.h"
 #include "deepstream_secondary_preprocess.h"
@@ -72,6 +73,7 @@ extern "C"
     NvDsSinkBin demux_sink_bin;
     NvDsDsAnalyticsBin dsanalytics_bin;
     NvDsDsExampleBin dsexample_bin;
+    NvDsVideoRecognitionBin videorecognition_bin;
     AppCtx *appCtx;
   } NvDsInstanceBin;
 
@@ -131,6 +133,7 @@ extern "C"
     NvDsTiledDisplayConfig tiled_display_config;
     NvDsDsAnalyticsConfig dsanalytics_config;
     NvDsDsExampleConfig dsexample_config;
+    NvDsVideoRecognitionConfig videorecognition_config;
     NvDsSinkMsgConvBrokerConfig msg_conv_config;
     NvDsMyNetworkConfig mynetwork_config;
     NvDsImageSave image_save_config;

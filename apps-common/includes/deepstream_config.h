@@ -56,6 +56,7 @@
 #define NVDS_ELEM_SEGVISUAL "nvsegvisual"
 #define NVDS_ELEM_DSANALYTICS_ELEMENT "nvdsanalytics"
 #define NVDS_ELEM_DSEXAMPLE_ELEMENT "dsexample"
+#define NVDS_ELEM_DSVIDEORECOGNITION_ELEMENT "videorecognition"
 #define NVDS_ELEM_DSMYNETWORK_ELEMENT "_mynetwork"
 
 #define NVDS_ELEM_DEWARPER "nvdewarper"

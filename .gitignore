@@ -13,6 +13,7 @@ src/deepstream-opencv-test
 src/gst-dsexample
 src/deepstream-app/output
 src/gst-nvtracker
+src/gst-videorecognition/build
 
 .vscode
 
