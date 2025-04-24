@@ -28,3 +28,10 @@ link_directories(${DS_LIBS_DIR})
 add_library(${PROJECT_NAME} SHARED ${TRACK})
 
 target_link_libraries(${PROJECT_NAME} nvds_meta ${OpenCV_LIBS})
+
+# 添加安装
+set(GST_PLUGINS_DIR "/opt/nvidia/deepstream/deepstream/lib")
+install(TARGETS ${PROJECT_NAME}
+        LIBRARY DESTINATION ${GST_PLUGINS_DIR}
+        COMPONENT runtime
+)

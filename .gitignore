@@ -14,6 +14,8 @@ src/gst-dsexample
 src/deepstream-app/output
 src/gst-nvtracker
 src/gst-videorecognition/build
+src/Mixformer_plugin/.idea
+src/Mixformer_plugin/cmake-build-debug
 
 .vscode
 
