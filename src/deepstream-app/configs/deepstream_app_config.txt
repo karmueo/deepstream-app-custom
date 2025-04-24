@@ -208,5 +208,20 @@ display-tracking-id=1
 # gpu-id=0
 # display-tracking-id=1
 
+[ds-example]
+enable=0
+processing-width=224
+processing-height=224
+full-frame=0
+#batch-size for batch supported optimized plugin
+batch-size=1
+unique-id=15
+gpu-id=0
+blur-objects=0
+# Supported memory types for blur-objects:
+# For x86: 1 and 3
+# For Jetson: 0
+nvbuf-memory-type=3
+
 [tests]
 file-loop=0

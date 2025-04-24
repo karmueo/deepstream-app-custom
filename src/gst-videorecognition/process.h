@@ -7,7 +7,7 @@
 class Process
 {
 public:
-    Process();
+    Process(int max_history_frames = 300);
     ~Process();
 
     // 添加视频帧
@@ -25,6 +25,23 @@ public:
                                   int height,
                                   int width);
 
+    void convertCvInputToTensorRT(float *input_data,
+                                  int clip_len,
+                                  int height,
+                                  int width);
+
+    // 获取当前视频帧长度
+    int getCurrentFrameLength() const
+    {
+        return m_vTargetFrames.size();
+    }
+
+    // 清空释放视频帧
+    void clearFrames()
+    {
+        m_vTargetFrames.clear();
+    }
+
 private:
     // 输入一张图片，和缩放尺寸，对其进行保持长宽比的缩放，其他区域用黑色填充
     cv::Mat resizeWithAspectRatio(const cv::Mat &src, const cv::Size &size);
@@ -40,6 +57,8 @@ private:
 
     // 模型输入尺寸
     cv::Size m_input_size;
+
+    int m_max_history_frames; // 最大保存历史帧数
 };
 
 #endif /* __VIDEORECOGNITION_PROCESS_H__ */

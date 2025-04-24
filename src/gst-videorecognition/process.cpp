@@ -1,8 +1,10 @@
 #include "process.h"
 
-Process::Process()
+Process::Process(int max_history_frames)
 {
-    m_input_size = cv::Size(224, 224); // 模型输入尺寸
+    m_input_size = cv::Size(224, 224);             // 模型输入尺寸
+    m_max_history_frames = max_history_frames;     // 最大保存历史帧数
+    m_vTargetFrames.reserve(m_max_history_frames); // 预留空间
 }
 
 Process::~Process()
@@ -11,14 +13,14 @@ Process::~Process()
 
 void Process::addFrame(const cv::Mat &frame)
 {
-    // 将视频帧添加到目标视频帧vector中
-    m_vTargetFrames.push_back(frame);
-
     // 控制视频帧数量
-    if (m_vTargetFrames.size() > 300)
+    if (m_vTargetFrames.size() >= m_max_history_frames)
     {
         m_vTargetFrames.erase(m_vTargetFrames.begin());
     }
+
+    // 将视频帧添加到目标视频帧vector中
+    m_vTargetFrames.push_back(frame);
 }
 
 void Process::convertCvInputToTensorRT(const std::vector<cv::Mat> &frames,
@@ -30,7 +32,6 @@ void Process::convertCvInputToTensorRT(const std::vector<cv::Mat> &frames,
     // 参数校验
     assert(frames.size() <= clip_len);
     assert(frames[0].channels() == 3);
-    assert(frames[0].type() == CV_32FC3);
     assert(frames[0].rows == height && frames[0].cols == width);
 
     auto actual_frames = frames.size();
@@ -41,12 +42,74 @@ void Process::convertCvInputToTensorRT(const std::vector<cv::Mat> &frames,
         // 选择帧（超出范围用最后一帧）
         const cv::Mat &frame = frames[std::min(t, static_cast<int>(actual_frames - 1))];
 
+        // 转换为RGB格式
+        cv::cvtColor(frame, frame, cv::COLOR_BGR2RGB);
+        // 判断尺寸是否等于输入尺寸
+        if (frame.rows != m_input_size.height || frame.cols != m_input_size.width)
+        {
+            cv::Mat resizeMat = resizeWithAspectRatio(frame, m_input_size);
+        }
+
+        // 归一化
+        cv::Mat norm_img = half_norm(frame);
+
         // 获取当前帧在input_data中的起始位置
         float *frame_data = input_data + t * 3 * height * width;
 
         // 通道分离并交错存储 (OpenCV的HWC -> TensorRT的CHW)
         std::vector<cv::Mat> channels(3);
         cv::split(frame, channels);
+
+        for (int c = 0; c < 3; ++c)
+        {
+            for (int h = 0; h < height; ++h)
+            {
+                for (int w = 0; w < width; ++w)
+                {
+                    // 计算目标位置 [1][t][c][h][w]
+                    int dst_idx = c * (height * width) + h * width + w;
+                    frame_data[dst_idx] = channels[c].at<float>(h, w);
+                }
+            }
+        }
+    }
+}
+
+void Process::convertCvInputToTensorRT(float *input_data, int clip_len, int height, int width)
+{
+    // 参数校验
+    assert(m_vTargetFrames.size() <= clip_len);
+    assert(m_vTargetFrames[0].channels() == 3);
+    assert(m_vTargetFrames[0].rows == height && m_vTargetFrames[0].cols == width);
+
+    auto actual_frames = m_vTargetFrames.size();
+
+    // 内存布局转换 [batch, clip_len, channel, height, width]
+    for (int t = 0; t < clip_len; ++t)
+    {
+        cv::Mat norm_img;
+        // 选择帧（超出范围用最后一帧）
+        const cv::Mat &frame = m_vTargetFrames[std::min(t, static_cast<int>(actual_frames - 1))];
+
+        // 转换为RGB格式
+        cv::cvtColor(frame, frame, cv::COLOR_BGR2RGB);
+        // 判断尺寸是否等于输入尺寸
+        if (frame.rows != m_input_size.height || frame.cols != m_input_size.width)
+        {
+            cv::Mat resizeMat = resizeWithAspectRatio(frame, m_input_size);
+            norm_img = half_norm(resizeMat);
+        }
+        else
+        {
+            norm_img = half_norm(frame);
+        }
+
+        // 获取当前帧在input_data中的起始位置
+        float *frame_data = input_data + t * 3 * height * width;
+
+        // 通道分离并交错存储 (OpenCV的HWC -> TensorRT的CHW)
+        std::vector<cv::Mat> channels(3);
+        cv::split(norm_img, channels);
 
         for (int c = 0; c < 3; ++c)
         {
@@ -185,12 +248,7 @@ std::vector<cv::Mat> Process::sampleFrames(const int &num_samples)
     for (const auto &idx : indices)
     {
         cv::Mat sampled_frame = m_vTargetFrames[idx].clone();
-        // 转换为RGB格式
-        cv::cvtColor(sampled_frame, sampled_frame, cv::COLOR_BGR2RGB);
-        cv::Mat resized_frame = resizeWithAspectRatio(sampled_frame, m_input_size);
-        // 归一化
-        cv::Mat norm_img = half_norm(resized_frame);
-        sampled_frames.push_back(norm_img);
+        sampled_frames.push_back(sampled_frame);
     }
 
     return sampled_frames;

@@ -10,6 +10,7 @@
 #include <map>
 #include "tsnTrt.h"
 #include "videorecognitionTrt.h"
+#include "process.h"
 
 #define PACKAGE "videorecognition"
 #define VERSION "1.0.0"
@@ -41,6 +42,21 @@ struct _Gstvideorecognition
     GstVideoInfo video_info;
 
     VideoRecognitionTRT *video_recognition;
+
+    // CUDA Stream used for allocating the CUDA task
+    cudaStream_t cuda_stream;
+
+    // Resolution at which frames/objects should be processed
+    gint processing_width;
+    gint processing_height;
+
+    // 用于RGBA转换的中间临时缓冲区
+    NvBufSurface *inter_buf;
+
+    // 最大保存历史帧数
+    guint32 max_history_frames;
+
+    Process *trtProcessPtr;
 };
 
 struct _GstvideorecognitionClass
