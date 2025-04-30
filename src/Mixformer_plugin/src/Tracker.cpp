@@ -60,6 +60,10 @@ NvMOTStatus NvMOT_Init(NvMOTConfig *pConfigIn,
 void NvMOT_DeInit(NvMOTContextHandle contextHandle)
 {
     /// 销毁上下文句柄
+    if (contextHandle == nullptr)
+    {
+        return;
+    }
     delete contextHandle;
 }
 

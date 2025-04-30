@@ -27,33 +27,33 @@ private:
     // 遍历计算output_score_map的最大值
     float get_max_score();
 
-private:
-    int output_pred_boxes_size = 1;
-    int output_score_size = 1;
-    int input_template_size = 1;
-    int input_search_size = 1;
+private: 
+    int output_pred_boxes_size   = 1;
+    int output_score_size        = 1;
+    int input_template_size      = 1;
+    int input_search_size        = 1;
     int input_template_anno_size = 1;
 
-    float *output_pred_boxes = nullptr;
-    float *output_score = nullptr;
-    float *input_template = nullptr;
-    float *input_search = nullptr;
+    float *output_pred_boxes   = nullptr;
+    float *output_score        = nullptr;
+    float *input_template      = nullptr;
+    float *input_search        = nullptr;
     float *input_template_anno = nullptr;
 
-    void *dev_input_template = nullptr;
-    void *dev_input_search = nullptr;
+    void *dev_input_template      = nullptr;
+    void *dev_input_search        = nullptr;
     void *dev_input_template_anno = nullptr;
-    void *dev_output_pred_boxes = nullptr;
-    void *dev_output_score = nullptr;
+    void *dev_output_pred_boxes   = nullptr;
+    void *dev_output_score        = nullptr;
 
-    int template_size = 112; // 192
-    int search_size = 224;   // 384
+    int   template_size   = 112;  // 192
+    int   search_size     = 224;  // 384
     float template_factor = 2.0;
-    float search_factor = 4.0;
+    float search_factor   = 4.0;
 
-    const char *input_0 = "template";
-    const char *input_1 = "search";
-    const char *input_2 = "template_anno";
+    const char *input_0  = "template";
+    const char *input_1  = "search";
+    const char *input_2  = "template_anno";
     const char *output_0 = "pred_boxes";
     const char *output_1 = "score";
 };

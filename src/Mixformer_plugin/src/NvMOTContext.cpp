@@ -90,7 +90,6 @@ NvMOTStatus NvMOTContext::processFrame(const NvMOTProcessParams *params, NvMOTTr
         NvMOTTrackedObj *trackedObj = &trackedObjs[0];
 
         // 如果跟踪上了，给NvMOTTrackedObj赋值
-        // if (is_tracked_)
         if (tracker_->isTracked())
         {
             NvMOTRect motRect{
@@ -132,7 +131,7 @@ NvMOTStatus NvMOTContext::processFrame(const NvMOTProcessParams *params, NvMOTTr
 NvMOTStatus NvMOTContext::retrieveMiscData(const NvMOTProcessParams *params,
                                            NvMOTTrackerMiscData *pTrackerMiscData)
 {
-    std::set<NvMOTStreamId> videoStreamIdList;
+    /* std::set<NvMOTStreamId> videoStreamIdList;
     for (NvMOTStreamId streamInd = 0; streamInd < params->numFrames; streamInd++)
     {
         videoStreamIdList.insert(params->frameList[streamInd].streamID);
@@ -144,7 +143,7 @@ NvMOTStatus NvMOTContext::retrieveMiscData(const NvMOTProcessParams *params,
         {
             tracker_->updatePastFrameObjBatch(pTrackerMiscData->pPastFrameObjBatch);
         }
-    }
+    } */
 
     return NvMOTStatus_OK;
 }
