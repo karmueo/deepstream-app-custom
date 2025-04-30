@@ -40,7 +40,7 @@ NvMOTContext::NvMOTContext(const NvMOTConfig &configIn, NvMOTConfigResponse &con
 
     // FIXME:
     // mixformer_ = std::make_shared<MixformerTRT>(engine_name);
-    tracker_ = std::make_shared<DeepTracker>("/workspace/deepstream-app-custom/src/Mixformer_plugin/models/mixformer_v2_fp16.engine");
+    tracker_ = std::make_shared<DeepTracker>("/workspace/deepstream-app-custom/src/Mixformer_plugin/models/sutrack_fp32.engine");
 }
 
 NvMOTContext::~NvMOTContext()

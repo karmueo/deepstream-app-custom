@@ -20,7 +20,8 @@ DeepTracker::DeepTracker(const std::string &engine_name)
     trackId_ = 0;
     miss_ = 0;
     // FIXME:
-    mixformer_ = std::make_shared<MixformerTRT>(engine_name);
+    // mixformer_ = std::make_shared<MixformerTRT>(engine_name);
+    trackerPtr_ = std::make_unique<SuTrackTRT>(engine_name);
     frameNum_ = 0;
     list_ = nullptr;
     list_size_ = 0;
@@ -70,8 +71,14 @@ TrackInfo DeepTracker::update(const cv::Mat &img, const NvMOTObjToTrackList *det
         trackInfo_.bbox.box.x1 = objectToTrack_->bbox.x + objectToTrack_->bbox.width;
         trackInfo_.bbox.box.y0 = objectToTrack_->bbox.y;
         trackInfo_.bbox.box.y1 = objectToTrack_->bbox.y + objectToTrack_->bbox.height;
+        trackInfo_.bbox.box.w = objectToTrack_->bbox.width;
+        trackInfo_.bbox.box.h = objectToTrack_->bbox.height;
+        trackInfo_.bbox.box.cx = (trackInfo_.bbox.box.x0 + trackInfo_.bbox.box.x1) / 2.f;
+        trackInfo_.bbox.box.cy = (trackInfo_.bbox.box.y0 + trackInfo_.bbox.box.y1) / 2.f;
+        trackInfo_.bbox.score = objectToTrack_->confidence;
         trackInfo_.bbox.class_id = objectToTrack_->classId;
-        mixformer_->init(img, trackInfo_.bbox);
+        // mixformer_->init(img, trackInfo_.bbox);
+        trackerPtr_->init(img, trackInfo_.bbox);
 
         if (list_ != nullptr)
         {
@@ -86,10 +93,11 @@ TrackInfo DeepTracker::update(const cv::Mat &img, const NvMOTObjToTrackList *det
     else
     {
         // 更新跟踪器并获取跟踪结果
-        trackInfo_.bbox = mixformer_->track(img);
+        // trackInfo_.bbox = mixformer_->track(img);
+        trackInfo_.bbox = trackerPtr_->track(img);
         bool is_track_match_detect = true;
 
-        if (trackInfo_.bbox.score == 0 || trackInfo_.bbox.box.x0 == 0 || trackInfo_.bbox.box.y0 == 0)
+        if (trackInfo_.bbox.score <= 0 || trackInfo_.bbox.box.w <= 0 || trackInfo_.bbox.box.h <= 0)
         {
             miss_ = 100;
         }
@@ -123,7 +131,7 @@ TrackInfo DeepTracker::update(const cv::Mat &img, const NvMOTObjToTrackList *det
                 }
             }
             // 如果跟踪置信度小于阈值或者前面和检测没有匹配的
-            if (trackInfo_.bbox.score < 0.9 || !is_track_match_detect)
+            if (trackInfo_.bbox.score < 0.5 || !is_track_match_detect)
             {
                 miss_++;
             }
