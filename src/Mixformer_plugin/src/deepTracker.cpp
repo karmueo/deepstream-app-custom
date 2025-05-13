@@ -19,9 +19,8 @@ DeepTracker::DeepTracker(const std::string &engine_name)
     age_ = 0;
     trackId_ = 0;
     miss_ = 0;
-    // FIXME:
-    // mixformer_ = std::make_shared<MixformerTRT>(engine_name);
-    trackerPtr_ = std::make_unique<SuTrackTRT>(engine_name);
+    // trackerPtr_ = std::make_unique<SuTrackTRT>(engine_name);
+    trackerPtr_ = std::make_unique<OstrackTRT>(engine_name);
     frameNum_ = 0;
     list_ = nullptr;
     list_size_ = 0;

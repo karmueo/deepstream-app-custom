@@ -3,6 +3,7 @@
 // #include "mixformer_trt.h"
 #include "nvdstracker.h"
 #include "suTrack_trt.h"
+#include "ostrack_trt.h"
 
 static float IOU(const cv::Rect &srcRect, const cv::Rect &dstRect);
 
@@ -41,7 +42,6 @@ private:
     int64_t trackId_;
     uint32_t miss_;
     NvMOTObjToTrack *objectToTrack_;
-    // std::shared_ptr<MixformerTRT> mixformer_;
     std::unique_ptr<BaseTrackTRT> trackerPtr_;
     TrackInfo trackInfo_;
     uint32_t frameNum_;

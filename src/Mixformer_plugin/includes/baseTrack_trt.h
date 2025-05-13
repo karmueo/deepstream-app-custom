@@ -49,9 +49,11 @@ struct DrOBB
     int class_id;
 };
 
+std::vector<float> hann(int sz);
+
 class BaseTrackTRT
 {
-public:
+public: 
     BaseTrackTRT(const std::string &engine_name);
     ~BaseTrackTRT();
 
@@ -65,7 +67,7 @@ public:
 
     virtual const DrOBB &track(const cv::Mat &img) = 0;
 
-protected:
+protected: 
     void sample_target(
         const cv::Mat &im,
         cv::Mat &croped,
@@ -78,20 +80,32 @@ protected:
 
     DrBBox cal_bbox(const float *boxes_ptr, const float &resize_factor, const float &search_size);
 
+    DrBBox cal_bbox(const float *score_map,
+                    const float *size_map,
+                    const float *offset_map,
+                    const int &score_map_size,
+                    const int &size_map_size,
+                    const int &offset_map_size,
+                    const float &resize_factor,
+                    const float &search_size,
+                    const std::vector<float> &window,
+                    const int &feat_sz,
+                    float &max_score);
+
     void map_box_back(DrBBox &pred_box, const float &resize_factor, const float &search_size);
 
     void clip_box(DrBBox &box, const int &height, const int &wight, const int &margin);
 
-protected:
+protected: 
     const float mean_vals[3] = {0.485f * 255.f,
                                 0.456f * 255.f,
                                 0.406f * 255.f}; // RGB
     const float norm_vals[3] = {1 / 0.229f / 255.f, 1 / 0.224f / 255.f, 1 / 0.225f / 255.f};
 
-    char *trt_model_stream = nullptr;
-    IRuntime *runtime = nullptr;
-    ICudaEngine *engine = nullptr;
-    IExecutionContext *context = nullptr;
+    char              *trt_model_stream = nullptr;
+    IRuntime          *runtime          = nullptr;
+    ICudaEngine       *engine           = nullptr;
+    IExecutionContext *context          = nullptr;
     Logger gLogger;
 
     DrBBox state;

@@ -2,6 +2,25 @@
 #include <fstream>
 #include <cassert>
 
+std::vector<float> hann(int sz)
+{
+    std::vector<float> hann1d(sz);
+    std::vector<float> hann2d(sz * sz);
+    for (int i = 1; i < sz + 1; i++)
+    {
+        float w = 0.5f - 0.5f * std::cos(2 * 3.1415926535898f * i / (sz + 1));
+        hann1d[i - 1] = w;
+    }
+    for (int i = 0; i < sz; i++)
+    {
+        for (int j = 0; j < sz; j++)
+        {
+            hann2d[i * sz + j] = hann1d[i] * hann1d[j];
+        }
+    }
+    return hann2d;
+}
+
 BaseTrackTRT::BaseTrackTRT(const std::string &engine_name)
 {
     // deserialize engine
@@ -144,6 +163,61 @@ DrBBox BaseTrackTRT::cal_bbox(const float *boxes_ptr, const float &resize_factor
     pred_box.cx = cx;
     pred_box.cy = cy;
 
+    return pred_box;
+}
+
+// calculate bbox
+DrBBox BaseTrackTRT::cal_bbox(const float *score_map,
+                              const float *size_map,
+                              const float *offset_map,
+                              const int &score_map_size,
+                              const int &size_map_size,
+                              const int &offset_map_size,
+                              const float &resize_factor,
+                              const float &search_size,
+                              const std::vector<float> &window,
+                              const int &feat_sz,
+                              float &max_score)
+{
+    float max_value = window[0] * score_map[0];
+    int max_idx_y = 0;
+    int max_idx_x = 0;
+    int max_idx = 0;
+    float tmp_score = 0.f;
+    for (int i = 0; i < score_map_size; i++)
+    {
+        tmp_score = window[i] * score_map[i];
+        if (tmp_score > max_value)
+        {
+            max_idx = i;
+            max_value = tmp_score;
+        }
+    }
+
+    max_idx_y = max_idx / feat_sz;
+    max_idx_x = max_idx % feat_sz;
+
+    float cx = (max_idx_x + offset_map[max_idx_y * feat_sz + max_idx_x]) * 1.f / feat_sz;
+    float cy = (max_idx_y + offset_map[feat_sz * feat_sz + max_idx_y * feat_sz + max_idx_x]) *1.f / feat_sz;
+    float w = size_map[max_idx_y * feat_sz + max_idx_x];
+    float h = size_map[feat_sz * feat_sz + max_idx_y * feat_sz + max_idx_x];
+
+    cx = cx * search_size / resize_factor;
+    cy = cy * search_size / resize_factor;
+    w = w * search_size / resize_factor;
+    h = h * search_size / resize_factor;
+
+    DrBBox pred_box = {0, 0, 0, 0, 0, 0, 0, 0};
+    pred_box.x0 = cx - 0.5 * w;
+    pred_box.y0 = cy - 0.5 * h;
+    pred_box.x1 = pred_box.x0 + w;
+    pred_box.y1 = pred_box.y0 + h;
+    pred_box.w = w;
+    pred_box.h = h;
+    pred_box.cx = cx;
+    pred_box.cy = cy;
+
+    max_score = max_value;
     return pred_box;
 }
 
