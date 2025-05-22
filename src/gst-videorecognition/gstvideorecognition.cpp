@@ -30,6 +30,7 @@
 #include <cstdio>
 #include "nvbufsurftransform.h"
 #include <gst/gstelement.h>
+// #include "gstnvdsinfer.h"
 
 /* enable to write transformed cvmat to files */
 /* #define DSEXAMPLE_DEBUG */
@@ -363,6 +364,7 @@ gst_videorecognition_init(Gstvideorecognition *self)
     self->video_recognition = new tsnTrt(
         "/workspace/deepstream-app-custom/src/gst-videorecognition/models/tsm_end2end.engine",
         self->processing_width);
+    self->recognitionResultPtr = new RECOGNITION();
 
     /* This quark is required to identify NvDsMeta when iterating through
      * the buffer metadatas */
@@ -450,6 +452,37 @@ gst_videorecognition_transform_ip(GstBaseTransform *btrans, GstBuffer *inbuf)
                 goto error;
             }
             self->trtProcessPtr->addFrame(target_img);
+
+            if (self->recognitionResultPtr->score >= 0.5)
+            {
+                NvDsClassifierMeta *classifier_meta =
+                    nvds_acquire_classifier_meta_from_pool(batch_meta);
+
+                classifier_meta->unique_component_id = 9;
+                NvDsLabelInfo *label_info =
+                    nvds_acquire_label_info_meta_from_pool(batch_meta);
+
+                label_info->result_class_id = self->recognitionResultPtr->class_id;
+                label_info->result_prob = self->recognitionResultPtr->score;
+                if (label_info->result_class_id == 0)
+                {
+                    strncpy(label_info->result_label, "bird", MAX_LABEL_SIZE - 1);
+                    label_info->result_label[MAX_LABEL_SIZE - 1] = '\0'; // 确保空字符结尾
+                }
+                else if (label_info->result_class_id == 1)
+                {
+                    strncpy(label_info->result_label, "uav", MAX_LABEL_SIZE - 1);
+                    label_info->result_label[MAX_LABEL_SIZE - 1] = '\0'; // 确保空字符结尾
+                }
+                else
+                {
+                    // 可选：处理其他 class_id 的情况，例如设置一个默认标签或留空
+                    strncpy(label_info->result_label, "unknown", MAX_LABEL_SIZE - 1);
+                    label_info->result_label[MAX_LABEL_SIZE - 1] = '\0';
+                }
+                nvds_add_label_info_meta_to_classifier(classifier_meta, label_info);
+                nvds_add_classifier_meta_to_object(obj_meta, classifier_meta);
+            }
         }
     }
 
@@ -465,9 +498,9 @@ gst_videorecognition_transform_ip(GstBaseTransform *btrans, GstBuffer *inbuf)
             self->processing_height,
             self->processing_frame_interval);
         /* self->trtProcessPtr->loadImagesFromDirectory(
-            "/workspace/deepstream-app-custom/src/deepstream-app/vidoe_recognition_data/1/", 
-            input_data, 
-            self->model_clip_length, 
+            "/workspace/deepstream-app-custom/src/deepstream-app/vidoe_recognition_data/1/",
+            input_data,
+            self->model_clip_length,
             self->processing_width,
             self->processing_height,
             self->processing_frame_interval); */
@@ -480,9 +513,13 @@ gst_videorecognition_transform_ip(GstBaseTransform *btrans, GstBuffer *inbuf)
             tsnPtr->do_inference();
             float *output_data = new float[tsnPtr->GetOutputSize()];
             tsnPtr->get_output(output_data);
-            RECOGNITION rec = tsnPtr->parse_output(output_data);
-            std::cout << "Class ID: " << rec.class_id << ", Class Name: " << rec.class_name
-                      << ", Score: " << rec.score << std::endl;
+            RECOGNITION result = tsnPtr->parse_output(output_data); // result是一个RECOGNITION对象
+            self->recognitionResultPtr->class_id = result.class_id;
+            self->recognitionResultPtr->class_name = result.class_name;
+            self->recognitionResultPtr->score = result.score;
+
+            std::cout << "Class ID: " << self->recognitionResultPtr->class_id << ", Class Name: " << self->recognitionResultPtr->class_name
+                      << ", Score: " << self->recognitionResultPtr->score << std::endl;
 
             for (l_frame = batch_meta->frame_meta_list; l_frame != NULL;
                  l_frame = l_frame->next)
@@ -494,18 +531,16 @@ gst_videorecognition_transform_ip(GstBaseTransform *btrans, GstBuffer *inbuf)
                      l_obj = l_obj->next)
                 {
                     obj_meta = (NvDsObjectMeta *)(l_obj->data);
-                    // 创建一个新的 NvDsClassifierMeta 实例
-                    NvDsClassifierMeta *classifier_meta = (NvDsClassifierMeta *)g_malloc0(sizeof(NvDsClassifierMeta));
-                    if (!classifier_meta)
-                    {
-                        g_printerr("Error: Failed to allocate NvDsClassifierMeta\n");
-                        break;
-                    }
-                    classifier_meta->unique_component_id = 9;
 
-                    NvDsLabelInfo *label_info = (NvDsLabelInfo *)g_malloc0(sizeof(NvDsLabelInfo));
-                    label_info->result_class_id = rec.class_id;
-                    label_info->result_prob = rec.score;
+                    NvDsClassifierMeta *classifier_meta =
+                        nvds_acquire_classifier_meta_from_pool(batch_meta);
+
+                    classifier_meta->unique_component_id = 9;
+                    NvDsLabelInfo *label_info =
+                        nvds_acquire_label_info_meta_from_pool(batch_meta);
+
+                    label_info->result_class_id = self->recognitionResultPtr->class_id;
+                    label_info->result_prob = self->recognitionResultPtr->score;
                     if (label_info->result_class_id == 0)
                     {
                         strncpy(label_info->result_label, "bird", MAX_LABEL_SIZE - 1);
@@ -522,10 +557,8 @@ gst_videorecognition_transform_ip(GstBaseTransform *btrans, GstBuffer *inbuf)
                         strncpy(label_info->result_label, "unknown", MAX_LABEL_SIZE - 1);
                         label_info->result_label[MAX_LABEL_SIZE - 1] = '\0';
                     }
-
-                    classifier_meta->label_info_list = g_list_append(classifier_meta->label_info_list, label_info);
-
-                    obj_meta->classifier_meta_list = g_list_append(obj_meta->classifier_meta_list, classifier_meta);
+                    nvds_add_label_info_meta_to_classifier(classifier_meta, label_info);
+                    nvds_add_classifier_meta_to_object(obj_meta, classifier_meta);
                 }
             }
 
@@ -639,6 +672,12 @@ void gst_videorecognition_finalize(GObject *object)
     {
         delete self->video_recognition;
         self->video_recognition = NULL;
+    }
+
+    if (self->recognitionResultPtr)
+    {
+        delete self->recognitionResultPtr;
+        self->recognitionResultPtr = NULL;
     }
 
     if (self->inter_buf)

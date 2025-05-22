@@ -357,7 +357,8 @@ bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
         {
             obj_meta = (NvDsObjectMeta *)(l->data);
 
-            if (g_list_length(obj_meta->classifier_meta_list) > 0) 
+            // HACK: 测试接收自定义的分类结果数据
+            /* if (g_list_length(obj_meta->classifier_meta_list) > 0) 
             {
                 for (NvDsClassifierMetaList* cl = obj_meta->classifier_meta_list; cl; cl = cl->next) 
                 {
@@ -371,7 +372,7 @@ bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                         }
                     }
                 }
-            }
+            } */
 
 
             /**

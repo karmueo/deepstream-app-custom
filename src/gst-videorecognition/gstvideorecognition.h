@@ -59,6 +59,9 @@ struct _Gstvideorecognition
     guint32 max_history_frames;
 
     Process *trtProcessPtr;
+
+    // 视频识别结果结构
+    RECOGNITION *recognitionResultPtr;
 };
 
 struct _GstvideorecognitionClass
