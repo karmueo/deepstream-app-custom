@@ -67,7 +67,7 @@ void OstrackTRT::destroyIOBuffer()
     CHECK(cudaFree(this->dev_output_offset_map));
 }
 
-void OstrackTRT::init(const cv::Mat &img, DrOBB bbox)
+int OstrackTRT::init(const cv::Mat &img, DrOBB bbox)
 {
     cv::Mat zt_patch;
     float resize_factor = 1.f;
@@ -75,7 +75,12 @@ void OstrackTRT::init(const cv::Mat &img, DrOBB bbox)
     bbox.box.h = bbox.box.y1 - bbox.box.y0;
     bbox.box.cx = bbox.box.x0 + 0.5f * bbox.box.w;
     bbox.box.cy = bbox.box.y0 + 0.5f * bbox.box.h;
-    sample_target(img, zt_patch, bbox.box, this->template_factor, this->template_size, resize_factor);
+
+    int ret = sample_target(img, zt_patch, bbox.box, this->template_factor, this->template_size, resize_factor);
+    if (ret != 0)
+    {
+        return -1;
+    }
 
     half_norm(zt_patch, this->input_template);
 
@@ -83,6 +88,8 @@ void OstrackTRT::init(const cv::Mat &img, DrOBB bbox)
     this->object_box.box = bbox.box;
     this->object_box.score = 1.0f;
     this->object_box.class_id = bbox.class_id;
+
+    return 0;
 }
 
 const DrOBB &OstrackTRT::track(const cv::Mat &img)
@@ -91,7 +98,12 @@ const DrOBB &OstrackTRT::track(const cv::Mat &img)
 
     cv::Mat x_patch;
     float resize_factor = 1.f;
-    sample_target(img, x_patch, this->state, this->search_factor, this->search_size, resize_factor);
+    int ret = sample_target(img, x_patch, this->state, this->search_factor, this->search_size, resize_factor);
+    if (ret != 0)
+    {
+        memset(&this->object_box, 0, sizeof(DrOBB));
+        return this->object_box;
+    }
 
     half_norm(x_patch, this->input_search);
 

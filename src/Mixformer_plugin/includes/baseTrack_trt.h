@@ -63,12 +63,13 @@ public:
 
     virtual void destroyIOBuffer() = 0;
 
-    virtual void init(const cv::Mat &img, DrOBB bbox) = 0;
+    virtual int init(const cv::Mat &img, DrOBB bbox) = 0;
 
     virtual const DrOBB &track(const cv::Mat &img) = 0;
 
 protected: 
-    void sample_target(
+    // FIXME: 做异常处理
+    int sample_target(
         const cv::Mat &im,
         cv::Mat &croped,
         DrBBox target_bb,

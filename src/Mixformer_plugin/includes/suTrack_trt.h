@@ -14,7 +14,7 @@ public:
 
     void destroyIOBuffer() override;
 
-    void init(const cv::Mat &img, DrOBB bbox) override;
+    int init(const cv::Mat &img, DrOBB bbox) override;
 
     const DrOBB &track(const cv::Mat &img) override;
 

@@ -65,12 +65,12 @@ void BaseTrackTRT::deserialize_engine(const std::string &engine_name)
     assert(context != nullptr);
 }
 
-void BaseTrackTRT::sample_target(const cv::Mat &im, cv::Mat &croped, DrBBox target_bb, float search_area_factor, int output_sz, float &resize_factor)
+int BaseTrackTRT::sample_target(const cv::Mat &im, cv::Mat &croped, DrBBox target_bb, float search_area_factor, int output_sz, float &resize_factor)
 {
     if (target_bb.w <= 0 || target_bb.h <= 0 || target_bb.cx <= 0 || target_bb.cy <= 0)
     {
         std::cout << "target_bb is out of range" << std::endl;
-        return;
+        return -1;
     }
 
     int x = target_bb.x0;
@@ -98,7 +98,7 @@ void BaseTrackTRT::sample_target(const cv::Mat &im, cv::Mat &croped, DrBBox targ
     if (roi_rect.x < 0 || roi_rect.y < 0 || roi_rect.width <= 0 || roi_rect.height <= 0)
     {
         std::cout << "roi_rect is out of range" << std::endl;
-        return;
+        return -1;
     }
     cv::Mat roi = im(roi_rect);
 
@@ -109,6 +109,8 @@ void BaseTrackTRT::sample_target(const cv::Mat &im, cv::Mat &croped, DrBBox targ
     cv::resize(croped, croped, cv::Size(output_sz, output_sz));
 
     resize_factor = output_sz * 1.f / crop_sz;
+
+    return 0;
 }
 
 void BaseTrackTRT::half_norm(const cv::Mat &img, float *input_data)
