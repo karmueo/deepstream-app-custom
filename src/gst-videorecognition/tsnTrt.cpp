@@ -46,7 +46,7 @@ bool tsnTrt::prepare_input(const std::string &input_name,
     assert(engine_->getTensorDataType(input_name.c_str()) == nvinfer1::DataType::kFLOAT);
 
     // 在设备上创建GPU缓冲区
-    // INPUT: 1,250,3,224,224
+    // INPUT
     auto input_size = clip_length * 3 * input_imt_shape_ * input_imt_shape_ * sizeof(float);
     CHECK(cudaMalloc(&intput_dev_buffer_, input_size));
     // DMA（直接内存访问）输入批处理数据到设备，在异步上推断批处理，然后DMA输出回到主机

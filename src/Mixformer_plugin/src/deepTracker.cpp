@@ -130,7 +130,7 @@ TrackInfo DeepTracker::update(const cv::Mat &img, const NvMOTObjToTrackList *det
                 }
             }
             // 如果跟踪置信度小于阈值或者前面和检测没有匹配的
-            if (trackInfo_.bbox.score < 0.5 || !is_track_match_detect)
+            if (trackInfo_.bbox.score < 0.25 || !is_track_match_detect)
             {
                 miss_++;
             }

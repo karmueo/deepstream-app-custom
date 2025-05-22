@@ -357,6 +357,23 @@ bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
         {
             obj_meta = (NvDsObjectMeta *)(l->data);
 
+            if (g_list_length(obj_meta->classifier_meta_list) > 0) 
+            {
+                for (NvDsClassifierMetaList* cl = obj_meta->classifier_meta_list; cl; cl = cl->next) 
+                {
+                    NvDsClassifierMeta* cl_meta = (NvDsClassifierMeta*)cl->data;
+                    for (NvDsLabelInfoList* ll = cl_meta->label_info_list; ll; ll = ll->next) 
+                    {
+                        NvDsLabelInfo* ll_meta = (NvDsLabelInfo*)ll->data;
+                        if (ll_meta->result_label[0] != '\0') 
+                        {
+                            g_print("Classifier label: %s\n", ll_meta->result_label);
+                        }
+                    }
+                }
+            }
+
+
             /**
              * 仅在此回调在 tiler 之后启用
              * 注意：缩放回代码注释

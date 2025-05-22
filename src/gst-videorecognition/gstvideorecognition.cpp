@@ -348,17 +348,21 @@ gst_videorecognition_init(Gstvideorecognition *self)
     /* We do not want to change the input caps. Set to passthrough. transform_ip
      * is still called. */
     gst_base_transform_set_passthrough(GST_BASE_TRANSFORM(btrans), TRUE);
-    // FIXME: 初始化一些参数
+    // TODO: 初始化一些参数
     self->gpu_id = 0;
     /* Initialize all property variables to default values */
     self->unique_id = 15;
     self->gpu_id = 0;
     self->frame_num = 0;
-    self->video_recognition = new tsnTrt("/workspace/deepstream-app-custom/triton_model/Video_Classify/1/end2end.engine", 224);
     self->processing_width = 224;
     self->processing_height = 224;
-    self->max_history_frames = 250;
-    self->trtProcessPtr = new Process();
+    self->processing_frame_interval = 1;
+    self->model_clip_length = 16;
+    self->max_history_frames = 300;
+    self->trtProcessPtr = new Process(self->max_history_frames);
+    self->video_recognition = new tsnTrt(
+        "/workspace/deepstream-app-custom/src/gst-videorecognition/models/tsm_end2end.engine",
+        self->processing_width);
 
     /* This quark is required to identify NvDsMeta when iterating through
      * the buffer metadatas */
@@ -376,33 +380,6 @@ gst_videorecognition_transform_ip(GstBaseTransform *btrans, GstBuffer *inbuf)
     GstMapInfo in_map_info;
     GstFlowReturn flow_ret = GST_FLOW_ERROR;
     gdouble scale_ratio = 1.0;
-
-    /* {
-        Process process;
-        process.testFunc("/workspace/deepstream-app-custom/arm_wrestling.mp4");
-        std::vector<cv::Mat> frames = process.sampleFrames(250);
-        const int input_size = 1 * 250 * 3 * 224 * 224;
-        float *input_data = new float[input_size];
-        // 数据预处理
-        process.convertCvInputToTensorRT(frames, input_data, 250, 224, 224);
-
-        if (self->video_recognition)
-        {
-            tsnTrt *tsnPtr = dynamic_cast<tsnTrt *>(self->video_recognition);
-            tsnPtr->prepare_input("input", 250, input_data);
-            tsnPtr->prepare_output("output");
-            tsnPtr->do_inference();
-            float *output_data = new float[tsnPtr->GetOutputSize()];
-            tsnPtr->get_output(output_data);
-            RECOGNITION rec = tsnPtr->parse_output(output_data);
-            std::cout << "Class ID: " << rec.class_id << ", Class Name: " << rec.class_name
-                      << ", Score: " << rec.score << std::endl;
-        }
-        else
-        {
-            std::cerr << "Error: video_recognition is null" << std::endl;
-        }
-    } */
 
     NvBufSurface *surface = NULL;
     NvDsBatchMeta *batch_meta = NULL;
@@ -477,18 +454,28 @@ gst_videorecognition_transform_ip(GstBaseTransform *btrans, GstBuffer *inbuf)
     }
 
     // 多帧推理
-    if (self->trtProcessPtr->getCurrentFrameLength() == 250)
+    if (self->trtProcessPtr->getCurrentFrameLength() == self->max_history_frames)
     {
-        // std::vector<cv::Mat> frames = self->trtProcessPtr->sampleFrames(self->max_history_frames);
-        const int input_size = 1 * 250 * 3 * 224 * 224;
-        float *input_data = new float[input_size];
+        std::vector<float> input_data;
         // 数据预处理
-        self->trtProcessPtr->convertCvInputToTensorRT(input_data, 250, 224, 224);
+        self->trtProcessPtr->convertCvInputToTensorRT(
+            input_data,
+            self->model_clip_length,
+            self->processing_width,
+            self->processing_height,
+            self->processing_frame_interval);
+        /* self->trtProcessPtr->loadImagesFromDirectory(
+            "/workspace/deepstream-app-custom/src/deepstream-app/vidoe_recognition_data/1/", 
+            input_data, 
+            self->model_clip_length, 
+            self->processing_width,
+            self->processing_height,
+            self->processing_frame_interval); */
 
         if (self->video_recognition)
         {
             tsnTrt *tsnPtr = dynamic_cast<tsnTrt *>(self->video_recognition);
-            tsnPtr->prepare_input("input", 250, input_data);
+            tsnPtr->prepare_input("input", self->model_clip_length, input_data.data());
             tsnPtr->prepare_output("output");
             tsnPtr->do_inference();
             float *output_data = new float[tsnPtr->GetOutputSize()];
@@ -497,6 +484,51 @@ gst_videorecognition_transform_ip(GstBaseTransform *btrans, GstBuffer *inbuf)
             std::cout << "Class ID: " << rec.class_id << ", Class Name: " << rec.class_name
                       << ", Score: " << rec.score << std::endl;
 
+            /* for (l_frame = batch_meta->frame_meta_list; l_frame != NULL;
+                 l_frame = l_frame->next)
+            {
+                NvDsMetaList *l_obj = NULL;
+                NvDsObjectMeta *obj_meta = NULL;
+                frame_meta = (NvDsFrameMeta *)(l_frame->data);
+                for (l_obj = frame_meta->obj_meta_list; l_obj != NULL;
+                     l_obj = l_obj->next)
+                {
+                    obj_meta = (NvDsObjectMeta *)(l_obj->data);
+                    // 创建一个新的 NvDsClassifierMeta 实例
+                    NvDsClassifierMeta *classifier_meta = (NvDsClassifierMeta *)g_malloc0(sizeof(NvDsClassifierMeta));
+                    if (!classifier_meta)
+                    {
+                        g_printerr("Error: Failed to allocate NvDsClassifierMeta\n");
+                        break;
+                    }
+                    classifier_meta->unique_component_id = 9;
+
+                    NvDsLabelInfo *label_info = (NvDsLabelInfo *)g_malloc0(sizeof(NvDsLabelInfo));
+                    label_info->result_class_id = rec.class_id;
+                    label_info->result_prob = rec.score;
+                    if (label_info->result_class_id == 0)
+                    {
+                        strncpy(label_info->result_label, "bird", MAX_LABEL_SIZE - 1);
+                        label_info->result_label[MAX_LABEL_SIZE - 1] = '\0'; // 确保空字符结尾
+                    }
+                    else if (label_info->result_class_id == 1)
+                    {
+                        strncpy(label_info->result_label, "uav", MAX_LABEL_SIZE - 1);
+                        label_info->result_label[MAX_LABEL_SIZE - 1] = '\0'; // 确保空字符结尾
+                    }
+                    else
+                    {
+                        // 可选：处理其他 class_id 的情况，例如设置一个默认标签或留空
+                        strncpy(label_info->result_label, "unknown", MAX_LABEL_SIZE - 1);
+                        label_info->result_label[MAX_LABEL_SIZE - 1] = '\0';
+                    }
+
+                    classifier_meta->label_info_list = g_list_append(classifier_meta->label_info_list, label_info);
+
+                    obj_meta->classifier_meta_list = g_list_append(obj_meta->classifier_meta_list, classifier_meta);
+                }
+            } */
+
             delete[] output_data;
         }
         else
@@ -504,8 +536,6 @@ gst_videorecognition_transform_ip(GstBaseTransform *btrans, GstBuffer *inbuf)
             std::cerr << "Error: video_recognition is null" << std::endl;
         }
         self->trtProcessPtr->clearFrames();
-        delete[] input_data;
-        input_data = nullptr;
     }
 
     flow_ret = GST_FLOW_OK;

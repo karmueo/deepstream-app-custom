@@ -49,6 +49,8 @@ struct _Gstvideorecognition
     // Resolution at which frames/objects should be processed
     gint processing_width;
     gint processing_height;
+    gint model_clip_length;
+    gint processing_frame_interval;
 
     // 用于RGBA转换的中间临时缓冲区
     NvBufSurface *inter_buf;

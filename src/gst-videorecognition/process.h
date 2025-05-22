@@ -25,10 +25,18 @@ public:
                                   int height,
                                   int width);
 
-    void convertCvInputToTensorRT(float *input_data,
-                                  int clip_len,
-                                  int height,
-                                  int width);
+    void convertCvInputToTensorRT(std::vector<float> &input_data,
+                                  const int &clip_len,
+                                  const int &height,
+                                  const int &width,
+                                  const int &frame_interval);
+
+    void loadImagesFromDirectory(const std::string &directoryPath,
+                                 std::vector<float> &input_data,
+                                 int clip_len,
+                                 int height,
+                                 int width,
+                                 int frame_interval);
 
     // 获取当前视频帧长度
     int getCurrentFrameLength() const
@@ -37,10 +45,19 @@ public:
     }
 
     // 清空释放视频帧
-    void clearFrames()
-    {
-        m_vTargetFrames.clear();
-    }
+    void clearFrames();
+
+    static float IOU(const cv::Rect &srcRect, const cv::Rect &dstRect);
+
+    void SaveVectorToTxt(const std::vector<float> &data, const std::string &filename);
+
+    std::vector<float> build_input_tensor(const std::vector<cv::Mat> &images,
+                                          int clip_len,
+                                          int height,
+                                          int width,
+                                          bool bgr_to_rgb);
+
+    void preprocess3(const cv::Mat &srcframe, float *inputTensorValues);
 
 private:
     // 输入一张图片，和缩放尺寸，对其进行保持长宽比的缩放，其他区域用黑色填充
@@ -48,17 +65,23 @@ private:
 
     cv::Mat half_norm(const cv::Mat &img);
 
+    float get_pixel_value(const std::vector<cv::Mat> &images, const int &c, const int &t, const int &h, const int &w);
+
 private:
     // 目标视频帧vector
     std::vector<cv::Mat> m_vTargetFrames;
+    std::vector<cv::Mat> m_vRawTargetFrames;
 
-    const float m_mean_vals[3] = {0.f, 0.f, 0.f}; // RGB
-    const float m_norm_vals[3] = {1 / 255.f, 1 / 255.f, 1 / 255.f};
+    const float m_mean_vals[3] = {0.485f, 0.456f, 0.406f}; // RGB
+    const float m_norm_vals[3] = {0.229f, 0.224f, 0.225f};
 
     // 模型输入尺寸
     cv::Size m_input_size;
 
     int m_max_history_frames; // 最大保存历史帧数
+
+    int m_current_dir_num;
+    std::string m_current_dir_path;
 };
 
 #endif /* __VIDEORECOGNITION_PROCESS_H__ */
