@@ -484,7 +484,7 @@ gst_videorecognition_transform_ip(GstBaseTransform *btrans, GstBuffer *inbuf)
             std::cout << "Class ID: " << rec.class_id << ", Class Name: " << rec.class_name
                       << ", Score: " << rec.score << std::endl;
 
-            /* for (l_frame = batch_meta->frame_meta_list; l_frame != NULL;
+            for (l_frame = batch_meta->frame_meta_list; l_frame != NULL;
                  l_frame = l_frame->next)
             {
                 NvDsMetaList *l_obj = NULL;
@@ -527,7 +527,7 @@ gst_videorecognition_transform_ip(GstBaseTransform *btrans, GstBuffer *inbuf)
 
                     obj_meta->classifier_meta_list = g_list_append(obj_meta->classifier_meta_list, classifier_meta);
                 }
-            } */
+            }
 
             delete[] output_data;
         }

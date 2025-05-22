@@ -10,12 +10,14 @@ Process::Process(int max_history_frames)
     m_vTargetFrames.reserve(m_max_history_frames); // 预留空间
     m_current_dir_num = 0;                         // 当前目录编号
 
+#ifdef SAVE_IMAGES
     // 创建文件夹 ./vidoe_recognition_data/{m_current_dir_num}
     m_current_dir_path = "./video_recognition_data/" + std::to_string(m_current_dir_num);
     if (!std::filesystem::exists(m_current_dir_path))
     {
         std::filesystem::create_directories(m_current_dir_path);
     }
+#endif
 }
 
 Process::~Process()
@@ -30,11 +32,13 @@ void Process::addFrame(const cv::Mat &frame)
         m_vTargetFrames.erase(m_vTargetFrames.begin());
     }
 
+#ifdef SAVE_IMAGES
     if (m_vRawTargetFrames.size() >= m_max_history_frames)
     {
         m_vRawTargetFrames.erase(m_vRawTargetFrames.begin());
     }
     m_vRawTargetFrames.push_back(frame);
+#endif
 
     cv::cvtColor(frame, frame, cv::COLOR_BGR2RGB);
     cv::Mat norm_img;
@@ -158,12 +162,13 @@ void Process::convertCvInputToTensorRT(std::vector<float> &input_data,
     }
     input_data = output;
 
-
+#ifdef SAVE_IMAGES
     // 遍历保存m_vRawTargetFrames
     for (int i = 0; i < m_vRawTargetFrames.size(); ++i)
     {
         cv::imwrite(m_current_dir_path + "/" + std::to_string(i) + ".jpg", m_vRawTargetFrames[i]);
     }
+#endif
 }
 
 void Process::loadImagesFromDirectory(
@@ -421,12 +426,15 @@ void Process::clearFrames()
 {
     m_vTargetFrames.clear();
     m_vRawTargetFrames.clear();
+
+#ifdef SAVE_IMAGES
     m_current_dir_num++;
     m_current_dir_path = "./video_recognition_data/" + std::to_string(m_current_dir_num);
     if (!std::filesystem::exists(m_current_dir_path))
     {
         std::filesystem::create_directories(m_current_dir_path);
     }
+#endif
 }
 
 float Process::IOU(const cv::Rect &srcRect, const cv::Rect &dstRect)
@@ -525,7 +533,7 @@ void Process::preprocess3(const cv::Mat &srcframe, float *inputTensorValues)
 
     // cvtColor(srcframe, imgRGBresize, cv::COLOR_BGR2RGB);  // 转RGB
     srcframe.convertTo(img_float, CV_32F, 1.0 / 255); // divided by 255转float
-    std::vector<cv::Mat> channels(3);                     // cv::Mat channels[3]; //分离通道进行HWC->CHW
+    std::vector<cv::Mat> channels(3);                 // cv::Mat channels[3]; //分离通道进行HWC->CHW
     cv::Mat dst;
     cv::split(img_float, channels);
 

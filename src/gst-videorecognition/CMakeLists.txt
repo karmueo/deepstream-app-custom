@@ -10,6 +10,8 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CUDA_VER "12.6" CACHE STRING "CUDA version")
 set(NVDS_VERSION "7.1" CACHE STRING "DeepStream version")
 
+# add_definitions(-DSAVE_IMAGES)
+
 # 3. 查找依赖包
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GST REQUIRED 
