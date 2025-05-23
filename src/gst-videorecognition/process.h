@@ -13,23 +13,21 @@ public:
     // 添加视频帧
     void addFrame(const cv::Mat &frame);
 
-    // 视频帧采样
-    std::vector<cv::Mat> sampleFrames(const int &num_samples);
-
     // 测试函数
     void testFunc(const std::string &videoPath);
-
-    void convertCvInputToTensorRT(const std::vector<cv::Mat> &frames,
-                                  float *input_data,
-                                  int clip_len,
-                                  int height,
-                                  int width);
 
     void convertCvInputToTensorRT(std::vector<float> &input_data,
                                   const int &clip_len,
                                   const int &height,
                                   const int &width,
                                   const int &frame_interval);
+
+    void convertCvInputToNtchwTensorRT(std::vector<float> &input_data,
+                                       const int &num_clips,
+                                       const int &clip_len,
+                                       const int &height,
+                                       const int &width,
+                                       const int &frame_interval);
 
     void loadImagesFromDirectory(const std::string &directoryPath,
                                  std::vector<float> &input_data,
@@ -65,11 +63,23 @@ private:
 
     cv::Mat half_norm(const cv::Mat &img);
 
+    std::vector<cv::Mat> sampleFrames(const std::vector<cv::Mat> &images,
+                                      const int &num_samples,
+                                      const int &clip_len,
+                                      const int &frame_interval);
+    std::vector<cv::Mat> sampleFrames2(const std::vector<cv::Mat> &images,
+                                       const int &num_samples,
+                                       const int &clip_len,
+                                       const int &frame_interval);
+
+    std::vector<std::vector<cv::Mat>> getSampleClips(const std::vector<cv::Mat> &src_images, int num_clips, int clip_len);
+
     float get_pixel_value(const std::vector<cv::Mat> &images, const int &c, const int &t, const int &h, const int &w);
 
+    cv::Mat preprocess(const cv::Mat &srcframe);
+
 private:
-    // 目标视频帧vector
-    std::vector<cv::Mat> m_vTargetFrames;
+    std::vector<cv::Mat> m_vTargetFrames; // 视频帧,RGB,224x224
     std::vector<cv::Mat> m_vRawTargetFrames;
 
     const float m_mean_vals[3] = {0.485f, 0.456f, 0.406f}; // RGB

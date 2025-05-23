@@ -2,6 +2,7 @@
 #include <dirent.h>
 #include <filesystem>
 #include <fstream>
+#include <chrono>
 
 Process::Process(int max_history_frames)
 {
@@ -56,58 +57,6 @@ void Process::addFrame(const cv::Mat &frame)
     }
 }
 
-void Process::convertCvInputToTensorRT(const std::vector<cv::Mat> &frames,
-                                       float *input_data,
-                                       int clip_len,
-                                       int height,
-                                       int width)
-{
-    // 参数校验
-    assert(frames.size() <= clip_len);
-    assert(frames[0].channels() == 3);
-    assert(frames[0].rows == height && frames[0].cols == width);
-
-    auto actual_frames = frames.size();
-
-    // 内存布局转换 [batch, clip_len, channel, height, width]
-    for (int t = 0; t < clip_len; ++t)
-    {
-        // 选择帧（超出范围用最后一帧）
-        const cv::Mat &frame = frames[std::min(t, static_cast<int>(actual_frames - 1))];
-
-        // 转换为RGB格式
-        cv::cvtColor(frame, frame, cv::COLOR_BGR2RGB);
-        // 判断尺寸是否等于输入尺寸
-        if (frame.rows != m_input_size.height || frame.cols != m_input_size.width)
-        {
-            cv::Mat resizeMat = resizeWithAspectRatio(frame, m_input_size);
-        }
-
-        // 归一化
-        cv::Mat norm_img = half_norm(frame);
-
-        // 获取当前帧在input_data中的起始位置
-        float *frame_data = input_data + t * 3 * height * width;
-
-        // 通道分离并交错存储 (OpenCV的HWC -> TensorRT的CHW)
-        std::vector<cv::Mat> channels(3);
-        cv::split(frame, channels);
-
-        for (int c = 0; c < 3; ++c)
-        {
-            for (int h = 0; h < height; ++h)
-            {
-                for (int w = 0; w < width; ++w)
-                {
-                    // 计算目标位置 [1][t][c][h][w]
-                    int dst_idx = c * (height * width) + h * width + w;
-                    frame_data[dst_idx] = channels[c].at<float>(h, w);
-                }
-            }
-        }
-    }
-}
-
 void Process::convertCvInputToTensorRT(std::vector<float> &input_data,
                                        const int &clip_len,
                                        const int &height,
@@ -118,22 +67,23 @@ void Process::convertCvInputToTensorRT(std::vector<float> &input_data,
     assert(m_vTargetFrames[0].channels() == 3);
     assert(m_vTargetFrames[0].rows == height && m_vTargetFrames[0].cols == width);
 
-    auto ori_clip_len = (clip_len - 1) * frame_interval + 1;
-    auto clip_offset = std::max(static_cast<int>(m_vTargetFrames.size() - ori_clip_len), 0);
-    clip_offset = std::floor(clip_offset / 2.0f);
-    // 计算实际需要提取的帧范围
-    int start_frame = static_cast<int>(clip_offset);
-    int end_frame = start_frame + ori_clip_len;
-    // 确保不越界
-    end_frame = std::min(end_frame, static_cast<int>(m_vTargetFrames.size()));
-    // 提取帧到新 vector（高效连续存储）
-    std::vector<cv::Mat> extracted_frames;
-    extracted_frames.reserve(end_frame - start_frame); // 预分配内存
-    for (int i = start_frame; i < end_frame; i += frame_interval)
-    {
-        extracted_frames.push_back(m_vTargetFrames[i].clone()); // 深拷贝避免原数据被修改
-    }
+    // auto ori_clip_len = (clip_len - 1) * frame_interval + 1;
+    // auto clip_offset = std::max(static_cast<int>(m_vTargetFrames.size() - ori_clip_len), 0);
+    // clip_offset = std::floor(clip_offset / 2.0f);
+    // // 计算实际需要提取的帧范围
+    // int start_frame = static_cast<int>(clip_offset);
+    // int end_frame = start_frame + ori_clip_len;
+    // // 确保不越界
+    // end_frame = std::min(end_frame, static_cast<int>(m_vTargetFrames.size()));
+    // // 提取帧到新 vector（高效连续存储）
+    // std::vector<cv::Mat> extracted_frames;
+    // extracted_frames.reserve(end_frame - start_frame); // 预分配内存
+    // for (int i = start_frame; i < end_frame; i += frame_interval)
+    // {
+    //     extracted_frames.push_back(m_vTargetFrames[i].clone()); // 深拷贝避免原数据被修改
+    // }
 
+    std::vector<cv::Mat> extracted_frames = sampleFrames2(m_vTargetFrames, 1, clip_len, frame_interval);
     auto actual_frames = extracted_frames.size();
     assert(actual_frames == clip_len);
 
@@ -175,6 +125,47 @@ void Process::convertCvInputToTensorRT(std::vector<float> &input_data,
 #endif
 }
 
+void Process::convertCvInputToNtchwTensorRT(std::vector<float> &input_data,
+                                            const int &num_clips,
+                                            const int &clip_len,
+                                            const int &height,
+                                            const int &width,
+                                            const int &frame_interval)
+{
+    // 参数校验
+    assert(m_vTargetFrames[0].channels() == 3);
+    assert(m_vTargetFrames[0].rows == height && m_vTargetFrames[0].cols == width);
+
+    std::vector<std::vector<cv::Mat>> extracted_num_frames = getSampleClips(m_vTargetFrames, num_clips, clip_len);
+
+    auto actual_num_clips = extracted_num_frames.size();
+    assert(actual_num_clips == num_clips);
+    auto actual_frames = extracted_num_frames[actual_num_clips - 1].size();
+    assert(actual_frames == clip_len);
+
+    std::vector<float> output(1 * num_clips * 3 * clip_len * height * width);
+    for (int i = 0; i < num_clips; ++i)
+    {
+        for (int c = 0; c < 3; ++c)
+        {
+            for (int t = 0; t < clip_len; ++t)
+            {
+                for (int h = 0; h < height; ++h)
+                {
+                    for (int w = 0; w < width; ++w)
+                    {
+                        // 计算目标位置 [1][t][c][h][w]
+                        int dst_idx =
+                            i * (3 * clip_len * height * width) + c * (clip_len * height * width) + t * (height * width) + h * width + w;
+                        output[dst_idx] = extracted_num_frames[i][t].at<cv::Vec3f>(h, w)[c];
+                    }
+                }
+            }
+        }
+    }
+    input_data = output;
+}
+
 void Process::loadImagesFromDirectory(
     const std::string &directoryPath,
     std::vector<float> &input_data,
@@ -210,7 +201,7 @@ void Process::loadImagesFromDirectory(
         int num_b = std::stoi(b.substr(0, b.find('.')));
         return num_a < num_b; });
 
-    // 4. 按顺序读取图片到 vector<cv::Mat>
+    // 4. 按顺序读取图片到 vector<cv::Mat> 作为m_vTargetFrames的仿真
     std::vector<cv::Mat> images;
     for (const auto &filename : filenames)
     {
@@ -221,13 +212,15 @@ void Process::loadImagesFromDirectory(
             std::cerr << "Warning: Failed to load image " << full_path << std::endl;
             continue;
         }
-        // cv::cvtColor(img, img, cv::COLOR_BGR2RGB);
+        cv::cvtColor(img, img, cv::COLOR_BGR2RGB);
         // cv::Mat norm_img;
         // norm_img = half_norm(img);
         images.push_back(img);
     }
 
+    // 总共需要多少帧
     auto ori_clip_len = (clip_len - 1) * frame_interval + 1;
+    // 计算偏移量，队列中的帧数大于ori_clip_len时，取中间的ori_clip_len帧
     auto clip_offset = std::max(static_cast<int>(images.size() - ori_clip_len), 0);
     clip_offset = std::floor(clip_offset / 2.0f);
     // 计算实际需要提取的帧范围
@@ -236,20 +229,15 @@ void Process::loadImagesFromDirectory(
     // 确保不越界
     end_frame = std::min(end_frame, static_cast<int>(images.size()));
 
-    // 提取帧到新 vector（高效连续存储）
-    std::vector<cv::Mat> extracted_frames;
-    extracted_frames.reserve(end_frame - start_frame); // 预分配内存
-    for (int i = start_frame; i < end_frame; i += frame_interval)
-    {
-        extracted_frames.push_back(images[i].clone()); // 深拷贝避免原数据被修改
-    }
-
-    auto actual_frames = extracted_frames.size();
-    assert(actual_frames == clip_len);
+    // NOTE: 方法1
     // 将帧数据拷贝到 GPU（NCTHW 格式）
     // std::vector<float> cpu_data(1 * 3 * clip_len * height * width);
     // input_data = build_input_tensor(extracted_frames, clip_len, height, width, true);
-
+    // 提取帧到新 vector（高效连续存储）
+    auto start_time = std::chrono::high_resolution_clock::now();
+    std::vector<cv::Mat> extracted_frames = sampleFrames2(images, 1, clip_len, frame_interval);
+    auto actual_frames = extracted_frames.size();
+    assert(actual_frames == clip_len);
     std::vector<float *> vec_input_data(clip_len);
     vec_input_data.resize(clip_len);
     const int image_len = width * height * 3;
@@ -273,9 +261,145 @@ void Process::loadImagesFromDirectory(
         }
         delete[] vec_input_data[i];
     }
-    input_data = output;
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+    std::cout << "1. Time taken to process frames: " << duration.count() << " ms" << std::endl;
+    // input_data = output;
+
+    // NOTE: 方法2
+    start_time = std::chrono::high_resolution_clock::now();
+    std::vector<cv::Mat> extracted_frames2 = sampleFrames2(images, 1, clip_len, frame_interval);
+
+    auto actual_frames2 = extracted_frames2.size();
+    assert(actual_frames2 == clip_len);
+
+    std::vector<float> output2(1 * 3 * clip_len * height * width);
+    for (int t = 0; t < clip_len; ++t)
+    {
+        for (int c = 0; c < 3; ++c)
+        {
+            for (int h = 0; h < height; ++h)
+            {
+                for (int w = 0; w < width; ++w)
+                {
+                    // 计算目标位置 [1][t][c][h][w]
+                    int dst_idx = t * (3 * height * width) + c * (height * width) + h * width + w;
+                    output2[dst_idx] = extracted_frames2[t].at<cv::Vec3f>(h, w)[c];
+                }
+            }
+        }
+    }
+    end_time = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+    std::cout << "2. Time taken to process frames: " << duration.count() << " ms" << std::endl;
+
+    assert(output2.size() == output.size());
+    // 计算 ouput 和 output2 的差异
+    for (size_t i = 0; i < output.size(); ++i)
+    {
+        if (std::abs(output[i] - output2[i]) > 1e-5)
+        {
+            std::cout << "Difference at index " << i << ": " << output[i] << " vs " << output2[i] << std::endl;
+        }
+    }
+
+    // 将数据拷贝到 input_data
+    input_data = output2;
 
     // SaveVectorToTxt(input_data, "input_data.txt");
+}
+
+std::vector<cv::Mat> Process::sampleFrames(const std::vector<cv::Mat> &images,
+                                           const int &num_samples, const int &clip_len, const int &frame_interval)
+{
+    // 总共需要多少帧
+    auto ori_clip_len = (clip_len - 1) * frame_interval + 1;
+    // 计算偏移量，队列中的帧数大于ori_clip_len时，取中间的ori_clip_len帧
+    auto clip_offset = std::max(static_cast<int>(images.size() - ori_clip_len), 0);
+    clip_offset = std::floor(clip_offset / 2.0f);
+    // 计算实际需要提取的帧范围
+    int start_frame = static_cast<int>(clip_offset);
+    int end_frame = start_frame + ori_clip_len;
+    // 确保不越界
+    end_frame = std::min(end_frame, static_cast<int>(images.size()));
+    std::vector<cv::Mat> extracted_frames;
+    extracted_frames.reserve(end_frame - start_frame); // 预分配内存
+    for (int i = start_frame; i < end_frame; i += frame_interval)
+    {
+        extracted_frames.push_back(images[i].clone()); // 深拷贝避免原数据被修改
+    }
+
+    return extracted_frames;
+}
+
+std::vector<cv::Mat> Process::sampleFrames2(const std::vector<cv::Mat> &images, const int &num_samples, const int &clip_len, const int &frame_interval)
+{
+    // 总共需要多少帧
+    auto ori_clip_len = (clip_len - 1) * frame_interval + 1;
+    // 计算偏移量，队列中的帧数大于ori_clip_len时，取中间的ori_clip_len帧
+    auto clip_offset = std::max(static_cast<int>(images.size() - ori_clip_len), 0);
+    clip_offset = std::floor(clip_offset / 2.0f);
+    // 计算实际需要提取的帧范围
+    int start_frame = static_cast<int>(clip_offset);
+    int end_frame = start_frame + ori_clip_len;
+    // 确保不越界
+    end_frame = std::min(end_frame, static_cast<int>(images.size()));
+    std::vector<cv::Mat> extracted_frames;
+    extracted_frames.reserve(end_frame - start_frame); // 预分配内存
+    for (int i = start_frame; i < end_frame; i += frame_interval)
+    {
+        cv::Mat img_float = preprocess(images[i]);
+        extracted_frames.push_back(img_float);
+    }
+
+    return extracted_frames;
+}
+
+std::vector<std::vector<cv::Mat>> Process::getSampleClips(
+    const std::vector<cv::Mat> &src_images,
+    int num_clips,
+    int clip_len)
+{
+    std::vector<std::vector<cv::Mat>> clips;  // 存储所有片段
+    const int num_frames = src_images.size(); // 视频总帧数
+
+    // 检查输入有效性
+    if (num_frames < clip_len || num_clips <= 0 || clip_len <= 0)
+    {
+        return clips; // 返回空结果
+    }
+
+    // 计算每个片段的基准长度（浮点数精度）
+    const float seg_size = float(num_frames - 1) / clip_len;
+    // 计算片段内采样点间隔（均匀分布）
+    const float duration = seg_size / (num_clips + 1);
+
+    // 遍历每个片段
+    for (int k = 0; k < num_clips; ++k)
+    {
+        std::vector<cv::Mat> current_clip; // 当前片段的帧集合
+
+        // 采样当前片段的每一帧
+        for (int i = 0; i < clip_len; ++i)
+        {
+            // 计算当前帧在原始视频中的起始位置
+            const int start = static_cast<int>(std::round(seg_size * i));
+            // 计算精确索引（考虑片段偏移）
+            const int frame_index = start + static_cast<int>(duration * (k + 1));
+            // 确保索引不越界
+            const int safe_index = std::min(frame_index, num_frames - 1);
+
+            // 将帧加入当前片段
+            // 进行预处理
+            cv::Mat img_float = preprocess(src_images[safe_index]);
+            current_clip.push_back(img_float);
+        }
+
+        // 将当前片段加入结果集
+        clips.push_back(current_clip);
+    }
+
+    return clips;
 }
 
 cv::Mat Process::half_norm(const cv::Mat &img)
@@ -317,8 +441,21 @@ float Process::get_pixel_value(const std::vector<cv::Mat> &images, const int &c,
         std::cerr << "Error: Image is empty!" << std::endl;
         return 0.0f;
     }
+    cv::Mat img_float;
+    img.convertTo(img_float, CV_32F, 1.0 / 255); // divided by 255转float
+    std::vector<cv::Mat> channels(3);            // cv::Mat channels[3]; //分离通道进行HWC->CHW
+    cv::Mat dst;
+    cv::split(img_float, channels);
+
+    for (int i = 0; i < img_float.channels(); i++) // 标准化ImageNet
+    {
+        channels[i] -= m_mean_vals[i]; // mean均值
+        channels[i] /= m_norm_vals[i]; // std方差
+    }
+    cv::merge(channels, dst);
+
     float pixel_value = 0.0f;
-    pixel_value = img.at<cv::Vec3f>(h, w)[c];
+    pixel_value = dst.at<cv::Vec3f>(h, w)[c];
     return pixel_value;
 }
 
@@ -381,49 +518,6 @@ void Process::testFunc(const std::string &videoPath)
 
     std::cout << "Finished processing. Total frames processed: "
               << processedFrames << std::endl;
-}
-
-std::vector<cv::Mat> Process::sampleFrames(const int &num_samples)
-{
-    // 目前总的视频帧数
-    int total_frames = m_vTargetFrames.size();
-
-    // 生成采样索引（避免浮点累计误差）
-    std::vector<int> indices;
-
-    // 如果总的视频帧数大于采样数，则进行采样
-    if (total_frames > num_samples)
-    {
-        indices.reserve(num_samples);
-        const float step = static_cast<float>(total_frames - 1) / (num_samples - 1);
-
-        for (int i = 0; i < num_samples; ++i)
-        {
-            int idx = static_cast<int>(std::round(i * step));
-            idx = std::clamp(idx, 0, total_frames - 1);
-            indices.push_back(idx);
-        }
-    }
-    else
-    {
-        // 如果总的视频帧数小于等于采样数，则直接添加所有帧
-        for (int i = 0; i < total_frames; ++i)
-        {
-            indices.push_back(i);
-        }
-    }
-
-    std::vector<cv::Mat> sampled_frames;
-    sampled_frames.reserve(indices.size());
-
-    // 采样视频帧
-    for (const auto &idx : indices)
-    {
-        cv::Mat sampled_frame = m_vTargetFrames[idx].clone();
-        sampled_frames.push_back(sampled_frame);
-    }
-
-    return sampled_frames;
 }
 
 void Process::clearFrames()
@@ -525,13 +619,8 @@ std::vector<float> Process::build_input_tensor(
     return output;
 }
 
-void Process::preprocess3(const cv::Mat &srcframe, float *inputTensorValues)
+cv::Mat Process::preprocess(const cv::Mat &srcframe)
 {
-    //=====================================================================
-    /*std::vector<float> mean_ = { 0.485f, 0.456f, 0.406f };
-    std::vector<float> std_vals = { 0.229f, 0.224f, 0.225f };
-    cv::Size input_WH(750, 500);*/
-
     cv::Mat img = srcframe.clone();
     cv::Mat img_float;
 
@@ -547,16 +636,53 @@ void Process::preprocess3(const cv::Mat &srcframe, float *inputTensorValues)
         channels[i] /= m_norm_vals[i]; // std方差
     }
     cv::merge(channels, dst);
-    int img_float_len = img_float.cols * img_float.rows;
 
-    for (int i = 0; i < img_float.rows; i++)
+    return dst;
+}
+
+void Process::preprocess3(const cv::Mat &srcframe, float *inputTensorValues)
+{
+    //=====================================================================
+    /*std::vector<float> mean_ = { 0.485f, 0.456f, 0.406f };
+    std::vector<float> std_vals = { 0.229f, 0.224f, 0.225f };
+    cv::Size input_WH(750, 500);*/
+
+    // cv::Mat img = srcframe.clone();
+    // cv::Mat img_float;
+
+    // // cvtColor(srcframe, imgRGBresize, cv::COLOR_BGR2RGB);  // 转RGB
+    // srcframe.convertTo(img_float, CV_32F, 1.0 / 255); // divided by 255转float
+    // std::vector<cv::Mat> channels(3);                 // cv::Mat channels[3]; //分离通道进行HWC->CHW
+    // cv::Mat dst;
+    // cv::split(img_float, channels);
+
+    // for (int i = 0; i < img_float.channels(); i++) // 标准化ImageNet
+    // {
+    //     channels[i] -= m_mean_vals[i]; // mean均值
+    //     channels[i] /= m_norm_vals[i]; // std方差
+    // }
+    // cv::merge(channels, dst);
+    // int img_float_len = img_float.cols * img_float.rows;
+    // for (int i = 0; i < img_float.rows; i++)
+    // {
+    //     float *pixel = dst.ptr<float>(i);
+    //     for (int j = 0; j < img_float.cols; j++)
+    //     {
+    //         inputTensorValues[i * img_float.cols + j] = pixel[0];
+    //         inputTensorValues[1 * img_float_len + i * img_float.cols + j] = pixel[1];
+    //         inputTensorValues[2 * img_float_len + i * img_float.cols + j] = pixel[2];
+    //         pixel += 3;
+    //     }
+    // }
+    int img_float_len = srcframe.cols * srcframe.rows;
+    for (int i = 0; i < srcframe.rows; i++)
     {
-        float *pixel = dst.ptr<float>(i);
-        for (int j = 0; j < img_float.cols; j++)
+        const float *pixel = srcframe.ptr<float>(i);
+        for (int j = 0; j < srcframe.cols; j++)
         {
-            inputTensorValues[i * img_float.cols + j] = pixel[0];
-            inputTensorValues[1 * img_float_len + i * img_float.cols + j] = pixel[1];
-            inputTensorValues[2 * img_float_len + i * img_float.cols + j] = pixel[2];
+            inputTensorValues[i * srcframe.cols + j] = pixel[0];
+            inputTensorValues[1 * img_float_len + i * srcframe.cols + j] = pixel[1];
+            inputTensorValues[2 * img_float_len + i * srcframe.cols + j] = pixel[2];
             pixel += 3;
         }
     }

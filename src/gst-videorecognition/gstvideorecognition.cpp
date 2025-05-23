@@ -358,8 +358,10 @@ gst_videorecognition_init(Gstvideorecognition *self)
     self->processing_width = 224;
     self->processing_height = 224;
     self->processing_frame_interval = 5;
+    // 根据模型选择num_clips和clip_length和processing_width
+    self->model_num_clips = 1;
     self->model_clip_length = 32;
-    self->max_history_frames = self->processing_frame_interval * self->model_clip_length + 2;
+    self->max_history_frames = self->processing_frame_interval * self->model_clip_length * self->model_num_clips + self->model_num_clips * 2;
     self->trtProcessPtr = new Process(self->max_history_frames);
     self->video_recognition = new tsnTrt(
         "/workspace/deepstream-app-custom/src/gst-videorecognition/models/tsn_end2end_fp32.engine",
@@ -498,8 +500,15 @@ gst_videorecognition_transform_ip(GstBaseTransform *btrans, GstBuffer *inbuf)
             self->processing_height,
             self->processing_frame_interval);
         /* self->trtProcessPtr->loadImagesFromDirectory(
-            "/workspace/deepstream-app-custom/src/deepstream-app/vidoe_recognition_data/1/",
+            "/workspace/deepstream-app-custom/src/deepstream-app/110_video_frames/bird/bird_1/0/",
             input_data,
+            self->model_clip_length,
+            self->processing_width,
+            self->processing_height,
+            self->processing_frame_interval); */
+        /* self->trtProcessPtr->convertCvInputToNtchwTensorRT(
+            input_data,
+            self->model_num_clips,
             self->model_clip_length,
             self->processing_width,
             self->processing_height,

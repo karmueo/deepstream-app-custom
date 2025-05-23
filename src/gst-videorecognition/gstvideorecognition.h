@@ -50,6 +50,7 @@ struct _Gstvideorecognition
     gint processing_width;
     gint processing_height;
     gint model_clip_length;
+    gint model_num_clips;
     gint processing_frame_interval;
 
     // 用于RGBA转换的中间临时缓冲区
