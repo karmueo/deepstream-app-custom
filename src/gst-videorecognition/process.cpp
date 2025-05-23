@@ -137,6 +137,7 @@ void Process::convertCvInputToTensorRT(std::vector<float> &input_data,
     auto actual_frames = extracted_frames.size();
     assert(actual_frames == clip_len);
 
+    // vec_input_data为指针数组，存储每一帧的图像数据
     std::vector<float *> vec_input_data(clip_len);
     vec_input_data.resize(clip_len);
     const int image_len = width * height * 3;
@@ -147,6 +148,7 @@ void Process::convertCvInputToTensorRT(std::vector<float> &input_data,
 
     for (int i = 0; i < clip_len; ++i)
     {
+        // 把每一帧的图像数据进行归一化处理后存储到vec_input_data中
         preprocess3(extracted_frames[i], vec_input_data[i]);
     }
 
@@ -156,6 +158,8 @@ void Process::convertCvInputToTensorRT(std::vector<float> &input_data,
     {
         for (int j = 0; j < image_len; ++j)
         {
+            // vec_input_data[i]表示第i张图，j表示该图的第j个像素点
+            // 计算在一维数组中的位置
             output[i * image_len + j] = vec_input_data[i][j];
         }
         delete[] vec_input_data[i];

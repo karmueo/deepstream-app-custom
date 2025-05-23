@@ -357,12 +357,12 @@ gst_videorecognition_init(Gstvideorecognition *self)
     self->frame_num = 0;
     self->processing_width = 224;
     self->processing_height = 224;
-    self->processing_frame_interval = 1;
-    self->model_clip_length = 16;
-    self->max_history_frames = 300;
+    self->processing_frame_interval = 5;
+    self->model_clip_length = 32;
+    self->max_history_frames = self->processing_frame_interval * self->model_clip_length + 2;
     self->trtProcessPtr = new Process(self->max_history_frames);
     self->video_recognition = new tsnTrt(
-        "/workspace/deepstream-app-custom/src/gst-videorecognition/models/tsm_end2end.engine",
+        "/workspace/deepstream-app-custom/src/gst-videorecognition/models/tsn_end2end_fp32.engine",
         self->processing_width);
     self->recognitionResultPtr = new RECOGNITION();
 
@@ -520,47 +520,6 @@ gst_videorecognition_transform_ip(GstBaseTransform *btrans, GstBuffer *inbuf)
 
             std::cout << "Class ID: " << self->recognitionResultPtr->class_id << ", Class Name: " << self->recognitionResultPtr->class_name
                       << ", Score: " << self->recognitionResultPtr->score << std::endl;
-
-            for (l_frame = batch_meta->frame_meta_list; l_frame != NULL;
-                 l_frame = l_frame->next)
-            {
-                NvDsMetaList *l_obj = NULL;
-                NvDsObjectMeta *obj_meta = NULL;
-                frame_meta = (NvDsFrameMeta *)(l_frame->data);
-                for (l_obj = frame_meta->obj_meta_list; l_obj != NULL;
-                     l_obj = l_obj->next)
-                {
-                    obj_meta = (NvDsObjectMeta *)(l_obj->data);
-
-                    NvDsClassifierMeta *classifier_meta =
-                        nvds_acquire_classifier_meta_from_pool(batch_meta);
-
-                    classifier_meta->unique_component_id = 9;
-                    NvDsLabelInfo *label_info =
-                        nvds_acquire_label_info_meta_from_pool(batch_meta);
-
-                    label_info->result_class_id = self->recognitionResultPtr->class_id;
-                    label_info->result_prob = self->recognitionResultPtr->score;
-                    if (label_info->result_class_id == 0)
-                    {
-                        strncpy(label_info->result_label, "bird", MAX_LABEL_SIZE - 1);
-                        label_info->result_label[MAX_LABEL_SIZE - 1] = '\0'; // 确保空字符结尾
-                    }
-                    else if (label_info->result_class_id == 1)
-                    {
-                        strncpy(label_info->result_label, "uav", MAX_LABEL_SIZE - 1);
-                        label_info->result_label[MAX_LABEL_SIZE - 1] = '\0'; // 确保空字符结尾
-                    }
-                    else
-                    {
-                        // 可选：处理其他 class_id 的情况，例如设置一个默认标签或留空
-                        strncpy(label_info->result_label, "unknown", MAX_LABEL_SIZE - 1);
-                        label_info->result_label[MAX_LABEL_SIZE - 1] = '\0';
-                    }
-                    nvds_add_label_info_meta_to_classifier(classifier_meta, label_info);
-                    nvds_add_classifier_meta_to_object(obj_meta, classifier_meta);
-                }
-            }
 
             delete[] output_data;
         }

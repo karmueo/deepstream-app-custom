@@ -56,6 +56,7 @@ TrackInfo DeepTracker::update(const cv::Mat &img, const NvMOTObjToTrackList *det
         for (uint32_t numObjects = 0; numObjects < detectObjList->numFilled; numObjects++)
         {
             NvMOTObjToTrack obj = detectObjList->list[numObjects];
+            // TODO: 要跟踪哪个目标这个策略还要优化
             // 计算哪个目标离中心最近
             auto obj_cx = obj.bbox.x + obj.bbox.width / 2.f;
             auto obj_cy = obj.bbox.y + obj.bbox.height / 2.f;
