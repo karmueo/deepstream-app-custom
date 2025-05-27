@@ -3,6 +3,8 @@
 
 #include <opencv2/opencv.hpp>
 
+std::vector<std::vector<std::vector<float>>> reshape_to_3d(const float *output_data, const std::vector<int> &shape);
+
 // 定义一个类，该类主要实现对视频帧的各种自定义预处理
 class Process
 {
@@ -35,6 +37,13 @@ public:
                                  int height,
                                  int width,
                                  int frame_interval);
+
+    void loadImagesFromDirectory2(const std::string &directoryPath,
+                                  std::vector<float> &input_data,
+                                  int num_clips,
+                                  int clip_len,
+                                  int height,
+                                  int width);
 
     // 获取当前视频帧长度
     int getCurrentFrameLength() const
@@ -78,12 +87,15 @@ private:
 
     cv::Mat preprocess(const cv::Mat &srcframe);
 
+    // HACK:从本地文件读取输入，测试用
+    std::vector<float> loadDataFromFile(const std::string &txt_path);
+
 private:
     std::vector<cv::Mat> m_vTargetFrames; // 视频帧,RGB,224x224
     std::vector<cv::Mat> m_vRawTargetFrames;
 
-    const float m_mean_vals[3] = {0.485f, 0.456f, 0.406f}; // RGB
-    const float m_norm_vals[3] = {0.229f, 0.224f, 0.225f};
+    const float m_mean_vals[3] = {0.45f, 0.45f, 0.45f}; // RGB
+    const float m_norm_vals[3] = {0.225f, 0.225f, 0.225f};
 
     // 模型输入尺寸
     cv::Size m_input_size;

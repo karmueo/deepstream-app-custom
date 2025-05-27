@@ -309,6 +309,92 @@ void Process::loadImagesFromDirectory(
     // SaveVectorToTxt(input_data, "input_data.txt");
 }
 
+void Process::loadImagesFromDirectory2(
+    const std::string &directoryPath,
+    std::vector<float> &input_data,
+    int num_clips,
+    int clip_len,
+    int height,
+    int width)
+{
+    // 1. 检查文件夹是否存在
+    // DIR *dir = opendir(directoryPath.c_str());
+    // if (!dir)
+    // {
+    //     return;
+    // }
+
+    // // 2. 遍历文件夹，收集所有 .jpg 文件
+    // std::vector<std::string> filenames;
+    // struct dirent *entry;
+    // while ((entry = readdir(dir)) != nullptr)
+    // {
+    //     std::string filename = entry->d_name;
+    //     if (filename.size() >= 4 && filename.substr(filename.size() - 4) == ".jpg")
+    //     {
+    //         filenames.push_back(filename);
+    //     }
+    // }
+    // closedir(dir);
+
+    // // 3. 按数字顺序排序文件名（0.jpg, 1.jpg, ..., 255.jpg）
+    // std::sort(filenames.begin(), filenames.end(), [](const std::string &a, const std::string &b)
+    //           {
+    //     int num_a = std::stoi(a.substr(0, a.find('.')));
+    //     int num_b = std::stoi(b.substr(0, b.find('.')));
+    //     return num_a < num_b; });
+
+    // // 4. 按顺序读取图片到 vector<cv::Mat> 作为m_vTargetFrames的仿真
+    // std::vector<cv::Mat> images;
+    // for (const auto &filename : filenames)
+    // {
+    //     std::string full_path = directoryPath + filename;
+    //     cv::Mat img = cv::imread(full_path, cv::IMREAD_COLOR);
+    //     if (img.empty())
+    //     {
+    //         std::cerr << "Warning: Failed to load image " << full_path << std::endl;
+    //         continue;
+    //     }
+    //     cv::cvtColor(img, img, cv::COLOR_BGR2RGB);
+    //     // cv::Mat norm_img;
+    //     // norm_img = half_norm(img);
+    //     images.push_back(img);
+    // }
+
+    // std::vector<std::vector<cv::Mat>> extracted_num_frames = getSampleClips(images, num_clips, clip_len);
+
+    // auto actual_num_clips = extracted_num_frames.size();
+    // assert(actual_num_clips == num_clips);
+    // auto actual_frames = extracted_num_frames[actual_num_clips - 1].size();
+    // assert(actual_frames == clip_len);
+
+    // std::vector<float> output(1 * num_clips * 3 * clip_len * height * width);
+    // for (int i = 0; i < num_clips; ++i)
+    // {
+    //     for (int c = 0; c < 3; ++c)
+    //     {
+    //         for (int t = 0; t < clip_len; ++t)
+    //         {
+    //             for (int h = 0; h < height; ++h)
+    //             {
+    //                 for (int w = 0; w < width; ++w)
+    //                 {
+    //                     // 计算目标位置 [1][t][c][h][w]
+    //                     int dst_idx =
+    //                         i * (3 * clip_len * height * width) + c * (clip_len * height * width) + t * (height * width) + h * width + w;
+    //                     output[dst_idx] = extracted_num_frames[i][t].at<cv::Vec3f>(h, w)[c];
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+    // input_data = output;
+
+    input_data = loadDataFromFile("/workspace/deepstream-app-custom/src/gst-videorecognition/input_data.txt");
+
+    // SaveVectorToTxt(input_data, "/workspace/deepstream-app-custom/src/gst-videorecognition/input_data.txt");
+}
+
 std::vector<cv::Mat> Process::sampleFrames(const std::vector<cv::Mat> &images,
                                            const int &num_samples, const int &clip_len, const int &frame_interval)
 {
@@ -566,6 +652,26 @@ void Process::SaveVectorToTxt(const std::vector<float> &data, const std::string 
     std::cout << "Data saved to " << filename << std::endl;
 }
 
+std::vector<float> Process::loadDataFromFile(const std::string &txt_path)
+{
+    // 1. 读取文件
+    std::ifstream file(txt_path);
+    if (!file.is_open())
+    {
+        throw std::runtime_error("无法打开文件: " + txt_path);
+    }
+
+    // 2. 读取所有行到 vector
+    std::vector<float> data;
+    std::string line;
+    while (std::getline(file, line))
+    {
+        data.push_back(std::stof(line)); // 转换为 float
+    }
+
+    return data;
+}
+
 std::vector<float> Process::build_input_tensor(
     const std::vector<cv::Mat> &images,
     int clip_len,
@@ -686,4 +792,40 @@ void Process::preprocess3(const cv::Mat &srcframe, float *inputTensorValues)
             pixel += 3;
         }
     }
+}
+
+
+std::vector<std::vector<std::vector<float>>> reshape_to_3d(const float *output_data, const std::vector<int> &shape)
+{
+    // 检查形状合法性
+    if (shape.size() != 3)
+    {
+        throw std::invalid_argument("Shape must have exactly 3 dimensions");
+    }
+    if (shape[0] <= 0 || shape[1] <= 0 || shape[2] <= 0)
+    {
+        throw std::invalid_argument("All shape dimensions must be positive");
+    }
+
+    const int total_elements = shape[0] * shape[1] * shape[2];
+    std::vector<std::vector<std::vector<float>>> result(shape[0], std::vector<std::vector<float>>(shape[1], std::vector<float>(shape[2])));
+
+    // 将一维数据填充到三维结构中
+    int index = 0;
+    for (int i = 0; i < shape[0]; ++i)
+    {
+        for (int j = 0; j < shape[1]; ++j)
+        {
+            for (int k = 0; k < shape[2]; ++k)
+            {
+                if (index >= total_elements)
+                {
+                    throw std::out_of_range("Output_data has fewer elements than required by shape");
+                }
+                result[i][j][k] = output_data[index++];
+            }
+        }
+    }
+
+    return result;
 }

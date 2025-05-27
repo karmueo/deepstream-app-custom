@@ -357,14 +357,17 @@ gst_videorecognition_init(Gstvideorecognition *self)
     self->frame_num = 0;
     self->processing_width = 224;
     self->processing_height = 224;
-    self->processing_frame_interval = 5;
+    // self->processing_frame_interval = 5;
+    self->processing_frame_interval = 1;
     // 根据模型选择num_clips和clip_length和processing_width
-    self->model_num_clips = 1;
-    self->model_clip_length = 32;
+    // self->model_num_clips = 1;
+    self->model_num_clips = 4;
+    // self->model_clip_length = 32;
+    self->model_clip_length = 8;
     self->max_history_frames = self->processing_frame_interval * self->model_clip_length * self->model_num_clips + self->model_num_clips * 2;
     self->trtProcessPtr = new Process(self->max_history_frames);
     self->video_recognition = new tsnTrt(
-        "/workspace/deepstream-app-custom/src/gst-videorecognition/models/tsn_end2end_fp32.engine",
+        "/workspace/deepstream-app-custom/src/gst-videorecognition/models/uniformerv2_end2end_fp32.engine",
         self->processing_width);
     self->recognitionResultPtr = new RECOGNITION();
 
@@ -493,22 +496,29 @@ gst_videorecognition_transform_ip(GstBaseTransform *btrans, GstBuffer *inbuf)
     {
         std::vector<float> input_data;
         // 数据预处理
-        self->trtProcessPtr->convertCvInputToTensorRT(
-            input_data,
-            self->model_clip_length,
-            self->processing_width,
-            self->processing_height,
-            self->processing_frame_interval);
-        /* self->trtProcessPtr->loadImagesFromDirectory(
-            "/workspace/deepstream-app-custom/src/deepstream-app/110_video_frames/bird/bird_1/0/",
+        /* self->trtProcessPtr->convertCvInputToTensorRT(
             input_data,
             self->model_clip_length,
             self->processing_width,
             self->processing_height,
             self->processing_frame_interval); */
-        /* self->trtProcessPtr->convertCvInputToNtchwTensorRT(
+        self->trtProcessPtr->convertCvInputToNtchwTensorRT(
             input_data,
             self->model_num_clips,
+            self->model_clip_length,
+            self->processing_width,
+            self->processing_height,
+            self->processing_frame_interval);
+        /* self->trtProcessPtr->loadImagesFromDirectory2(
+            "/workspace/deepstream-app-custom/src/deepstream-app/110_video_frames/bird/bird_1/0/",
+            input_data,
+            self->model_num_clips,
+            self->model_clip_length,
+            self->processing_width,
+            self->processing_height); */
+        /* self->trtProcessPtr->loadImagesFromDirectory(
+            "/workspace/deepstream-app-custom/src/deepstream-app/110_video_frames/bird/bird_1/0/",
+            input_data,
             self->model_clip_length,
             self->processing_width,
             self->processing_height,
@@ -517,8 +527,8 @@ gst_videorecognition_transform_ip(GstBaseTransform *btrans, GstBuffer *inbuf)
         if (self->video_recognition)
         {
             tsnTrt *tsnPtr = dynamic_cast<tsnTrt *>(self->video_recognition);
-            tsnPtr->prepare_input("input", self->model_clip_length, input_data.data());
-            tsnPtr->prepare_output("output");
+            tsnPtr->prepare_input("input", self->model_num_clips, self->model_clip_length, input_data.data());
+            tsnPtr->prepare_output("/Softmax_output_0");
             tsnPtr->do_inference();
             float *output_data = new float[tsnPtr->GetOutputSize()];
             tsnPtr->get_output(output_data);

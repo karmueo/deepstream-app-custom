@@ -16,7 +16,7 @@ public:
     bool prepare_output(const std::string &output_name);
 
     // 准备模型输入
-    bool prepare_input(const std::string &input_name, const int &clip_length, const float *input_data);
+    bool prepare_input(const std::string &input_name, const int &clip_num, const int &clip_length, const float *input_data);
 
     // 获取输出
     void get_output(float *output_data);

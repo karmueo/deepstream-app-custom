@@ -1,5 +1,6 @@
 #include "tsnTrt.h"
 #include <algorithm>
+#include "process.h"
 
 tsnTrt::tsnTrt(const std::string &engine_name, const u_int32_t input_imt_shape) : VideoRecognitionTRT(engine_name, input_imt_shape)
 {
@@ -19,7 +20,7 @@ bool tsnTrt::prepare_output(const std::string &output_name)
     assert(engine_->getTensorDataType(output_name.c_str()) == nvinfer1::DataType::kFLOAT);
 
     // 应该等于类别数量
-    auto out_dims = this->engine_->getTensorShape("output");
+    auto out_dims = this->engine_->getTensorShape("/Softmax_output_0");
 
     int output_num = 1;
     for (int j = 0; j < out_dims.nbDims; j++)
@@ -36,6 +37,7 @@ bool tsnTrt::prepare_output(const std::string &output_name)
 }
 
 bool tsnTrt::prepare_input(const std::string &input_name,
+                           const int &clip_num,
                            const int &clip_length,
                            const float *input_data)
 {
@@ -47,7 +49,15 @@ bool tsnTrt::prepare_input(const std::string &input_name,
 
     // 在设备上创建GPU缓冲区
     // INPUT
-    auto input_size = clip_length * 3 * input_imt_shape_ * input_imt_shape_ * sizeof(float);
+    auto input_size = clip_num * clip_length * 3 * input_imt_shape_ * input_imt_shape_ * sizeof(float);
+    auto int_dims = this->engine_->getTensorShape("input");
+    int input_num = 1;
+    for (int j = 0; j < int_dims.nbDims; j++)
+    {
+        input_num *= int_dims.d[j];
+    }
+    assert(input_num * sizeof(float) == input_size);
+
     CHECK(cudaMalloc(&intput_dev_buffer_, input_size));
     // DMA（直接内存访问）输入批处理数据到设备，在异步上推断批处理，然后DMA输出回到主机
     CHECK(cudaMemcpyAsync(intput_dev_buffer_, input_data, input_size, cudaMemcpyHostToDevice, stream_));
@@ -73,15 +83,36 @@ void tsnTrt::get_output(float *output_data)
 
 RECOGNITION tsnTrt::parse_output(const float *output_data)
 {
+    const std::vector<int> shape = {1, 4, 2};
+    int class_num = shape[2];
     // 解析输出结果
     std::vector<RECOGNITION> result;
-    for (int i = 0; i < this->output_size_ / sizeof(float); i++)
+    result.resize(class_num);
+
+    auto data = reshape_to_3d(output_data, shape);
+    for (auto i = 0; i < shape[1]; i++)
+    {
+        for (auto j = 0; j < class_num; j++)
+        {
+            RECOGNITION rec = result[j];
+            rec.class_id = j;
+            rec.score += data[0][i][j];
+            result[j] = rec;
+        }
+    }
+
+    for (auto i = 0; i < class_num; i++)
+    {
+        result[i].score = result[i].score / shape[1];
+    }
+
+    /* for (int i = 0; i < this->output_size_ / sizeof(float); i++)
     {
         RECOGNITION rec;
         rec.class_id = i;
         rec.score = output_data[i];
         result.push_back(rec);
-    }
+    } */
 
     // Sort the results based on score
     std::sort(result.begin(), result.end(), [](const RECOGNITION &a, const RECOGNITION &b)
