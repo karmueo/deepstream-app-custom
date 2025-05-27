@@ -23,3 +23,6 @@ src/Mixformer_plugin/models/profile.json
 *.onnx
 *.engine
 *.log
+src/gst-videorecognition/input_data.txt
+.gitignore
+src/gst-videorecognition/output.bin
