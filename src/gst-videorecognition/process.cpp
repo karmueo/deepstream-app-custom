@@ -34,7 +34,7 @@ void Process::addFrame(const cv::Mat &frame)
     }
 
 #ifdef SAVE_IMAGES
-    if (m_vRawTargetFrames.size() >= m_max_history_frames)
+    if (m_vRawTargetFrames.size() >= 60)
     {
         m_vRawTargetFrames.erase(m_vRawTargetFrames.begin());
     }
@@ -164,6 +164,14 @@ void Process::convertCvInputToNtchwTensorRT(std::vector<float> &input_data,
         }
     }
     input_data = output;
+
+#ifdef SAVE_IMAGES
+    // 遍历保存m_vRawTargetFrames
+    for (int i = 0; i < m_vRawTargetFrames.size(); ++i)
+    {
+        cv::imwrite(m_current_dir_path + "/" + std::to_string(i) + ".jpg", m_vRawTargetFrames[i]);
+    }
+#endif
 }
 
 void Process::loadImagesFromDirectory(
@@ -793,7 +801,6 @@ void Process::preprocess3(const cv::Mat &srcframe, float *inputTensorValues)
         }
     }
 }
-
 
 std::vector<std::vector<std::vector<float>>> reshape_to_3d(const float *output_data, const std::vector<int> &shape)
 {
