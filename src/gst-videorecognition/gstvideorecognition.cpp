@@ -363,7 +363,7 @@ gst_videorecognition_init(Gstvideorecognition *self)
     // self->model_num_clips = 1;
     self->model_num_clips = 4;
     // self->model_clip_length = 32;
-    self->model_clip_length = 8;
+    self->model_clip_length = 16;
     self->max_history_frames = self->processing_frame_interval * self->model_clip_length * self->model_num_clips + self->model_num_clips * 2;
     self->trtProcessPtr = new Process(self->max_history_frames);
     self->video_recognition = new tsnTrt(
