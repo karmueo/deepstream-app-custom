@@ -10,12 +10,12 @@ services:
       - "/dev/snd"      # 音频设备
     volumes:
       - "/tmp/.X11-unix:/tmp/.X11-unix"  # X11 显示套接字
-      - "$HOME/work/workspace:/workspace" # 挂载工作目录
+      - "./:/workspace/deepstream-app-custom" # 挂载工作目录
     environment:
       - DISPLAY=${DISPLAY:-localhost:10.0}  # 从主机继承或默认 localhost:10.0
       - GST_PLUGIN_PATH=/usr/local/lib/x86_64-linux-gnu/gstreamer-1.0
-      - HTTP_PROXY=http://192.168.1.110:7890
-      - HTTPS_PROXY=http://192.168.1.110:7890
+      # - HTTP_PROXY=http://192.168.1.110:7890
+      # - HTTPS_PROXY=http://192.168.1.110:7890
     privileged: true    # 特权模式
     cap_add:
       - SYS_PTRACE     # 允许 ptrace 调试
