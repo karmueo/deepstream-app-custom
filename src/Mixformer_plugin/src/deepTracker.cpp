@@ -39,6 +39,12 @@ DeepTracker::~DeepTracker()
 TrackInfo DeepTracker::update(const cv::Mat &img, const NvMOTObjToTrackList *detectObjList, const uint32_t frameNum)
 {
     frameNum_ = frameNum;
+    // 根据输入图片的尺寸确定跟踪框的宽度和高度阈值
+    if (trackBoxWidthThreshold_ == 0)
+        trackBoxWidthThreshold_ = img.cols * 0.3;
+    if (trackBoxHeightThreshold_ == 0)
+        trackBoxHeightThreshold_ = img.rows * 0.3;
+
     // 输出的结果存放在bbox中
     if (is_tracked_ == false)
     {
@@ -52,21 +58,37 @@ TrackInfo DeepTracker::update(const cv::Mat &img, const NvMOTObjToTrackList *det
         // 当前画面的中心坐标
         auto image_cx = img.cols / 2.f;
         auto image_cy = img.rows / 2.f;
-        float min_distance = 1000000.f;
+
+        NvMOTObjToTrack *closest_class1 = nullptr; // 记录最近的目标
+        NvMOTObjToTrack *closest_any = nullptr;    // 记录最近的目标（不限classId）
+        float min_distance_class1 = FLT_MAX;       // classId=1的最小距离
+        float min_distance_any = FLT_MAX;          // 所有目标的最小距离
         for (uint32_t numObjects = 0; numObjects < detectObjList->numFilled; numObjects++)
         {
-            NvMOTObjToTrack obj = detectObjList->list[numObjects];
-            // TODO: 要跟踪哪个目标这个策略还要优化
-            // 计算哪个目标离中心最近
-            auto obj_cx = obj.bbox.x + obj.bbox.width / 2.f;
-            auto obj_cy = obj.bbox.y + obj.bbox.height / 2.f;
-            auto distance = std::abs(obj_cx - image_cx) + std::abs(obj_cy - image_cy);
-            if (distance < min_distance)
+            // 直接使用数组元素的指针，避免局部变量作用域问题
+            NvMOTObjToTrack *pObj = &detectObjList->list[numObjects];
+
+            // 计算目标中心到图像中心的曼哈顿距离
+            float obj_cx = pObj->bbox.x + pObj->bbox.width * 0.5f;
+            float obj_cy = pObj->bbox.y + pObj->bbox.height * 0.5f;
+            float distance = std::abs(obj_cx - image_cx) + std::abs(obj_cy - image_cy);
+
+            // 更新所有目标中的最近距离
+            if (distance < min_distance_any)
             {
-                min_distance = distance;
-                objectToTrack_ = &obj;
+                min_distance_any = distance;
+                closest_any = pObj;
+            }
+
+            // 如果是classId=1的目标，更新classId=1的最近距离
+            if (pObj->classId == 1 && distance < min_distance_class1)
+            {
+                min_distance_class1 = distance;
+                closest_class1 = pObj;
             }
         }
+        // 优先选择classId=1的目标，若无则选最近目标
+        objectToTrack_ = (closest_class1 != nullptr) ? closest_class1 : closest_any;
 
         trackInfo_.bbox.box.x0 = objectToTrack_->bbox.x;
         trackInfo_.bbox.box.x1 = objectToTrack_->bbox.x + objectToTrack_->bbox.width;
@@ -105,6 +127,7 @@ TrackInfo DeepTracker::update(const cv::Mat &img, const NvMOTObjToTrackList *det
         else
         {
             // 如果有检测结果，和检测结果对比来查看跟踪是否正确
+            float iou = 0.;
             if (detectObjList->numFilled != 0)
             {
                 is_track_match_detect = false;
@@ -122,7 +145,7 @@ TrackInfo DeepTracker::update(const cv::Mat &img, const NvMOTObjToTrackList *det
                                                       obj.bbox.width,
                                                       obj.bbox.height);
 
-                    float iou = IOU(detectionRect, trackRect);
+                    iou = IOU(detectionRect, trackRect);
                     if (iou > 0.5)
                     {
                         // 如果IOU大于0.5，认为跟踪成功
@@ -132,13 +155,19 @@ TrackInfo DeepTracker::update(const cv::Mat &img, const NvMOTObjToTrackList *det
                 }
             }
             // 如果跟踪置信度小于阈值或者前面和检测没有匹配的
-            if (trackInfo_.bbox.score < 0.3 || !is_track_match_detect)
+            if (trackInfo_.bbox.score < 0.3 || !is_track_match_detect ||
+                trackInfo_.bbox.box.w > trackBoxWidthThreshold_ ||
+                trackInfo_.bbox.box.h > trackBoxHeightThreshold_)
             {
                 miss_++;
             }
+            else
+            {
+                miss_ = 0;
+            }
         }
 
-        if (miss_ > 20)
+        if (miss_ > 10)
         {
             // 如果跟踪分数小于阈值，或者IOU小于0.5，认为跟踪失败
             is_tracked_ = false;

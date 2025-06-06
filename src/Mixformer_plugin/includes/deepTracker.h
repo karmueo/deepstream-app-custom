@@ -47,4 +47,6 @@ private:
     uint32_t frameNum_;
     NvDsTargetMiscDataFrame *list_;
     uint32_t list_size_;
+    int trackBoxWidthThreshold_;   // 跟踪框宽度阈值，单位像素
+    int trackBoxHeightThreshold_;  // 跟踪框高度阈值，单位像素
 };
