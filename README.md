@@ -10,6 +10,8 @@ export LD_LIBRARY_PATH=/opt/nvidia/deepstream/deepstream/lib:$LD_LIBRARY_PATH
 ## 获取项目
 ```sh
 git clone --recurse-submodules git@github.com:karmueo/deepstream-app-custom.git
+# git submodule init
+# git submodule update
 ```
 
 <!-- ## 安装nvdsinfer_yolo_efficient_nms
