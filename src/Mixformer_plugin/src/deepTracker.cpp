@@ -25,6 +25,8 @@ DeepTracker::DeepTracker(const std::string &engine_name)
     frameNum_ = 0;
     list_ = nullptr;
     list_size_ = 0;
+    enableTrackCenterStable_ = true; // 默认启用跟踪中心位置稳定判断
+    trackCenterStablePixelThreshold_ = 3;
 }
 
 DeepTracker::~DeepTracker()
@@ -39,6 +41,7 @@ DeepTracker::~DeepTracker()
 TrackInfo DeepTracker::update(const cv::Mat &img, const NvMOTObjToTrackList *detectObjList, const uint32_t frameNum)
 {
     frameNum_ = frameNum;
+    bool is_good_track = false;
     // 根据输入图片的尺寸确定跟踪框的宽度和高度阈值
     if (trackBoxWidthThreshold_ == 0)
         trackBoxWidthThreshold_ = img.cols * 0.3;
@@ -160,11 +163,13 @@ TrackInfo DeepTracker::update(const cv::Mat &img, const NvMOTObjToTrackList *det
                 trackInfo_.bbox.box.h > trackBoxHeightThreshold_)
             {
                 miss_++;
+                is_good_track = false;
             }
             else
             {
                 miss_ = 0;
                 age_++;
+                is_good_track = true;
             }
         }
 
@@ -184,47 +189,94 @@ TrackInfo DeepTracker::update(const cv::Mat &img, const NvMOTObjToTrackList *det
         }
     }
 
-    /* if (age_ <= 29)
+    if (is_good_track)
     {
-        list_[age_].age = age_;
-        list_[age_].tBbox.left = trackInfo_.bbox.box.x0;
-        list_[age_].tBbox.top = trackInfo_.bbox.box.y0;
-        list_[age_].tBbox.width = trackInfo_.bbox.box.x1 - trackInfo_.bbox.box.x0;
-        list_[age_].tBbox.height = trackInfo_.bbox.box.y1 - trackInfo_.bbox.box.y0;
-        list_[age_].confidence = trackInfo_.bbox.score;
-        list_[age_].trackerState = ACTIVE;
-        list_[age_].visibility = 1.0;
-        list_[age_].frameNum = frameNum_;
-        list_size_ = age_ + 1;
-    }
-    else
-    {
-        // 过期的跟踪数据移除，更新为新的
-        for (int i = 0; i < 29; i++)
+        if (age_ < list_capacity_)
         {
-            list_[i].age = list_[i + 1].age;
-            list_[i].tBbox.left = list_[i + 1].tBbox.left;
-            list_[i].tBbox.top = list_[i + 1].tBbox.top;
-            list_[i].tBbox.width = list_[i + 1].tBbox.width;
-            list_[i].tBbox.height = list_[i + 1].tBbox.height;
-            list_[i].confidence = list_[i + 1].confidence;
-            list_[i].trackerState = ACTIVE;
-            list_[i].visibility = 1.0;
-            list_[i].frameNum = frameNum_;
+            list_[age_].age = age_;
+            list_[age_].tBbox.left = trackInfo_.bbox.box.x0;
+            list_[age_].tBbox.top = trackInfo_.bbox.box.y0;
+            list_[age_].tBbox.width = trackInfo_.bbox.box.x1 - trackInfo_.bbox.box.x0;
+            list_[age_].tBbox.height = trackInfo_.bbox.box.y1 - trackInfo_.bbox.box.y0;
+            list_[age_].confidence = trackInfo_.bbox.score;
+            list_[age_].trackerState = ACTIVE;
+            list_[age_].visibility = 1.0;
+            list_[age_].frameNum = frameNum_;
+            list_size_ = age_ + 1;
         }
-        list_[29].age = 30;
-        list_[29].tBbox.left = trackInfo_.bbox.box.x0;
-        list_[29].tBbox.top = trackInfo_.bbox.box.y0;
-        list_[29].tBbox.width = trackInfo_.bbox.box.x1 - trackInfo_.bbox.box.x0;
-        list_[29].tBbox.height = trackInfo_.bbox.box.y1 - trackInfo_.bbox.box.y0;
-        list_[29].confidence = trackInfo_.bbox.score;
-        list_[29].trackerState = ACTIVE;
-        list_[29].visibility = 1.0;
-        list_[29].frameNum = frameNum_;
-        list_size_ = 30;
-    } */
+        else
+        {
+            // 过期的跟踪数据移除，更新为新的
+            for (int i = 0; i < list_capacity_ - 1; i++)
+            {
+                list_[i].age = list_[i + 1].age;
+                list_[i].tBbox.left = list_[i + 1].tBbox.left;
+                list_[i].tBbox.top = list_[i + 1].tBbox.top;
+                list_[i].tBbox.width = list_[i + 1].tBbox.width;
+                list_[i].tBbox.height = list_[i + 1].tBbox.height;
+                list_[i].confidence = list_[i + 1].confidence;
+                list_[i].trackerState = ACTIVE;
+                list_[i].visibility = 1.0;
+                list_[i].frameNum = frameNum_;
+            }
+            list_[list_capacity_ - 1].age = 30;
+            list_[list_capacity_ - 1].tBbox.left = trackInfo_.bbox.box.x0;
+            list_[list_capacity_ - 1].tBbox.top = trackInfo_.bbox.box.y0;
+            list_[list_capacity_ - 1].tBbox.width = trackInfo_.bbox.box.x1 - trackInfo_.bbox.box.x0;
+            list_[list_capacity_ - 1].tBbox.height = trackInfo_.bbox.box.y1 - trackInfo_.bbox.box.y0;
+            list_[list_capacity_ - 1].confidence = trackInfo_.bbox.score;
+            list_[list_capacity_ - 1].trackerState = ACTIVE;
+            list_[list_capacity_ - 1].visibility = 1.0;
+            list_[list_capacity_ - 1].frameNum = frameNum_;
+            list_size_ = list_capacity_;
+        }
 
-    
+        // 计算历史跟踪目标的位置，如果跟踪目标的中心位置变化不大，且不再画面中心，认为是虚假跟踪
+        if (enableTrackCenterStable_)
+        {
+            if (list_size_ == list_capacity_)
+            {
+                // 计算跟踪中心位置的平均值
+                float avg_cx = 0.0f;
+                float avg_cy = 0.0f;
+                for (uint32_t i = 0; i < list_size_; i++)
+                {
+                    avg_cx += (list_[i].tBbox.left + list_[i].tBbox.width * 0.5f);
+                    avg_cy += (list_[i].tBbox.top + list_[i].tBbox.height * 0.5f);
+                }
+                avg_cx /= list_size_;
+                avg_cy /= list_size_;
+
+                // 判断平均中心位置是否位于画面中心
+                bool isCentered = false;
+                auto imageCenterThreshold = trackCenterStablePixelThreshold_ * 3;
+                if (std::abs(avg_cx - (img.cols / 2.f)) < imageCenterThreshold &&
+                    std::abs(avg_cy - (img.rows / 2.f)) < imageCenterThreshold)
+                {
+                    // 如果平均中心位置接近画面中心，认为跟踪稳定
+                    isCentered = true;
+                }
+
+                // 判断平均中心位置是否变换很小
+                if (isCentered && std::abs(avg_cx - trackInfo_.bbox.box.cx) < trackCenterStablePixelThreshold_ &&
+                    std::abs(avg_cy - trackInfo_.bbox.box.cy) < trackCenterStablePixelThreshold_)
+                {
+                    // 如果平均中心位置变化很小，并且稳定在非画面中心位置，认为i是虚假跟踪
+                    is_tracked_ = false;
+                    age_ = 0;
+                    if (trackId_++ > 0xFFFFFFFF)
+                    {
+                        trackId_ = 0;
+                    }
+
+                    miss_ = 0;
+                    memset(&trackInfo_, 0, sizeof(trackInfo_));
+                    return trackInfo_;
+                }
+            }
+        }
+    }
+
     trackInfo_.age = age_;
     trackInfo_.trackId = trackId_;
     trackInfo_.miss = miss_;

@@ -46,7 +46,10 @@ private:
     TrackInfo trackInfo_;
     uint32_t frameNum_;
     NvDsTargetMiscDataFrame *list_;
+    uint32_t list_capacity_ = 30;  // 默认容量为30
     uint32_t list_size_;
-    int trackBoxWidthThreshold_;   // 跟踪框宽度阈值，单位像素
-    int trackBoxHeightThreshold_;  // 跟踪框高度阈值，单位像素
+    int      trackBoxWidthThreshold_;           // 跟踪框宽度阈值，单位像素
+    int      trackBoxHeightThreshold_;          // 跟踪框高度阈值，单位像素
+    bool     enableTrackCenterStable_;          // 是否启用跟踪中心位置稳定判断
+    uint32_t trackCenterStablePixelThreshold_;  // 跟踪中心位置稳定判断的像素阈值，单位像素
 };
