@@ -358,7 +358,8 @@ bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
             obj_meta = (NvDsObjectMeta *)(l->data);
 
             // HACK: 测试接收自定义的分类结果数据
-            /* if (g_list_length(obj_meta->classifier_meta_list) > 0) 
+            bool isTrueTarget = false;
+            if (g_list_length(obj_meta->classifier_meta_list) > 0)
             {
                 for (NvDsClassifierMetaList* cl = obj_meta->classifier_meta_list; cl; cl = cl->next) 
                 {
@@ -368,11 +369,21 @@ bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                         NvDsLabelInfo* ll_meta = (NvDsLabelInfo*)ll->data;
                         if (ll_meta->result_label[0] != '\0') 
                         {
-                            g_print("Classifier label: %s\n", ll_meta->result_label);
+                            if (ll_meta->result_prob > 0.9)
+                            {
+                                isTrueTarget = true;
+                            }
                         }
                     }
                 }
-            } */
+            }
+
+            if (!isTrueTarget)
+            {
+                g_print("Skipping object\n");
+                nvds_remove_obj_meta_from_frame(frame_meta, obj_meta);
+                break; // 如果不是目标，则跳过
+            }
 
 
             /**
