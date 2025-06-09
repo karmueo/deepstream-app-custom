@@ -92,7 +92,7 @@ NvMOTStatus NvMOTContext::processFrame(const NvMOTProcessParams *params, NvMOTTr
         NvMOTTrackedObj *trackedObj = &trackedObjs[0];
 
         // 如果跟踪上了，给NvMOTTrackedObj赋值
-        if (tracker_->isTracked())
+        if (tracker_->isTracked() && trackInfo.age > 5)
         {
             NvMOTRect motRect{
                 static_cast<float>(trackInfo.bbox.box.x0),

@@ -164,6 +164,7 @@ TrackInfo DeepTracker::update(const cv::Mat &img, const NvMOTObjToTrackList *det
             else
             {
                 miss_ = 0;
+                age_++;
             }
         }
 
@@ -183,7 +184,7 @@ TrackInfo DeepTracker::update(const cv::Mat &img, const NvMOTObjToTrackList *det
         }
     }
 
-    if (age_ <= 29)
+    /* if (age_ <= 29)
     {
         list_[age_].age = age_;
         list_[age_].tBbox.left = trackInfo_.bbox.box.x0;
@@ -221,9 +222,10 @@ TrackInfo DeepTracker::update(const cv::Mat &img, const NvMOTObjToTrackList *det
         list_[29].visibility = 1.0;
         list_[29].frameNum = frameNum_;
         list_size_ = 30;
-    }
+    } */
 
-    trackInfo_.age = age_++;
+    
+    trackInfo_.age = age_;
     trackInfo_.trackId = trackId_;
     trackInfo_.miss = miss_;
 
