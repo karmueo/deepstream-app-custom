@@ -249,7 +249,7 @@ TrackInfo DeepTracker::update(const cv::Mat &img, const NvMOTObjToTrackList *det
 
                 // 判断平均中心位置是否位于画面中心
                 bool isCentered = false;
-                auto imageCenterThreshold = trackCenterStablePixelThreshold_ * 3;
+                auto imageCenterThreshold = 100;
                 if (std::abs(avg_cx - (img.cols / 2.f)) < imageCenterThreshold &&
                     std::abs(avg_cy - (img.rows / 2.f)) < imageCenterThreshold)
                 {
@@ -258,20 +258,33 @@ TrackInfo DeepTracker::update(const cv::Mat &img, const NvMOTObjToTrackList *det
                 }
 
                 // 判断平均中心位置是否变换很小
-                if (isCentered && std::abs(avg_cx - trackInfo_.bbox.box.cx) < trackCenterStablePixelThreshold_ &&
-                    std::abs(avg_cy - trackInfo_.bbox.box.cy) < trackCenterStablePixelThreshold_)
+                if (isCentered == false)
                 {
-                    // 如果平均中心位置变化很小，并且稳定在非画面中心位置，认为i是虚假跟踪
-                    is_tracked_ = false;
-                    age_ = 0;
-                    if (trackId_++ > 0xFFFFFFFF)
+                    // 计算中心位置标准差
+                    float std_dev_cx = 0.0f;
+                    float std_dev_cy = 0.0f;
+                    for (uint32_t i = 0; i < list_size_; i++)
                     {
-                        trackId_ = 0;
+                        std_dev_cx += std::pow((list_[i].tBbox.left + list_[i].tBbox.width * 0.5f) - avg_cx, 2);
+                        std_dev_cy += std::pow((list_[i].tBbox.top + list_[i].tBbox.height * 0.5f) - avg_cy, 2);
                     }
+                    std_dev_cx = std::sqrt(std_dev_cx / list_size_);
+                    std_dev_cy = std::sqrt(std_dev_cy / list_size_);
 
-                    miss_ = 0;
-                    memset(&trackInfo_, 0, sizeof(trackInfo_));
-                    return trackInfo_;
+                    if (std_dev_cx < trackCenterStablePixelThreshold_ &&
+                        std_dev_cy < trackCenterStablePixelThreshold_)
+                    {
+                        // 如果平均中心位置变化很小，并且稳定在非画面中心位置，认为i是虚假跟踪
+                        is_tracked_ = false;
+                        age_ = 0;
+                        if (trackId_++ > 0xFFFFFFFF)
+                        {
+                            trackId_ = 0;
+                        }
+                        miss_ = 0;
+                        memset(&trackInfo_, 0, sizeof(trackInfo_));
+                        return trackInfo_;
+                    }
                 }
             }
         }
