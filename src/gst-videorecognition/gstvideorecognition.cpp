@@ -349,7 +349,7 @@ gst_videorecognition_init(Gstvideorecognition *self)
     /* We do not want to change the input caps. Set to passthrough. transform_ip
      * is still called. */
     gst_base_transform_set_passthrough(GST_BASE_TRANSFORM(btrans), TRUE);
-    // TODO: 初始化一些参数
+    // FIXME: 初始化一些参数，不要写死，写配置
     self->gpu_id = 0;
     /* Initialize all property variables to default values */
     self->unique_id = 15;
@@ -363,11 +363,11 @@ gst_videorecognition_init(Gstvideorecognition *self)
     // self->model_num_clips = 1;
     self->model_num_clips = 4;
     // self->model_clip_length = 32;
-    self->model_clip_length = 16;
+    self->model_clip_length = 8;
     self->max_history_frames = self->processing_frame_interval * self->model_clip_length * self->model_num_clips + self->model_num_clips * 2;
     self->trtProcessPtr = new Process(self->max_history_frames);
     self->video_recognition = new tsnTrt(
-        "/workspace/deepstream-app-custom/src/gst-videorecognition/models/uniformerv2_end2end_fp32.engine",
+        "/workspace/deepstream-app-custom/src/gst-videorecognition/models/uniformerv2_end2end_fp16.engine",
         self->processing_width);
     self->recognitionResultPtr = new RECOGNITION();
 
