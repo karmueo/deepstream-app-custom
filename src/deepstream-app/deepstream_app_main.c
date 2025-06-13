@@ -21,6 +21,7 @@
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include "nvdsmeta_schema.h"
+#include "gst-nvdssr.h"
 
 #ifdef EN_DEBUG
 #define LOGD(...) printf(__VA_ARGS__)
@@ -78,6 +79,27 @@ GOptionEntry entries[] = {
      "Set the input uri (file://stream or rtsp://stream)", NULL},
     {NULL},
 };
+
+static gboolean
+smartRecord(NvDsSrcBin *src_bin)
+{
+    NvDsSRSessionId sessId = 0;
+    guint startTime = 7;
+    guint duration = 8;
+
+    if (src_bin->config->smart_rec_duration >= 0)
+        duration = src_bin->config->smart_rec_duration;
+
+    if (src_bin->config->smart_rec_start_time >= 0)
+        startTime = src_bin->config->smart_rec_start_time;
+
+    if (src_bin->recordCtx && !src_bin->reconfiguring)
+    {
+        NvDsSRContext *ctx = (NvDsSRContext *)src_bin->recordCtx;
+        NvDsSRStart(ctx, &sessId, startTime, duration, NULL);
+    }
+    return TRUE;
+}
 
 static gpointer
 meta_copy_func(gpointer data, gpointer user_data)
@@ -345,6 +367,11 @@ bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
     NvDsObjectMeta *obj_meta = NULL;
     GstClockTime buffer_pts = 0;
     guint32 stream_id = 0;
+    NvDsSRSessionId sessId = 0;
+    NvDsSrcParentBin *bin = &appCtx->pipeline.multi_src_bin;
+    NvDsSrcBin *src_bin = &bin->sub_bins[index];
+    guint startTime = 7;
+    guint duration = 8;
 
     for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame != NULL;
          l_frame = l_frame->next)
@@ -358,34 +385,38 @@ bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
             obj_meta = (NvDsObjectMeta *)(l->data);
 
             // HACK: 测试接收自定义的分类结果数据
-            /* bool isTrueTarget = false;
+            bool isTrueTarget = false;
             if (g_list_length(obj_meta->classifier_meta_list) > 0)
             {
-                for (NvDsClassifierMetaList* cl = obj_meta->classifier_meta_list; cl; cl = cl->next) 
+                for (NvDsClassifierMetaList *cl = obj_meta->classifier_meta_list; cl; cl = cl->next)
                 {
-                    NvDsClassifierMeta* cl_meta = (NvDsClassifierMeta*)cl->data;
-                    for (NvDsLabelInfoList* ll = cl_meta->label_info_list; ll; ll = ll->next) 
+                    NvDsClassifierMeta *cl_meta = (NvDsClassifierMeta *)cl->data;
+                    for (NvDsLabelInfoList *ll = cl_meta->label_info_list; ll; ll = ll->next)
                     {
-                        NvDsLabelInfo* ll_meta = (NvDsLabelInfo*)ll->data;
-                        if (ll_meta->result_label[0] != '\0') 
+                        NvDsLabelInfo *ll_meta = (NvDsLabelInfo *)ll->data;
+                        if (ll_meta->result_label[0] != '\0')
                         {
                             // FIXME: 不要写死
                             if (ll_meta->result_prob > 0.5)
                             {
                                 isTrueTarget = true;
+                                if (src_bin->config->smart_record == 2)
+                                {
+                                    // 启用智能视频记录
+                                    g_timeout_add(30000, smartRecord, src_bin);
+                                }
                             }
                         }
                     }
                 }
             }
 
-            if (!isTrueTarget)
+            /* if (!isTrueTarget)
             {
-                g_print("Skipping object\n");
+                // g_print("Skipping object\n");
                 nvds_remove_obj_meta_from_frame(frame_meta, obj_meta);
                 break; // 如果不是目标，则跳过
             } */
-
 
             /**
              * 仅在此回调在 tiler 之后启用

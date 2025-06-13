@@ -31,6 +31,7 @@ bash /opt/nvidia/deepstream/deepstream/user_additional_install.sh
 apt install libgstreamer-plugins-base1.0-dev libgstreamer1.0-dev libopencv-dev
 apt reinstall libxvidcore4
 apt reinstall libmp3lame0
+apt-get install ttf-wqy-microhei
 ```
 
 ### 编译DeepStream-Yolo

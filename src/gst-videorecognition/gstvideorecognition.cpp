@@ -471,12 +471,12 @@ gst_videorecognition_transform_ip(GstBaseTransform *btrans, GstBuffer *inbuf)
                 label_info->result_prob = self->recognitionResultPtr->score;
                 if (label_info->result_class_id == 0)
                 {
-                    strncpy(label_info->result_label, "bird", MAX_LABEL_SIZE - 1);
+                    strncpy(label_info->result_label, "鸟", MAX_LABEL_SIZE - 1);
                     label_info->result_label[MAX_LABEL_SIZE - 1] = '\0'; // 确保空字符结尾
                 }
                 else if (label_info->result_class_id == 1)
                 {
-                    strncpy(label_info->result_label, "uav", MAX_LABEL_SIZE - 1);
+                    strncpy(label_info->result_label, "无人机", MAX_LABEL_SIZE - 1);
                     label_info->result_label[MAX_LABEL_SIZE - 1] = '\0'; // 确保空字符结尾
                 }
                 else

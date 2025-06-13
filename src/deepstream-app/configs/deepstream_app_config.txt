@@ -24,6 +24,10 @@ rtsp-reconnect-interval-sec=3
 rtsp-reconnect-attempts=-1
 latency=200
 select-rtp-protocol=4
+smart-record=1
+smart-rec-dir-path=/workspace/smart_rec
+smart-rec-duration=20
+smart-rec-start-time=5
 
 [pre-process]
 enable=0
@@ -207,7 +211,7 @@ tracker-height=1080
 ll-lib-file=/opt/nvidia/deepstream/deepstream/lib/libsot.so
 ll-config-file=config_sot.yml
 gpu-id=0
-display-tracking-id=1
+display-tracking-id=0
 
 [ds-example]
 enable=0
