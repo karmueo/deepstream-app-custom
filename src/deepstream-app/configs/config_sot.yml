@@ -1,0 +1,16 @@
+%YAML:1.0
+
+BaseConfig:
+  modelName: 0    # { 0=sutrack, 1=ostrack, 2=mixformer_v2 }
+  modelType: 0  # { 0=FP32, 1=FP16}
+  modelRootPath: /workspace/deepstream-app-custom/src/Mixformer_plugin/models
+
+TargetManagement:
+  expandFactor: 2.0
+  probationAge: 5
+  maxMiss: 10 # max number of frames to miss before target is removed
+  scoreThreshold: 0.3 # 跟踪置信度阈值
+  iouThreshold: 0.5 # 跟踪框和检测框匹配的IOU阈值
+  boxMaxWidthFactor: 0.3 # 跟踪框最大宽度因子
+  boxMaxHeightFactor: 0.3 # 跟踪框最大高度因子
+  maxHistoryLength: 30 # 跟踪历史长度

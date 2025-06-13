@@ -10,10 +10,13 @@
 // #include "mixformer_trt.h"
 #include <memory>
 #include "deepTracker.h"
+#include <yaml-cpp/yaml.h>
 
 #define MAX_TARGETS_PER_STREAM 512
 
 using namespace std;
+
+int parseConfigFile(const char *pCustomConfigFilePath, TRACKER_CONFIG &trackerConfig);
 
 /**
  * @brief Context for input video streams
@@ -61,6 +64,7 @@ public:
 protected:
     std::shared_ptr<DeepTracker> tracker_;
     int tmpId_ = 0;
+    TRACKER_CONFIG trackerConfig_; // 跟踪器配置
 };
 
 #endif // DNSTARPROD_TRACKER_H

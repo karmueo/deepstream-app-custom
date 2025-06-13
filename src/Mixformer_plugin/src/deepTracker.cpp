@@ -13,15 +13,32 @@ static float IOU(const cv::Rect &srcRect, const cv::Rect &dstRect)
     return iou;
 }
 
-DeepTracker::DeepTracker(const std::string &engine_name)
+DeepTracker::DeepTracker(const std::string &engine_name, const TRACKER_CONFIG &trackerConfig)
 {
+    trackerConfig_ = trackerConfig;
+    list_capacity_ = trackerConfig_.targetManagement.maxTrackAge; // 设置默认容量为最大跟踪年龄
     is_tracked_ = false;
     age_ = 0;
     trackId_ = 0;
     miss_ = 0;
-    // TODO: 需要增加配置文件
-    trackerPtr_ = std::make_unique<SuTrackTRT>(engine_name);
-    // trackerPtr_ = std::make_unique<OstrackTRT>(engine_name);
+    if (trackerConfig_.modelName == MODEL_SUTRACK)
+    {
+        trackerPtr_ = std::make_unique<SuTrackTRT>(engine_name);
+    }
+    else if (trackerConfig_.modelName == MODEL_OSTRACK)
+    {
+        trackerPtr_ = std::make_unique<OstrackTRT>(engine_name);
+    }
+    else if (trackerConfig_.modelName == MODEL_MIXFORMERV2)
+    {
+        // TODO:
+        // mixformer_ = std::make_shared<MixformerV2TRT>(engine_name);
+    }
+    else
+    {
+        std::cerr << "Unsupported model name: " << trackerConfig_.modelName << std::endl;
+    }
+
     frameNum_ = 0;
     list_ = nullptr;
     list_size_ = 0;
@@ -42,11 +59,6 @@ TrackInfo DeepTracker::update(const cv::Mat &img, const NvMOTObjToTrackList *det
 {
     frameNum_ = frameNum;
     bool is_good_track = false;
-    // 根据输入图片的尺寸确定跟踪框的宽度和高度阈值
-    if (trackBoxWidthThreshold_ == 0)
-        trackBoxWidthThreshold_ = img.cols * 0.3;
-    if (trackBoxHeightThreshold_ == 0)
-        trackBoxHeightThreshold_ = img.rows * 0.3;
 
     // 输出的结果存放在bbox中
     if (is_tracked_ == false)
@@ -112,7 +124,7 @@ TrackInfo DeepTracker::update(const cv::Mat &img, const NvMOTObjToTrackList *det
             list_ = nullptr;
         }
         list_size_ = 0;
-        list_ = new NvDsTargetMiscDataFrame[30];
+        list_ = new NvDsTargetMiscDataFrame[trackerConfig_.targetManagement.maxTrackAge];
 
         is_tracked_ = true;
     }
@@ -125,7 +137,7 @@ TrackInfo DeepTracker::update(const cv::Mat &img, const NvMOTObjToTrackList *det
 
         if (trackInfo_.bbox.score <= 0 || trackInfo_.bbox.box.w <= 0 || trackInfo_.bbox.box.h <= 0)
         {
-            miss_ = 100;
+            miss_ = trackerConfig_.targetManagement.maxMiss + 1; // 跟踪失败
         }
         else
         {
@@ -149,7 +161,7 @@ TrackInfo DeepTracker::update(const cv::Mat &img, const NvMOTObjToTrackList *det
                                                       obj.bbox.height);
 
                     iou = IOU(detectionRect, trackRect);
-                    if (iou > 0.5)
+                    if (iou > trackerConfig_.targetManagement.iouThreshold)
                     {
                         // 如果IOU大于0.5，认为跟踪成功
                         is_track_match_detect = true;
@@ -158,9 +170,12 @@ TrackInfo DeepTracker::update(const cv::Mat &img, const NvMOTObjToTrackList *det
                 }
             }
             // 如果跟踪置信度小于阈值或者前面和检测没有匹配的
-            if (trackInfo_.bbox.score < 0.3 || !is_track_match_detect ||
-                trackInfo_.bbox.box.w > trackBoxWidthThreshold_ ||
-                trackInfo_.bbox.box.h > trackBoxHeightThreshold_)
+            float maxBoxWidth = img.cols * trackerConfig_.targetManagement.trackBoxWidthThreshold;
+            float maxBoxHeight = img.rows * trackerConfig_.targetManagement.trackBoxHeightThreshold;
+            if (trackInfo_.bbox.score < trackerConfig_.targetManagement.scoreThreshold || 
+                !is_track_match_detect ||
+                trackInfo_.bbox.box.w > maxBoxWidth ||
+                trackInfo_.bbox.box.h > maxBoxHeight)
             {
                 miss_++;
                 is_good_track = false;
@@ -173,7 +188,7 @@ TrackInfo DeepTracker::update(const cv::Mat &img, const NvMOTObjToTrackList *det
             }
         }
 
-        if (miss_ > 10)
+        if (miss_ > trackerConfig_.targetManagement.maxMiss)
         {
             // 如果跟踪分数小于阈值，或者IOU小于0.5，认为跟踪失败
             is_tracked_ = false;
@@ -219,7 +234,7 @@ TrackInfo DeepTracker::update(const cv::Mat &img, const NvMOTObjToTrackList *det
                 list_[i].visibility = 1.0;
                 list_[i].frameNum = frameNum_;
             }
-            list_[list_capacity_ - 1].age = 30;
+            list_[list_capacity_ - 1].age = trackerConfig_.targetManagement.maxTrackAge;
             list_[list_capacity_ - 1].tBbox.left = trackInfo_.bbox.box.x0;
             list_[list_capacity_ - 1].tBbox.top = trackInfo_.bbox.box.y0;
             list_[list_capacity_ - 1].tBbox.width = trackInfo_.bbox.box.x1 - trackInfo_.bbox.box.x0;
@@ -313,7 +328,7 @@ void DeepTracker::updatePastFrameObjBatch(NvDsTargetMiscDataBatch *pastFrameObjB
                 pastFrameObjBatch->list[0].list[0].numObj = list_size_;
                 pastFrameObjBatch->list[0].list[0].classId = objectToTrack_->classId;
                 pastFrameObjBatch->list[0].list[0].uniqueId = trackId_;
-                pastFrameObjBatch->list[0].list[0].numAllocated = 30;
+                pastFrameObjBatch->list[0].list[0].numAllocated = trackerConfig_.targetManagement.maxTrackAge;
             }
 
             pastFrameObjBatch->list[0].numFilled = 1;

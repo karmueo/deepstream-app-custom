@@ -37,12 +37,43 @@ static float IOU(const cv::Rect &srcRect, const cv::Rect &dstRect)
 NvMOTContext::NvMOTContext(const NvMOTConfig &configIn, NvMOTConfigResponse &configResponse)
 {
     configResponse.summaryStatus = NvMOTConfigStatus_OK;
+    // 解析配置文件
+    if (parseConfigFile(configIn.customConfigFilePath, trackerConfig_) != 0)
+    {
+        std::cerr << "Failed to parse custom config file: " << configIn.customConfigFilePath << std::endl;
+    }
 
-    // FIXME:
     // mixformer_ = std::make_shared<MixformerTRT>(engine_name);
-    tracker_ = std::make_shared<DeepTracker>("/workspace/deepstream-app-custom/src/Mixformer_plugin/models/sutrack_fp32.engine");
+    std::string modelPath;
+    if (trackerConfig_.modelName == MODEL_SUTRACK)
+    {
+        if (trackerConfig_.modelType == 0)
+        {
+            // FP32 模型
+            modelPath = trackerConfig_.modelRootPath + "/sutrack_fp32.engine";
+        }
+        else if (trackerConfig_.modelType == 1)
+        {
+            // FP16 模型
+            modelPath = trackerConfig_.modelRootPath + "/sutrack_fp16.engine";
+        }
+    }
+    else if (trackerConfig_.modelName == MODEL_OSTRACK)
+    {
+        if (trackerConfig_.modelType == 0)
+        {
+            // FP32 模型
+            modelPath = trackerConfig_.modelRootPath + "/ostrack-384-ep300-ce_fp32.engine";
+        }
+        else if (trackerConfig_.modelType == 1)
+        {
+            // FP16 模型
+            modelPath = trackerConfig_.modelRootPath + "/ostrack-384-ep300-ce_fp16.engine";
+        }
+    }
+    tracker_ = std::make_shared<DeepTracker>(modelPath, trackerConfig_);
+    // TODO: 添加 MixformerV2 模型支持
     // tracker_ = std::make_shared<DeepTracker>("/workspace/deepstream-app-custom/src/Mixformer_plugin/models/ostrack-384-ep300-ce_fp16.engine");
-
 }
 
 NvMOTContext::~NvMOTContext()
@@ -92,13 +123,36 @@ NvMOTStatus NvMOTContext::processFrame(const NvMOTProcessParams *params, NvMOTTr
         NvMOTTrackedObj *trackedObj = &trackedObjs[0];
 
         // 如果跟踪上了，给NvMOTTrackedObj赋值
-        if (tracker_->isTracked() && trackInfo.age > 5)
+        if (tracker_->isTracked() && trackInfo.age > trackerConfig_.targetManagement.probationAge)
         {
+            // 按 expandFactor 膨胀
+            float new_w = trackInfo.bbox.box.w * trackerConfig_.targetManagement.expandFactor;
+            float new_h = trackInfo.bbox.box.h * trackerConfig_.targetManagement.expandFactor;
+
+            float new_x0 = trackInfo.bbox.box.cx - new_w / 2.0f;
+            float new_y0 = trackInfo.bbox.box.cy - new_h / 2.0f;
+            if (new_x0 < 0)
+            {
+                new_x0 = 0;
+            }
+            if (new_y0 < 0)
+            {
+                new_y0 = 0;
+            }
+            if (new_x0 + new_w > bufferParams->width)
+            {
+                new_w = bufferParams->width - new_x0;
+            }
+            if (new_y0 + new_h > bufferParams->height)
+            {
+                new_h = bufferParams->height - new_y0;
+            }
+
             NvMOTRect motRect{
-                static_cast<float>(trackInfo.bbox.box.x0),
-                static_cast<float>(trackInfo.bbox.box.y0),
-                static_cast<float>(trackInfo.bbox.box.x1 - trackInfo.bbox.box.x0),
-                static_cast<float>(trackInfo.bbox.box.y1 - trackInfo.bbox.box.y0)};
+                new_x0,
+                new_y0,
+                new_w,
+                new_h};
 
             // 更新跟踪对象信息
             trackedObj->classId = trackInfo.bbox.class_id;

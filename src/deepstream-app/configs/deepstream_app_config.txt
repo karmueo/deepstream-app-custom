@@ -205,6 +205,7 @@ enable=1
 tracker-width=1920
 tracker-height=1080
 ll-lib-file=/opt/nvidia/deepstream/deepstream/lib/libsot.so
+ll-config-file=config_sot.yml
 gpu-id=0
 display-tracking-id=1
 
