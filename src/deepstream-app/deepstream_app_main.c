@@ -400,7 +400,7 @@ bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                             if (ll_meta->result_prob > 0.5)
                             {
                                 isTrueTarget = true;
-                                if (src_bin->config->smart_record == 2)
+                                if (src_bin->config->smart_record == 3)
                                 {
                                     // 启用智能视频记录
                                     g_timeout_add(30000, smartRecord, src_bin);
