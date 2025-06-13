@@ -11,6 +11,6 @@ TargetManagement:
   maxMiss: 10 # max number of frames to miss before target is removed
   scoreThreshold: 0.3 # 跟踪置信度阈值
   iouThreshold: 0.5 # 跟踪框和检测框匹配的IOU阈值
-  boxMaxWidthFactor: 0.3 # 跟踪框最大宽度因子
-  boxMaxHeightFactor: 0.3 # 跟踪框最大高度因子
-  maxHistoryLength: 30 # 跟踪历史长度
+  trackBoxWidthThreshold: 0.3 # 跟踪框最大宽度因子
+  trackBoxHeightThreshold: 0.3 # 跟踪框最大高度因子
+  maxTrackAge: 30 # 跟踪历史长度
