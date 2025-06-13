@@ -17,6 +17,7 @@ type=4
 uri=rtsp://192.168.1.110/live/test
 #rtsp://192.168.1.193:25544/live/test
 #rtsp://192.168.1.193:25544/live/test
+#rtsp://admin:Abc.12345@192.168.1.64/ch1/stream0
 num-sources=1
 gpu-id=0
 cudadec-memtype=0
