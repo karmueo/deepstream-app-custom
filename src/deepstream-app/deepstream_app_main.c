@@ -80,9 +80,53 @@ GOptionEntry entries[] = {
     {NULL},
 };
 
-static gboolean
-smartRecord(NvDsSrcBin *src_bin)
+// static gboolean
+// smartRecord(NvDsSrcBin *src_bin)
+// {
+//     guint startTime = 7;
+//     guint duration = 8;
+
+//     if (src_bin->config->smart_rec_duration >= 0)
+//         duration = src_bin->config->smart_rec_duration;
+
+//     if (src_bin->config->smart_rec_start_time >= 0)
+//         startTime = src_bin->config->smart_rec_start_time;
+
+//     if (src_bin->recordCtx && !src_bin->reconfiguring)
+//     {
+//         NvDsSRContext *ctx = (NvDsSRContext *)src_bin->recordCtx;
+//         if (ctx->recordOn)
+//         {
+//             NvDsSRStop(ctx, 0);
+//         }
+//         else
+//         {
+//             NvDsSRStart(ctx, &sessId, startTime, duration, NULL);
+//         }
+//     }
+//     return TRUE;
+// }
+
+static gboolean g_pending_request = FALSE; // 是否有待处理的请求
+
+// 冷却结束回调
+static gboolean on_cooldown_end()
 {
+    if (g_pending_request)
+    {
+        g_pending_request = FALSE;
+    }
+    return G_SOURCE_REMOVE;
+}
+
+static gboolean
+smart_record_event_generator(NvDsSrcBin *src_bin)
+{
+    if (g_pending_request)
+    {
+        return FALSE;
+    }
+
     NvDsSRSessionId sessId = 0;
     guint startTime = 7;
     guint duration = 8;
@@ -96,8 +140,15 @@ smartRecord(NvDsSrcBin *src_bin)
     if (src_bin->recordCtx && !src_bin->reconfiguring)
     {
         NvDsSRContext *ctx = (NvDsSRContext *)src_bin->recordCtx;
+        if (ctx->recordOn)
+        {
+            NvDsSRStop(ctx, 0);
+        }
         NvDsSRStart(ctx, &sessId, startTime, duration, NULL);
+        g_pending_request = TRUE;
+        g_timeout_add(30000, on_cooldown_end, NULL);
     }
+
     return TRUE;
 }
 
@@ -403,7 +454,8 @@ bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                                 if (src_bin->config->smart_record == 3)
                                 {
                                     // 启用智能视频记录
-                                    g_timeout_add(30000, smartRecord, src_bin);
+                                    // g_timeout_add(30000, smart_record_event_generator, src_bin);
+                                    smart_record_event_generator(src_bin);
                                 }
                             }
                         }

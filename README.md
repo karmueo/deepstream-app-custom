@@ -126,3 +126,10 @@ trtyolo export -w yolov11.pt -v ultralytics -o output --max_boxes 100 --iou_thre
 ```
 
 ## 运行程序
+
+
+## TODO:
+多目标跟踪和单目标跟踪能否一起使用，先用多目标跟踪形成稳定跟踪后再切到单目标跟踪
+录像功能验证
+可见光模型训练和部署
+多目标跟踪+分类，单目标跟踪+视频分类切换
