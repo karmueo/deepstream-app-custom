@@ -4,8 +4,10 @@
 
 # 输入参数
 # detection配置
-ONNX_PATH="yolov11_ir_drones_p2_2classes.onnx"  # 输入ONNX文件路径
-ENGINE_PATH="yolov11_ir_drones_p2_2classes_fp16.engine"           # 输出engine文件路径
+ONNX_PATH="yolo_classify_110_IR.onnx"  # 输入ONNX文件路径
+# ONNX_PATH="yolov11_ir_drones_p2_2classes.onnx"  # 输入ONNX文件路径
+ENGINE_PATH="yolo_classify_110_IR_fp32.engine"           # 输出engine文件路径
+# ENGINE_PATH="yolov11_ir_drones_p2_2classes_fp32.engine"           # 输出engine文件路径
 
 
 # 使用trtexec转换
@@ -21,5 +23,5 @@ ENGINE_PATH="yolov11_ir_drones_p2_2classes_fp16.engine"           # 输出engine
 /usr/src/tensorrt/bin/trtexec \
   --onnx=$ONNX_PATH \
   --saveEngine=$ENGINE_PATH \
-  --verbose \
-  --fp16
+  --verbose
+  # --fp16

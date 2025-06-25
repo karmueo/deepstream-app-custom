@@ -25,8 +25,8 @@ rtsp-reconnect-interval-sec=3
 rtsp-reconnect-attempts=-1
 latency=200
 select-rtp-protocol=4
-smart-record=3
-smart-rec-dir-path=/workspace/smart_rec
+smart-record=0
+smart-rec-dir-path=/workspace/deepstream-app-custom/smart_rec
 smart-rec-duration=20
 smart-rec-start-time=5
 
@@ -142,20 +142,21 @@ config-file=config_infer_primary_yoloV11.txt
 [secondary-pre-process0]
 enable=0
 operate-on-gie-id=1
-config-file=../../nvdspreprocess_lib/config_preprocess_video_classification.txt
+config-file=config_preprocess_sgie.txt
 
-#[secondary-gie0]
-#enable=1
-##(0): nvinfer; (1): nvinferserver
-#plugin-type=1
-#input-tensor-meta=1
-## nvinferserserver's gpu-id can only set from its own config-file
-#gpu-id=0
-#batch-size=8
-#gie-unique-id=4
-#operate-on-gie-id=1
-#operate-on-class-ids=0;1;2
-#config-file=config_infer_secondary_plan_engine_preprocess.txt
+[secondary-gie0]
+enable=0
+#(0): nvinfer; (1): nvinferserver
+plugin-type=0
+# Use preprocessed input tensors attached as metadata by nvdspreprocess plugin instead of preprocessing inside the nvinfer.
+input-tensor-meta=1
+# nvinferserserver's gpu-id can only set from its own config-file
+gpu-id=0
+batch-size=1
+gie-unique-id=4
+operate-on-gie-id=1
+operate-on-class-ids=0;1;2
+config-file=config_infer_secondary_classify.txt
 
 # 通过triton调用模型
 # [secondary-gie0]
@@ -169,19 +170,8 @@ config-file=../../nvdspreprocess_lib/config_preprocess_video_classification.txt
 # operate-on-class-ids=0;
 # config-file=config_infer_secondary_plan_engine.txt
 
-# 直接调用模型
-[secondary-gie0]
-enable=0
-gpu-id=0
-batch-size=1
-gie-unique-id=4
-operate-on-gie-id=1
-# operate-on-class-ids=0;1
-config-file=config_infer_secondary_classify.txt
-
 [videorecognition]
 enable=1
-#batch-size for batch supported optimized plugin
 batch-size=1
 unique-id=15
 gpu-id=0
@@ -191,7 +181,7 @@ nvbuf-memory-type=3
 enable=0
 # For NvDCF and NvDeepSORT tracker, tracker-width and tracker-height must be a multiple of 32, respectively
 tracker-width=960
-tracker-height=544
+tracker-height=480
 ll-lib-file=/opt/nvidia/deepstream/deepstream/lib/libnvds_nvmultiobjecttracker.so
 # ll-config-file required to set different tracker types
 # ll-config-file=/opt/nvidia/deepstream/deepstream/samples/configs/deepstream-app/config_tracker_IOU.yml

@@ -6,7 +6,7 @@ BaseConfig:
   modelRootPath: /workspace/deepstream-app-custom/src/Mixformer_plugin/models
 
 TargetManagement:
-  expandFactor: 2.0
+  expandFactor: 1.0
   probationAge: 5
   maxMiss: 10 # max number of frames to miss before target is removed
   scoreThreshold: 0.3 # 跟踪置信度阈值

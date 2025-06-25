@@ -18,6 +18,7 @@ DeepTracker::DeepTracker(const std::string &engine_name, const TRACKER_CONFIG &t
     trackerConfig_ = trackerConfig;
     list_capacity_ = trackerConfig_.targetManagement.maxTrackAge; // 设置默认容量为最大跟踪年龄
     is_tracked_ = false;
+    confirmAgeThreshold_ = trackerConfig_.confirmAgeThreshold;
     age_ = 0;
     trackId_ = 0;
     miss_ = 0;
@@ -137,60 +138,105 @@ TrackInfo DeepTracker::update(const cv::Mat &img, const NvMOTObjToTrackList *det
 
         if (trackInfo_.bbox.score <= 0 || trackInfo_.bbox.box.w <= 0 || trackInfo_.bbox.box.h <= 0)
         {
+            // 如果跟踪结果的分数小于等于0，或者宽度或高度小于等于0，认为跟踪失败
             miss_ = trackerConfig_.targetManagement.maxMiss + 1; // 跟踪失败
         }
         else
         {
             // 如果有检测结果，和检测结果对比来查看跟踪是否正确
             float iou = 0.;
-            if (detectObjList->numFilled != 0)
+            if (age_ > trackerConfig_.targetManagement.probationAge)
             {
-                is_track_match_detect = false;
-                // 计算和所有检测frame->objectsIn.list结果的IOU
-                cv::Rect trackRect = cv::Rect(trackInfo_.bbox.box.x0,
-                                              trackInfo_.bbox.box.y0,
-                                              trackInfo_.bbox.box.x1 - trackInfo_.bbox.box.x0,
-                                              trackInfo_.bbox.box.y1 - trackInfo_.bbox.box.y0);
-                for (uint i = 0; i < detectObjList->numFilled; i++)
+                if (detectObjList->numFilled != 0)
                 {
-                    NvMOTObjToTrack obj = detectObjList->list[i];
-                    // 计算IOU
-                    cv::Rect detectionRect = cv::Rect(obj.bbox.x,
-                                                      obj.bbox.y,
-                                                      obj.bbox.width,
-                                                      obj.bbox.height);
-
-                    iou = IOU(detectionRect, trackRect);
-                    if (iou > trackerConfig_.targetManagement.iouThreshold)
+                    is_track_match_detect = false;
+                    // 计算和所有检测frame->objectsIn.list结果的IOU
+                    cv::Rect trackRect = cv::Rect(trackInfo_.bbox.box.x0,
+                                                  trackInfo_.bbox.box.y0,
+                                                  trackInfo_.bbox.box.x1 - trackInfo_.bbox.box.x0,
+                                                  trackInfo_.bbox.box.y1 - trackInfo_.bbox.box.y0);
+                    for (uint i = 0; i < detectObjList->numFilled; i++)
                     {
-                        // 如果IOU大于0.5，认为跟踪成功
-                        is_track_match_detect = true;
-                        break;
+                        NvMOTObjToTrack obj = detectObjList->list[i];
+                        // 计算IOU
+                        cv::Rect detectionRect = cv::Rect(obj.bbox.x,
+                                                          obj.bbox.y,
+                                                          obj.bbox.width,
+                                                          obj.bbox.height);
+
+                        iou = IOU(detectionRect, trackRect);
+                        if (iou > trackerConfig_.targetManagement.iouThreshold)
+                        {
+                            // 如果IOU大于0.5，认为跟踪成功
+                            is_track_match_detect = true;
+                            break;
+                        }
                     }
                 }
-            }
-            // 如果跟踪置信度小于阈值或者前面和检测没有匹配的
-            float maxBoxWidth = img.cols * trackerConfig_.targetManagement.trackBoxWidthThreshold;
-            float maxBoxHeight = img.rows * trackerConfig_.targetManagement.trackBoxHeightThreshold;
-            if (trackInfo_.bbox.score < trackerConfig_.targetManagement.scoreThreshold || 
-                !is_track_match_detect ||
-                trackInfo_.bbox.box.w > maxBoxWidth ||
-                trackInfo_.bbox.box.h > maxBoxHeight)
-            {
-                miss_++;
-                is_good_track = false;
+
+                // 如果跟踪置信度小于阈值或者前面和检测没有匹配的
+                float maxBoxWidth = img.cols * trackerConfig_.targetManagement.trackBoxWidthThreshold;
+                float maxBoxHeight = img.rows * trackerConfig_.targetManagement.trackBoxHeightThreshold;
+                if (trackInfo_.bbox.score < trackerConfig_.targetManagement.scoreThreshold ||
+                    !is_track_match_detect ||
+                    trackInfo_.bbox.box.w > maxBoxWidth ||
+                    trackInfo_.bbox.box.h > maxBoxHeight)
+                {
+                    miss_++;
+                    is_good_track = false;
+                }
+                else
+                {
+                    miss_ = 0;
+                    age_++;
+                    is_good_track = true;
+                }
             }
             else
             {
-                miss_ = 0;
-                age_++;
-                is_good_track = true;
+                // 如果跟踪确认次数小于阈值，当检测结果为空时，认为失败，也就说必须连续有检测结果,且检测结果和跟踪结果的IOU大于阈值，才能认为跟踪成功
+                is_track_match_detect = false;
+                if (detectObjList->numFilled != 0)
+                {
+                    // 计算和所有检测frame->objectsIn.list结果的IOU
+                    cv::Rect trackRect = cv::Rect(trackInfo_.bbox.box.x0,
+                                                  trackInfo_.bbox.box.y0,
+                                                  trackInfo_.bbox.box.x1 - trackInfo_.bbox.box.x0,
+                                                  trackInfo_.bbox.box.y1 - trackInfo_.bbox.box.y0);
+                    for (uint i = 0; i < detectObjList->numFilled; i++)
+                    {
+                        NvMOTObjToTrack obj = detectObjList->list[i];
+                        // 计算IOU
+                        cv::Rect detectionRect = cv::Rect(obj.bbox.x,
+                                                          obj.bbox.y,
+                                                          obj.bbox.width,
+                                                          obj.bbox.height);
+
+                        iou = IOU(detectionRect, trackRect);
+                        if (iou > trackerConfig_.targetManagement.iouThreshold)
+                        {
+                            // 如果IOU大于0.5，认为跟踪成功
+                            is_track_match_detect = true;
+                            break;
+                        }
+                    }
+                }
+                if (!is_track_match_detect)
+                {
+                    miss_ = trackerConfig_.targetManagement.maxMiss + 1; // 跟踪失败
+                }
+                else
+                {
+                    miss_ = 0;
+                    age_++;
+                    is_good_track = true;
+                }
             }
         }
 
         if (miss_ > trackerConfig_.targetManagement.maxMiss)
         {
-            // 如果跟踪分数小于阈值，或者IOU小于0.5，认为跟踪失败
+            // 失败次数大于阈值，重置跟踪
             is_tracked_ = false;
             age_ = 0;
             if (trackId_++ > 0xFFFFFFFF)
@@ -199,6 +245,12 @@ TrackInfo DeepTracker::update(const cv::Mat &img, const NvMOTObjToTrackList *det
             }
 
             miss_ = 0;
+            memset(&trackInfo_, 0, sizeof(trackInfo_));
+            return trackInfo_;
+        }
+
+        if (age_ < confirmAgeThreshold_)
+        {
             memset(&trackInfo_, 0, sizeof(trackInfo_));
             return trackInfo_;
         }

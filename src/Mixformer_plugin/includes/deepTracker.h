@@ -40,6 +40,7 @@ struct TRACKER_CONFIG
     MODEL_NAME        modelName     = MODEL_SUTRACK;                 // 模型类型
     uint8_t           modelType     = 0;                             // 模型类型，0:FP32, 1:FP16
     TARGET_MANAGEMENT targetManagement;                              // 目标管理配置
+    uint32_t          confirmAgeThreshold = 5;                       // 确认跟踪的年龄阈值，默认5
 };
 
 class DeepTracker
@@ -78,4 +79,5 @@ private:
     bool     enableTrackCenterStable_;          // 是否启用跟踪中心位置稳定判断
     uint32_t trackCenterStablePixelThreshold_;  // 跟踪中心位置稳定判断的像素阈值，单位像素
     TRACKER_CONFIG trackerConfig_;
+    uint32_t confirmAgeThreshold_;
 };

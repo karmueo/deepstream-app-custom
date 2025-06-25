@@ -46,7 +46,9 @@ void Process::addFrame(const cv::Mat &frame)
     // 判断尺寸是否等于输入尺寸
     if (frame.rows != m_input_size.height || frame.cols != m_input_size.width)
     {
-        cv::Mat resizeMat = resizeWithAspectRatio(frame, m_input_size);
+        // TODO:
+        // cv::Mat resizeMat = resizeWithAspectRatio(frame, m_input_size);
+        cv::Mat resizeMat = resize(frame, m_input_size);
         // norm_img = half_norm(resizeMat);
         m_vTargetFrames.push_back(resizeMat);
     }
@@ -569,6 +571,15 @@ cv::Mat Process::resizeWithAspectRatio(const cv::Mat &src, const cv::Size &size)
     cv::Rect roi((size.width - newSize.width) / 2, (size.height - newSize.height) / 2, newSize.width, newSize.height);
     cv::resize(src, resizedImage(roi), newSize);
 
+    return resizedImage;
+}
+
+cv::Mat Process::resize(const cv::Mat &src, const cv::Size &size)
+{
+    // 直接拉伸到目标尺寸
+    cv::Mat resizedImage;
+    cv::resize(src, resizedImage, size, 0, 0, cv::INTER_LINEAR); // 使用线性插值
+    
     return resizedImage;
 }
 

@@ -70,6 +70,8 @@ private:
     // 输入一张图片，和缩放尺寸，对其进行保持长宽比的缩放，其他区域用黑色填充
     cv::Mat resizeWithAspectRatio(const cv::Mat &src, const cv::Size &size);
 
+    cv::Mat resize(const cv::Mat &src, const cv::Size &size);
+
     cv::Mat half_norm(const cv::Mat &img);
 
     std::vector<cv::Mat> sampleFrames(const std::vector<cv::Mat> &images,

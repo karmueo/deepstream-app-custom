@@ -367,7 +367,7 @@ gst_videorecognition_init(Gstvideorecognition *self)
     self->max_history_frames = self->processing_frame_interval * self->model_clip_length * self->model_num_clips + self->model_num_clips * 2;
     self->trtProcessPtr = new Process(self->max_history_frames);
     self->video_recognition = new tsnTrt(
-        "/workspace/deepstream-app-custom/src/gst-videorecognition/models/uniformerv2_end2end_fp16.engine",
+        "/workspace/deepstream-app-custom/src/gst-videorecognition/models/uniformerv2_e1_end2end_fp32.engine",
         self->processing_width);
     self->recognitionResultPtr = new RECOGNITION();
 
