@@ -1,27 +1,24 @@
 #!/bin/bash
+# filepath: /workspace/deepstream-app-custom/src/deepstream-app/models/convert2trt.sh
 
-# trtexec_convert.sh - 转换ONNX到TensorRT engine的脚本
+# 用法: ./convert2trt.sh <ONNX_PATH> <ENGINE_PATH> [fp16]
+# 例如: ./convert2trt.sh yolov11m_110_rgb_640.onnx yolov11m_110_rgb_640.engine fp16
 
-# 输入参数
-# detection配置
-ONNX_PATH="yolo_classify_110_IR.onnx"  # 输入ONNX文件路径
-# ONNX_PATH="yolov11_ir_drones_p2_2classes.onnx"  # 输入ONNX文件路径
-ENGINE_PATH="yolo_classify_110_IR_fp32.engine"           # 输出engine文件路径
-# ENGINE_PATH="yolov11_ir_drones_p2_2classes_fp32.engine"           # 输出engine文件路径
+if [ $# -lt 2 ]; then
+  echo "Usage: $0 <ONNX_PATH> <ENGINE_PATH> [fp16]"
+  exit 1
+fi
 
+ONNX_PATH="$1"
+ENGINE_PATH="$2"
+FP16_FLAG=""
 
-# 使用trtexec转换
-# /usr/src/tensorrt/bin/trtexec \
-#   --onnx=$ONNX_PATH \
-#   --saveEngine=$ENGINE_PATH \
-#   --minShapes=${INPUT_NAME}:${MIN_BATCH}x3x${HEIGHT}x${WIDTH} \
-#   --optShapes=${INPUT_NAME}:${OPT_BATCH}x3x${HEIGHT}x${WIDTH} \
-#   --maxShapes=${INPUT_NAME}:${MAX_BATCH}x3x${HEIGHT}x${WIDTH} \
-#   --verbose \
-#   --fp16
+if [ "$3" == "fp16" ]; then
+  FP16_FLAG="--fp16"
+fi
 
 /usr/src/tensorrt/bin/trtexec \
-  --onnx=$ONNX_PATH \
-  --saveEngine=$ENGINE_PATH \
-  --verbose
-  # --fp16
+  --onnx="$ONNX_PATH" \
+  --saveEngine="$ENGINE_PATH" \
+  --verbose \
+  $FP16_FLAG
