@@ -62,6 +62,31 @@ create_dsvideorecognition_bin(NvDsVideoRecognitionConfig *config, NvDsVideoRecog
                  "unique-id", config->unique_id,
                  "gpu-id", config->gpu_id,
                  NULL);
+    if (config->processing_width)
+    {
+        g_object_set(G_OBJECT(bin->elem_dsvideorecognition), "processing-width", config->processing_width, NULL);
+    }
+
+    if (config->processing_height)
+    {
+        g_object_set(G_OBJECT(bin->elem_dsvideorecognition), "processing-height", config->processing_height, NULL);
+    }
+
+    if (config->model_clip_length)
+    {
+        g_object_set(G_OBJECT(bin->elem_dsvideorecognition), "model-clip-length", config->model_clip_length, NULL);
+    }
+
+    if (config->model_num_clips)
+    {
+        g_object_set(G_OBJECT(bin->elem_dsvideorecognition), "num-clips", config->model_num_clips, NULL);
+    }
+
+    if (config->trt_engine_name)
+    {
+        g_object_set(G_OBJECT(bin->elem_dsvideorecognition), "trt-engine-name", config->trt_engine_name, NULL);
+    }
+
     if (config->batch_size)
     {
         g_object_set(G_OBJECT(bin->elem_dsvideorecognition), "batch-size", config->batch_size, NULL);

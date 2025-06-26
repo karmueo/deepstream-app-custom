@@ -24,7 +24,6 @@ custom-lib-path=../../../DeepStream-Yolo/nvdsinfer_custom_impl_Yolo/libnvdsinfer
 engine-create-func-name=NvDsInferYoloCudaEngineGet
 
 [class-attrs-all]
-threshold=0.8
 nms-iou-threshold=0.45
 pre-cluster-threshold=0.2
 topk=100

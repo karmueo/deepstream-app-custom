@@ -1182,6 +1182,40 @@ parse_videorecognition(NvDsVideoRecognitionConfig *config, GKeyFile *key_file)
                                        "batch-size", &error);
             CHECK_ERROR(error);
         }
+        else if (!g_strcmp0(*key, "processing-width"))
+        {
+            config->processing_width =
+                g_key_file_get_integer(key_file, CONFIG_GROUP_VIDEORECOGNITION,
+                                       "processing-width", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "processing-height"))
+        {
+            config->processing_height =
+                g_key_file_get_integer(key_file, CONFIG_GROUP_VIDEORECOGNITION,
+                                       "processing-height", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "model-clip-length"))
+        {
+            config->model_clip_length =
+                g_key_file_get_integer(key_file, CONFIG_GROUP_VIDEORECOGNITION,
+                                       "model-clip-length", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "num-clips"))
+        {
+            config->model_num_clips =
+                g_key_file_get_integer(key_file, CONFIG_GROUP_VIDEORECOGNITION,
+                                       "num-clips", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "trt-engine-file"))
+        {
+            config->trt_engine_name = g_key_file_get_string(
+                key_file, CONFIG_GROUP_VIDEORECOGNITION, "trt-engine-file", &error);
+            CHECK_ERROR(error);
+        }
         else
         {
             NVGSTDS_WARN_MSG_V("Unknown key '%s' for group [%s]", *key,

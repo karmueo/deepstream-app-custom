@@ -81,8 +81,21 @@ enum
 enum
 {
     PROP_0,
-    PROP_SILENT
+    PROP_UNIQUE_ID,
+    PROP_GPU_DEVICE_ID,
+    PROP_PROCESSING_WIDTH,
+    PROP_PROCESSING_HEIGHT,
+    PROP_MODEL_CLIP_LENGTH,
+    PROP_NUM_CLIPS,
+    PROP_TRT_ENGINE_NAME
 };
+
+#define DEFAULT_UNIQUE_ID 15
+#define DEFAULT_PROCESSING_WIDTH 224
+#define DEFAULT_PROCESSING_HEIGHT 224
+#define DEFAULT_PROCESSING_MODEL_CLIP_LENGTH 8
+#define DEFAULT_PROCESSING_NUM_CLIPS 4
+#define DEFAULT_TRT_ENGINE_NAME "/workspace/deepstream-app-custom/src/gst-videorecognition/models/uniformerv2_e1_end2end_fp32.engine"
 
 /* the capabilities of the inputs and outputs.
  *
@@ -313,6 +326,70 @@ gst_videorecognition_class_init(GstvideorecognitionClass *klass)
     gstbasetransform_class->transform_ip =
         GST_DEBUG_FUNCPTR(gst_videorecognition_transform_ip);
 
+    /* Install properties */
+    g_object_class_install_property(gobject_class, PROP_UNIQUE_ID,
+                                    g_param_spec_uint("unique-id",
+                                                      "Unique ID",
+                                                      "Unique ID for the element. Can be used to identify output of the element",
+                                                      0,
+                                                      G_MAXUINT,
+                                                      DEFAULT_UNIQUE_ID,
+                                                      (GParamFlags)(G_PARAM_READWRITE |
+                                                                    G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(gobject_class, PROP_GPU_DEVICE_ID,
+                                    g_param_spec_uint("gpu-id",
+                                                      "Set GPU Device ID",
+                                                      "Set GPU Device ID",
+                                                      0,
+                                                      G_MAXUINT,
+                                                      0,
+                                                      GParamFlags(G_PARAM_READWRITE |
+                                                                  G_PARAM_STATIC_STRINGS | GST_PARAM_MUTABLE_READY)));
+
+    g_object_class_install_property(gobject_class, PROP_PROCESSING_WIDTH,
+                                    g_param_spec_int("processing-width",
+                                                     "Processing Width",
+                                                     "Width of the input buffer to algorithm",
+                                                     1,
+                                                     G_MAXINT,
+                                                     DEFAULT_PROCESSING_WIDTH,
+                                                     (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(gobject_class, PROP_PROCESSING_HEIGHT,
+                                    g_param_spec_int("processing-height",
+                                                     "Processing Height",
+                                                     "Height of the input buffer to algorithm",
+                                                     1,
+                                                     G_MAXINT,
+                                                     DEFAULT_PROCESSING_HEIGHT,
+                                                     (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(gobject_class, PROP_MODEL_CLIP_LENGTH,
+                                    g_param_spec_int("model-clip-length",
+                                                     "Model Clip Length",
+                                                     "Length of the clip used by the model",
+                                                     1,
+                                                     G_MAXINT,
+                                                     DEFAULT_PROCESSING_MODEL_CLIP_LENGTH,
+                                                     (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(gobject_class, PROP_NUM_CLIPS,
+                                    g_param_spec_int("num-clips",
+                                                     "Number of Clips",
+                                                     "Number of clips used by the model",
+                                                     1,
+                                                     G_MAXINT,
+                                                     DEFAULT_PROCESSING_NUM_CLIPS,
+                                                     (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(gobject_class, PROP_TRT_ENGINE_NAME,
+                                    g_param_spec_string("trt-engine-name",
+                                                        "TensorRT Engine Name",
+                                                        "Name of the TensorRT engine file to use for inference",
+                                                        DEFAULT_TRT_ENGINE_NAME,
+                                                        (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
     /* Set sink and src pad capabilities */
     gst_element_class_add_pad_template(gstelement_class,
                                        gst_static_pad_template_get(&gst_videorecognition_src_template));
@@ -349,25 +426,26 @@ gst_videorecognition_init(Gstvideorecognition *self)
     /* We do not want to change the input caps. Set to passthrough. transform_ip
      * is still called. */
     gst_base_transform_set_passthrough(GST_BASE_TRANSFORM(btrans), TRUE);
-    // FIXME: 初始化一些参数，不要写死，写配置
-    self->gpu_id = 0;
+
+    // 初始化一些参数，不要写死，写配置
+    self->gpu_id = PROP_GPU_DEVICE_ID;
     /* Initialize all property variables to default values */
-    self->unique_id = 15;
-    self->gpu_id = 0;
+    self->unique_id = DEFAULT_UNIQUE_ID;
     self->frame_num = 0;
-    self->processing_width = 224;
-    self->processing_height = 224;
+    self->processing_width = DEFAULT_PROCESSING_WIDTH;
+    self->processing_height = DEFAULT_PROCESSING_HEIGHT;
     // self->processing_frame_interval = 5;
     self->processing_frame_interval = 1;
     // 根据模型选择num_clips和clip_length和processing_width
     // self->model_num_clips = 1;
-    self->model_num_clips = 4;
+    self->model_num_clips = DEFAULT_PROCESSING_NUM_CLIPS;
     // self->model_clip_length = 32;
-    self->model_clip_length = 8;
+    self->model_clip_length = DEFAULT_PROCESSING_MODEL_CLIP_LENGTH;
     self->max_history_frames = self->processing_frame_interval * self->model_clip_length * self->model_num_clips + self->model_num_clips * 2;
     self->trtProcessPtr = new Process(self->max_history_frames);
+    const char *trt_engine_file = DEFAULT_TRT_ENGINE_NAME;
     self->video_recognition = new tsnTrt(
-        "/workspace/deepstream-app-custom/src/gst-videorecognition/models/uniformerv2_e1_end2end_fp32.engine",
+        trt_engine_file,
         self->processing_width);
     self->recognitionResultPtr = new RECOGNITION();
 
@@ -628,7 +706,82 @@ void gst_videorecognition_set_property(GObject *object,
 {
     Gstvideorecognition *self = GST_VIDEORECOGNITION(object);
 
-    GST_DEBUG_OBJECT(self, "set_property");
+    switch (property_id)
+    {
+    case PROP_UNIQUE_ID:
+        self->unique_id = g_value_get_uint(value);
+        break;
+    case PROP_GPU_DEVICE_ID:
+        self->gpu_id = g_value_get_uint(value);
+        break;
+    case PROP_PROCESSING_WIDTH:
+        self->processing_width = g_value_get_int(value);
+        if (self->processing_width <= 0)
+        {
+            GST_ELEMENT_ERROR(self, STREAM, FAILED,
+                              ("Processing width must be greater than 0"), (NULL));
+            return;
+        }
+        break;
+    case PROP_PROCESSING_HEIGHT:
+        self->processing_height = g_value_get_int(value);
+        if (self->processing_height <= 0)
+        {
+            GST_ELEMENT_ERROR(self, STREAM, FAILED,
+                              ("Processing height must be greater than 0"), (NULL));
+            return;
+        }
+        break;
+    case PROP_MODEL_CLIP_LENGTH:
+        self->model_clip_length = g_value_get_int(value);
+        if (self->model_clip_length <= 0 || self->model_clip_length > 128)
+        {
+            self->model_clip_length = DEFAULT_PROCESSING_MODEL_CLIP_LENGTH;
+            GST_ELEMENT_ERROR(self, STREAM, FAILED,
+                              ("Model clip length must be greater than 0 and less than or equal to 128"), (NULL));
+           
+            return;
+        }
+        break;
+    case PROP_NUM_CLIPS:
+        self->model_num_clips = g_value_get_int(value);
+        if (self->model_num_clips <= 0)
+        {
+            GST_ELEMENT_ERROR(self, STREAM, FAILED,
+                              ("num_clips must be greater than 0"), (NULL));
+            return;
+        }
+        // 更新最大历史帧数
+        self->max_history_frames = self->processing_frame_interval * self->model_clip_length * self->model_num_clips + self->model_num_clips * 2;
+        if (self->trtProcessPtr)
+        {
+            delete self->trtProcessPtr;
+            self->trtProcessPtr = new Process(self->max_history_frames);
+        }
+        break;
+    case PROP_TRT_ENGINE_NAME:
+    {
+        auto s = g_value_get_string(value);
+        const gchar *trt_engine_name = s ? s : DEFAULT_TRT_ENGINE_NAME;
+        if (self->video_recognition)
+        {
+            delete self->video_recognition;
+            self->video_recognition = NULL;
+        }
+        self->video_recognition = new tsnTrt(trt_engine_name, self->processing_width);
+        if (!self->video_recognition)
+        {
+            GST_ELEMENT_ERROR(self, RESOURCE, FAILED,
+                              ("Failed to create video recognition object with engine %s", trt_engine_name), (NULL));
+            return;
+        }
+        break;
+    }
+
+    default:
+        G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
+        break;
+    }
 }
 
 void gst_videorecognition_get_property(GObject *object, guint property_id,
@@ -636,7 +789,27 @@ void gst_videorecognition_get_property(GObject *object, guint property_id,
 {
     Gstvideorecognition *self = GST_VIDEORECOGNITION(object);
 
-    GST_DEBUG_OBJECT(self, "get_property");
+    switch (property_id)
+    {
+    case PROP_UNIQUE_ID:
+        g_value_set_uint(value, self->unique_id);
+        break;
+    case PROP_GPU_DEVICE_ID:
+        g_value_set_uint(value, self->gpu_id);
+        break;
+    case PROP_PROCESSING_WIDTH:
+        g_value_set_int(value, self->processing_width);
+        break;
+    case PROP_PROCESSING_HEIGHT:
+        g_value_set_int(value, self->processing_height);
+        break;
+    case PROP_MODEL_CLIP_LENGTH:
+        g_value_set_int(value, self->model_clip_length);
+        break;
+    default:
+        G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
+        break;
+    }
 }
 
 // 对象销毁前的清理回调函数

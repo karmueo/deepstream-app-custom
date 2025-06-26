@@ -20,30 +20,35 @@ extern "C"
 {
 #endif
 
-  typedef struct
-  {
-    // Create a bin for the element only if enabled
-    gboolean enable;
-    guint unique_id;
-    guint gpu_id;
-    guint batch_size;
-    // For nvvidconv
-    guint nvbuf_memory_type;
-  } NvDsVideoRecognitionConfig;
+    typedef struct
+    {
+        // Create a bin for the element only if enabled
+        gboolean enable;
+        guint unique_id;
+        guint gpu_id;
+        guint batch_size;
+        // For nvvidconv
+        guint nvbuf_memory_type;
+        guint processing_width;
+        guint processing_height;
+        guint model_clip_length;
+        guint model_num_clips;
+        gchar *trt_engine_name; // TensorRT engine name
+    } NvDsVideoRecognitionConfig;
 
-  // Struct to store references to the bin and elements
-  typedef struct
-  {
-    GstElement *bin;
-    GstElement *queue;
-    GstElement *pre_conv;
-    GstElement *cap_filter;
-    GstElement *elem_dsvideorecognition;
-  } NvDsVideoRecognitionBin;
+    // Struct to store references to the bin and elements
+    typedef struct
+    {
+        GstElement *bin;
+        GstElement *queue;
+        GstElement *pre_conv;
+        GstElement *cap_filter;
+        GstElement *elem_dsvideorecognition;
+    } NvDsVideoRecognitionBin;
 
-  // Function to create the bin and set properties
-  gboolean
-  create_dsvideorecognition_bin(NvDsVideoRecognitionConfig *config, NvDsVideoRecognitionBin *bin);
+    // Function to create the bin and set properties
+    gboolean
+    create_dsvideorecognition_bin(NvDsVideoRecognitionConfig *config, NvDsVideoRecognitionBin *bin);
 
 #ifdef __cplusplus
 }
