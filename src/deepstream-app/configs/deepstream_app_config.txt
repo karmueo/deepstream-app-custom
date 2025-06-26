@@ -42,12 +42,12 @@ source-id=0
 gpu-id=0
 nvbuf-memory-type=0
 codec=1
-bitrate=4000000
+bitrate=2000000
 iframeinterval=15
 rtsp-port=8555
 udp-port=5400
-width=1920
-height=1080
+width=1280
+height=720
 profile=4
 udp-buffer-size=100000
 
@@ -149,13 +149,13 @@ enable=0
 #(0): nvinfer; (1): nvinferserver
 plugin-type=0
 # Use preprocessed input tensors attached as metadata by nvdspreprocess plugin instead of preprocessing inside the nvinfer.
-input-tensor-meta=1
+# input-tensor-meta=1
 # nvinferserserver's gpu-id can only set from its own config-file
 gpu-id=0
 batch-size=1
 gie-unique-id=4
 operate-on-gie-id=1
-operate-on-class-ids=0;1;2
+# operate-on-class-ids=0;1;2
 config-file=config_infer_secondary_classify.txt
 
 # 通过triton调用模型
