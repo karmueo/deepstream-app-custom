@@ -7,6 +7,12 @@ export CUDA_VER=12.6
 export LD_LIBRARY_PATH=/opt/nvidia/deepstream/deepstream/lib:$LD_LIBRARY_PATH
 ```
 
+## 时区设置
+```
+ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+echo "Asia/Shanghai" > /etc/timezone
+```
+
 ## 获取项目
 ```sh
 git clone --recurse-submodules git@github.com:karmueo/deepstream-app-custom.git
