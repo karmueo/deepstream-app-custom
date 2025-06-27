@@ -37,6 +37,7 @@ bash /opt/nvidia/deepstream/deepstream/user_additional_install.sh
 apt install libgstreamer-plugins-base1.0-dev libgstreamer1.0-dev libopencv-dev
 apt reinstall libxvidcore4
 apt reinstall libmp3lame0
+# 中文显示
 apt-get install ttf-wqy-microhei
 ```
 
@@ -52,6 +53,39 @@ cd /workspace/deepstream-app-custom/src/gst-mynetwork
 make
 make install
 ```
+
+### (可选)MQTT报文服务
+安装
+```sh
+# 可选
+# 如果要使用MQTT发送结果，安装mosquitto，可以安装在docker中，也可以安装在宿主机或者局域网其他服务器中
+apt-get install libglib2.0 libglib2.0-dev
+wget https://mosquitto.org/files/source/mosquitto-2.0.15.tar.gz
+tar -xvf mosquitto-2.0.15.tar.gz
+cd mosquitto-2.0.15
+make
+make install
+sudo cp /usr/local/lib/libmosquitto* /opt/nvidia/deepstream/deepstream/lib/
+sudo ldconfig
+```
+
+运行mosquitto
+```sh
+adduser --system mosquitto
+mosquitto
+```
+
+mosquitto配置文件，比如创建一个my_config.conf如下
+```conf
+allow_anonymous true
+listener 1883 0.0.0.0
+```
+
+启动
+```sh
+mosquitto -v -c ./my_config.conf
+```
+然后就可以使用mqtt发送和接收消息了
 
 ### 编译单目标跟踪插件
 ```sh
@@ -132,10 +166,3 @@ trtyolo export -w yolov11.pt -v ultralytics -o output --max_boxes 100 --iou_thre
 ```
 
 ## 运行程序
-
-
-## TODO:
-多目标跟踪和单目标跟踪能否一起使用，先用多目标跟踪形成稳定跟踪后再切到单目标跟踪
-录像功能验证
-可见光模型训练和部署
-多目标跟踪+分类，单目标跟踪+视频分类切换

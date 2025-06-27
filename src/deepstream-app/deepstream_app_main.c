@@ -301,20 +301,18 @@ meta_free_func(gpointer data, gpointer user_data)
  * @param buf 用于存储生成的时间戳的缓冲区。
  * @param buf_size 缓冲区的大小。
  */
-static void
-generate_ts_rfc3339(char *buf, int buf_size)
-{
+static void generate_ts_rfc3339(char *buf, int buf_size) {
     time_t tloc;
     struct tm tm_log;
     struct timespec ts;
-    char strmsec[6]; //.nnnZ\0
+    char strmsec[6]; // .nnnZ\0
 
     clock_gettime(CLOCK_REALTIME, &ts);
-    memcpy(&tloc, (void *)(&ts.tv_sec), sizeof(time_t));
-    gmtime_r(&tloc, &tm_log);
-    strftime(buf, buf_size, "%Y-%m-%dT%H:%M:%S", &tm_log);
+    tloc = ts.tv_sec;  // 直接赋值即可，无需 memcpy
+    localtime_r(&tloc, &tm_log);  // 使用本地时区
+    strftime(buf, buf_size, "%Y-%m-%dT%H:%M:%S%z", &tm_log);  // %z 输出时区偏移（如 +0800）
     int ms = ts.tv_nsec / 1000000;
-    g_snprintf(strmsec, sizeof(strmsec), ".%.3dZ", ms);
+    g_snprintf(strmsec, sizeof(strmsec), ".%.3d", ms);
     strncat(buf, strmsec, buf_size);
 }
 
@@ -359,9 +357,30 @@ generate_event_msg_meta(AppCtx *appCtx,
     meta->moduleId = sensor_id;
     meta->frameId = frame_meta->frame_num;
     meta->ts = (gchar *)g_malloc0(MAX_TIME_STAMP_LEN + 1);
+
     meta->objectId = (gchar *)g_malloc0(MAX_LABEL_SIZE);
 
-    strncpy(meta->objectId, obj_params->obj_label, MAX_LABEL_SIZE);
+    // strncpy(meta->objectId, obj_params->obj_label, MAX_LABEL_SIZE);
+    meta->videoPath = (gchar *)g_malloc0(256);
+    strncpy(meta->videoPath, appCtx->config.multi_source_config[stream_id].uri, 256);
+
+    for (NvDsClassifierMetaList *cl = obj_params->classifier_meta_list; cl; cl = cl->next)
+    {
+        NvDsClassifierMeta *cl_meta = (NvDsClassifierMeta *)cl->data;
+        for (NvDsLabelInfoList *ll = cl_meta->label_info_list; ll; ll = ll->next)
+        {
+            NvDsLabelInfo *ll_meta = (NvDsLabelInfo *)ll->data;
+            if (ll_meta->result_label[0] != '\0')
+            {
+                if (ll_meta->result_prob > 0.5)
+                {
+                    strncpy(meta->objectId, ll_meta->result_label, MAX_LABEL_SIZE);
+                    meta->confidence = ll_meta->result_prob;
+                    break;
+                }
+            }
+        }
+    }
 
     /** INFO: This API is called once for every 30 frames (now) */
     // 生成符合RFC3339标准的时间戳。

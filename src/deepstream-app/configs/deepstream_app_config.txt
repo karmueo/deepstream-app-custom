@@ -75,8 +75,26 @@ enable=0
 #Type - 1=FakeSink 2=EglSink 3=File 4=UDPSink 5=nvdrmvideosink 6=MsgConvBroker 7=MyNetwork
 type=7
 
+# mqtt
+[sink3]
+enable=1
+#Type - 1=FakeSink 2=EglSink 3=File 4=UDPSink 5=nvdrmvideosink 6=MsgConvBroker
+type=6
+msg-conv-config=dstest5_msgconv_sample_config.txt
+#(0): PAYLOAD_DEEPSTREAM - Deepstream schema payload
+#(1): PAYLOAD_DEEPSTREAM_MINIMAL - Deepstream schema payload minimal
+#(256): PAYLOAD_RESERVED - Reserved type
+#(257): PAYLOAD_CUSTOM   - Custom schema payload
+msg-conv-payload-type=0
+msg-broker-proto-lib=/opt/nvidia/deepstream/deepstream/lib/libnvds_mqtt_proto.so
+#Provide your msg-broker-conn-str here
+msg-broker-conn-str=192.168.1.80;1883
+topic=ir_detection
+#Optional:
+# msg-broker-config=cfg_mqtt.txt
+
 [message-converter]
-enable=0
+enable=1
 msg-conv-config=dstest5_msgconv_sample_config.txt
 #(0): PAYLOAD_DEEPSTREAM - Deepstream schema payload
 #(1): PAYLOAD_DEEPSTREAM_MINIMAL - Deepstream schema payload minimal
@@ -87,6 +105,7 @@ msg-conv-payload-type=0
 #msg-conv-msg2p-lib=<val>
 # Id of component in case only selected message to parse.
 #msg-conv-comp-id=<val>W
+msg-conv-msg2p-lib=/workspace/deepstream-app-custom/src/nvmsgconv/libnvds_msgconv.so
 
 [osd]
 enable=1
@@ -172,7 +191,6 @@ config-file=config_infer_secondary_classify.txt
 
 [videorecognition]
 enable=1
-batch-size=1
 unique-id=15
 gpu-id=0
 nvbuf-memory-type=3
@@ -224,5 +242,12 @@ blur-objects=0
 # For Jetson: 0
 nvbuf-memory-type=3
 
-[tests]
-file-loop=0
+# Configure this group to enable cloud message consumer.
+[message-consumer0]
+enable=0
+proto-lib=/opt/nvidia/deepstream/deepstream/lib/libnvds_mqtt_proto.so
+conn-str=<host>;<port>
+config-file=<broker config file e.g. cfg_kafka.txt>
+subscribe-topic-list=<topic1>;<topic2>;<topicN>
+# Use this option if message has sensor name as id instead of index (0,1,2 etc.).
+#sensor-list-file=dstest5_msgconv_sample_config.txt

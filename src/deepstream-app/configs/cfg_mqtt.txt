@@ -1,0 +1,12 @@
+[message-broker]
+username = user1
+password = password1
+client-id = 1
+#enable-tls = 1
+#tls-cafile =
+#tls-capath =
+#tls-certfile =
+#tls-keyfile =
+#share-connection = 1
+#loop-timeout = 2000
+#keep-alive = 60
