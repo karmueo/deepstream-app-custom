@@ -1871,7 +1871,8 @@ create_pipeline(AppCtx *appCtx,
                 bbox_generated_callback bbox_generated_post_analytics_cb,
                 bbox_generated_callback all_bbox_generated_cb,
                 perf_callback perf_cb,
-                overlay_graphics_callback overlay_graphics_cb)
+                overlay_graphics_callback overlay_graphics_cb,
+                nv_msgbroker_subscribe_cb_t msg_broker_subscribe_cb)
 {
     gboolean ret = FALSE;
     NvDsPipeline *pipeline = &appCtx->pipeline;
@@ -2297,7 +2298,7 @@ create_pipeline(AppCtx *appCtx,
         {
             appCtx->c2d_ctx[i] =
                 start_cloud_to_device_messaging(&config->message_consumer_config[i],
-                                                NULL, &appCtx->pipeline.multi_src_bin);
+                                                msg_broker_subscribe_cb, &appCtx->pipeline.multi_src_bin);
             if (appCtx->c2d_ctx[i] == NULL)
             {
                 NVGSTDS_ERR_MSG_V("Failed to create message consumer");

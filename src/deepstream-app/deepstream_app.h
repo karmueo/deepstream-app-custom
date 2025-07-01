@@ -217,7 +217,8 @@ extern "C"
                            bbox_generated_callback bbox_generated_post_analytics_cb,
                            bbox_generated_callback all_bbox_generated_cb,
                            perf_callback perf_cb,
-                           overlay_graphics_callback overlay_graphics_cb);
+                           overlay_graphics_callback overlay_graphics_cb,
+                           nv_msgbroker_subscribe_cb_t msg_broker_subscribe_cb);
 
   gboolean pause_pipeline(AppCtx *appCtx);
   gboolean resume_pipeline(AppCtx *appCtx);

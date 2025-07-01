@@ -107,6 +107,16 @@ msg-conv-payload-type=0
 #msg-conv-comp-id=<val>W
 msg-conv-msg2p-lib=/workspace/deepstream-app-custom/src/nvmsgconv/libnvds_msgconv.so
 
+# Configure this group to enable cloud message consumer.
+[message-consumer]
+enable=0
+proto-lib=/opt/nvidia/deepstream/deepstream/lib/libnvds_mqtt_proto.so
+conn-str=192.168.1.80;1883
+# config-file=cfg_mqtt.txt
+subscribe-topic-list=command;test2;test3
+# Use this option if message has sensor name as id instead of index (0,1,2 etc.).
+#sensor-list-file=dstest5_msgconv_sample_config.txt
+
 [osd]
 enable=1
 gpu-id=0

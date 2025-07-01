@@ -133,7 +133,7 @@ operate-on-class-ids=0;1;2
 config-file=config_infer_secondary_classify.txt
 
 [videorecognition]
-enable=1
+enable=0
 batch-size=1
 unique-id=15
 gpu-id=0
@@ -157,7 +157,7 @@ nvbuf-memory-type=3
 
 # 自定义的单目标跟踪
 [tracker]
-enable=1
+enable=0
 # For NvDCF and NvDeepSORT tracker, tracker-width and tracker-height must be a multiple of 32, respectively
 tracker-width=1280
 tracker-height=720

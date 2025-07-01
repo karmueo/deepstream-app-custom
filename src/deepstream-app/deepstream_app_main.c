@@ -22,6 +22,7 @@
 #include <X11/Xutil.h>
 #include "nvdsmeta_schema.h"
 #include "gst-nvdssr.h"
+#include <json-glib/json-glib.h>
 
 #ifdef EN_DEBUG
 #define LOGD(...) printf(__VA_ARGS__)
@@ -80,32 +81,6 @@ GOptionEntry entries[] = {
     {NULL},
 };
 
-// static gboolean
-// smartRecord(NvDsSrcBin *src_bin)
-// {
-//     guint startTime = 7;
-//     guint duration = 8;
-
-//     if (src_bin->config->smart_rec_duration >= 0)
-//         duration = src_bin->config->smart_rec_duration;
-
-//     if (src_bin->config->smart_rec_start_time >= 0)
-//         startTime = src_bin->config->smart_rec_start_time;
-
-//     if (src_bin->recordCtx && !src_bin->reconfiguring)
-//     {
-//         NvDsSRContext *ctx = (NvDsSRContext *)src_bin->recordCtx;
-//         if (ctx->recordOn)
-//         {
-//             NvDsSRStop(ctx, 0);
-//         }
-//         else
-//         {
-//             NvDsSRStart(ctx, &sessId, startTime, duration, NULL);
-//         }
-//     }
-//     return TRUE;
-// }
 
 static gboolean g_pending_request = FALSE; // 是否有待处理的请求
 
@@ -295,22 +270,124 @@ meta_free_func(gpointer data, gpointer user_data)
     g_free(srcMeta);
 }
 
+
+/** TODO: 待实现
+ * @brief 解析接收的消息消息
+ *
+ * @param data 消息数据
+ * @param size 消息大小
+*/
+static void parse_cloud_message(gpointer data, guint size)
+{
+    JsonNode *rootNode = NULL;
+    GError *error = NULL;
+    gchar *sensorStr = NULL;
+    gint start, duration;
+    gboolean startRec, ret;
+
+    /**
+     * Following minimum json message is expected to trigger the start / stop
+     * of smart record.
+     * {
+     *   command: string   // <start-recording / stop-recording>
+     *   start: string     // "2020-05-18T20:02:00.051Z"
+     *   end: string       // "2020-05-18T20:02:02.851Z",
+     *   sensor: {
+     *     id: string
+     *   }
+     * }
+     */
+    JsonParser *parser = json_parser_new();
+    ret = json_parser_load_from_data(parser, data, size, &error);
+    if (!ret)
+    {
+        NVGSTDS_ERR_MSG_V("Error in parsing json message %s", error->message);
+        g_error_free(error);
+        g_object_unref(parser);
+        return NULL;
+    }
+
+    rootNode = json_parser_get_root(parser);
+    if (JSON_NODE_HOLDS_OBJECT(rootNode))
+    {
+        JsonObject *object;
+
+        object = json_node_get_object(rootNode);
+        if (json_object_has_member(object, "command"))
+        {
+            const gchar *type = json_object_get_string_member(object, "command");
+            if (!g_strcmp0(type, "start-recording"))
+                startRec = TRUE;
+            else if (!g_strcmp0(type, "stop-recording"))
+                startRec = FALSE;
+            else
+            {
+                NVGSTDS_WARN_MSG_V("wrong command %s", type);
+                goto error;
+            }
+        }
+        else
+        {
+            // 'command' field not provided, assume it to be start-recording.
+            startRec = TRUE;
+        }
+
+        if (json_object_has_member(object, "sensor"))
+        {
+            JsonObject *tempObj = json_object_get_object_member(object, "sensor");
+            if (json_object_has_member(tempObj, "id"))
+            {
+                sensorStr = g_strdup(json_object_get_string_member(tempObj, "id"));
+                if (!sensorStr)
+                {
+                    NVGSTDS_WARN_MSG_V("wrong sensor.id value");
+                    goto error;
+                }
+
+                g_strstrip(sensorStr);
+                if (!g_strcmp0(sensorStr, ""))
+                {
+                    NVGSTDS_WARN_MSG_V("empty sensor.id value");
+                    goto error;
+                }
+            }
+            else
+            {
+                NVGSTDS_WARN_MSG_V("wrong message format, missing 'sensor.id' field.");
+                goto error;
+            }
+        }
+        else
+        {
+            NVGSTDS_WARN_MSG_V("wrong message format, missing 'sensor.id' field.");
+            goto error;
+        }
+    }
+
+    g_object_unref(parser);
+
+error:
+    g_object_unref(parser);
+    g_free(sensorStr);
+}
+
 /**
  * @brief 生成符合RFC3339标准的时间戳。
  *
  * @param buf 用于存储生成的时间戳的缓冲区。
  * @param buf_size 缓冲区的大小。
  */
-static void generate_ts_rfc3339(char *buf, int buf_size) {
+static void generate_ts_rfc3339(char *buf, int buf_size)
+{
     time_t tloc;
     struct tm tm_log;
     struct timespec ts;
     char strmsec[6]; // .nnnZ\0
 
     clock_gettime(CLOCK_REALTIME, &ts);
-    tloc = ts.tv_sec;  // 直接赋值即可，无需 memcpy
-    localtime_r(&tloc, &tm_log);  // 使用本地时区
-    strftime(buf, buf_size, "%Y-%m-%dT%H:%M:%S%z", &tm_log);  // %z 输出时区偏移（如 +0800）
+    tloc = ts.tv_sec;                                        // 直接赋值即可，无需 memcpy
+    localtime_r(&tloc, &tm_log);                             // 使用本地时区
+    strftime(buf, buf_size, "%Y-%m-%dT%H:%M:%S%z", &tm_log); // %z 输出时区偏移（如 +0800）
     int ms = ts.tv_nsec / 1000000;
     g_snprintf(strmsec, sizeof(strmsec), ".%.3d", ms);
     strncat(buf, strmsec, buf_size);
@@ -425,6 +502,7 @@ generate_event_msg_meta(AppCtx *appCtx,
     meta->objType = NVDS_OBJECT_TYPE_UNKNOWN;
     meta->objClassId = class_id;
 }
+
 
 /**
  * 所有推理（主要+次要）完成后调用的回调函数。
@@ -1020,6 +1098,30 @@ nvds_x_event_thread(gpointer data)
     return NULL;
 }
 
+static void msg_broker_subscribe_cb(NvMsgBrokerErrorType status, void *msg, int msglen, char *topic, void *user_ptr)
+{
+    // 判断topic是否为事件消息主题
+    if (strcmp(topic, "command") != 0)
+    {
+        status = NV_MSGBROKER_API_NOT_SUPPORTED;
+        return;
+    }
+
+    if (msg && msglen > 0)
+    {
+        NvDsEventMsgMeta *event_msg_meta = (NvDsEventMsgMeta *)msg;
+        AppCtx *appCtx = (AppCtx *)user_ptr;
+
+        // TODO:待实现
+        parse_cloud_message(msg, msglen);
+        status = NV_MSGBROKER_API_OK;
+    }
+    else
+    {
+        status = NV_MSGBROKER_API_ERR;
+    }
+}
+
 /**
  * callback function to add application specific metadata.
  * Here it demonstrates how to display the URI of source in addition to
@@ -1095,7 +1197,8 @@ recreate_pipeline_thread_func(gpointer arg)
                          bbox_generated_probe_after_analytics,
                          all_bbox_generated,
                          perf_cb,
-                         overlay_graphics))
+                         overlay_graphics,
+                         msg_broker_subscribe_cb))
     {
         NVGSTDS_ERR_MSG_V("Failed to create pipeline");
         return_value = -1;
@@ -1240,7 +1343,8 @@ int main(int argc, char *argv[])
                              bbox_generated_probe_after_analytics,
                              all_bbox_generated,
                              perf_cb,
-                             overlay_graphics))
+                             overlay_graphics,
+                             msg_broker_subscribe_cb))
         {
             NVGSTDS_ERR_MSG_V("Failed to create pipeline");
             return_value = -1;
