@@ -15,10 +15,12 @@
 #include <math.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <json-glib/json-glib.h>
 
 #include "deepstream_app.h"
 #include "nvbufsurface.h"
 #include "nvds_obj_encode.h"
+#include <gst/app/gstappsink.h>
 
 #define MAX_DISPLAY_LEN 64
 static guint demux_batch_num = 0;
@@ -29,6 +31,85 @@ GST_DEBUG_CATEGORY_EXTERN(NVDS_APP);
 GQuark _dsmeta_quark;
 
 #define CEIL(a, b) ((a + b - 1) / b)
+
+static GstFlowReturn on_control_data(GstElement *sink, AppCtx *appCtx)
+{
+    GstSample *sample = gst_app_sink_pull_sample(GST_APP_SINK(sink));
+    GstBuffer *buffer = gst_sample_get_buffer(sample);
+    GstMapInfo map;
+
+    if (gst_buffer_map(buffer, &map, GST_MAP_READ))
+    {
+        // TODO:解析JSON,根据实际JSON进行解析
+        JsonParser *parser = json_parser_new();
+        if (json_parser_load_from_data(parser, (gchar *)map.data, -1, NULL))
+        {
+            JsonNode *root = json_parser_get_root(parser);
+            if (JSON_NODE_HOLDS_OBJECT(root))
+            {
+                JsonObject *root_obj = json_node_get_object(root);
+
+                // 检查是否为重连指令
+                if (json_object_has_member(root_obj, "command"))
+                {
+                    const gchar *cmd = json_object_get_string_member(root_obj, "command");
+                    if (g_strcmp0(cmd, "reconnect_rtsp") == 0)
+                    {
+                        // 构造重连消息并发送到总线
+                        guint source_id = json_object_get_int_member(root_obj, "source_id");
+                        const gchar *new_uri = json_object_has_member(root_obj, "new_uri") ? json_object_get_string_member(root_obj, "new_uri") : NULL;
+
+                        GstStructure *s = gst_structure_new("reconnect-rtsp",
+                                                            "source-id", G_TYPE_UINT, source_id,
+                                                            "new-uri", G_TYPE_STRING, new_uri,
+                                                            NULL);
+
+                        GstBus *bus = gst_pipeline_get_bus(GST_PIPELINE(appCtx->pipeline.pipeline));
+                        GstMessage *msg = gst_message_new_application(GST_OBJECT(sink), s);
+                        gst_bus_post(bus, msg);
+                        gst_object_unref(bus);
+                    }
+                }
+
+                // 解析timestamp
+                if (json_object_has_member(root_obj, "timestamp"))
+                {
+                    gdouble timestamp = json_object_get_double_member(root_obj, "timestamp");
+                    // g_print("Timestamp: %.6f\n", timestamp);
+                }
+
+                // 解析message
+                if (json_object_has_member(root_obj, "message"))
+                {
+                    const gchar *message = json_object_get_string_member(root_obj, "message");
+                    // g_print("Message: %s\n", message);
+                }
+
+                // 解析sensor_data对象
+                if (json_object_has_member(root_obj, "sensor_data"))
+                {
+                    JsonObject *sensor_data = json_object_get_object_member(root_obj, "sensor_data");
+
+                    if (json_object_has_member(sensor_data, "temperature"))
+                    {
+                        gdouble temperature = json_object_get_double_member(sensor_data, "temperature");
+                        // g_print("Temperature: %.1f\n", temperature);
+                    }
+
+                    if (json_object_has_member(sensor_data, "humidity"))
+                    {
+                        gint humidity = json_object_get_int_member(sensor_data, "humidity");
+                        // g_print("Humidity: %d%%\n", humidity);
+                    }
+                }
+            }
+        }
+        g_object_unref(parser);
+        gst_buffer_unmap(buffer, &map);
+    }
+    gst_sample_unref(sample);
+    return GST_FLOW_OK;
+}
 
 /**
  * @brief  Add the (nvmsgconv->nvmsgbroker) sink-bin to the
@@ -482,6 +563,33 @@ bus_callback(GstBus *bus, GstMessage *message, gpointer data)
                     }
                 }
             }
+        }
+        break;
+    }
+    case GST_MESSAGE_APPLICATION:
+    {
+        const GstStructure *s = gst_message_get_structure(message);
+        if (gst_structure_has_name(s, "reconnect-rtsp"))
+        {
+            guint source_id;
+            const gchar *new_uri;
+            gst_structure_get(s, "source-id", G_TYPE_UINT, &source_id,
+                              "new-uri", G_TYPE_STRING, &new_uri, NULL);
+
+            // 获取对应的RTSP源
+            NvDsSrcBin *sub_bin = &appCtx->pipeline.multi_src_bin.sub_bins[source_id];
+
+            // 更新URI（如果提供了新地址）
+            if (new_uri && sub_bin->config->uri)
+            {
+                g_free(sub_bin->config->uri);
+                sub_bin->config->uri = g_strdup(new_uri);
+            }
+
+            // 触发异步重连（避免阻塞总线线程）
+            sub_bin->reconfiguring = TRUE;
+            g_timeout_add(0, (GSourceFunc)reset_source_pipeline, sub_bin);
+            appCtx->quit = TRUE;
         }
         break;
     }
@@ -1916,6 +2024,49 @@ create_pipeline(AppCtx *appCtx,
         for (i = 0; i < config->num_source_sub_bins; i++)
             config->multi_source_config[i].loop = TRUE;
     }
+
+    /* --- BEGIN: UDP JSON 控制报文接收分支 --- */
+    {
+        GstElement *udp_ctrl_src = gst_element_factory_make("udpsrc", "udp_ctrl_src");
+        GstElement *queue = gst_element_factory_make("queue", "ctrl_queue");
+        GstElement *caps_json = gst_element_factory_make("capsfilter", "caps_json");
+        GstElement *json_sink = gst_element_factory_make("appsink", "json_ctrl_sink");
+
+        if (!udp_ctrl_src || !caps_json || !json_sink || !queue)
+        {
+            NVGSTDS_ERR_MSG_V("Failed to create UDP control elements");
+            goto done;
+        }
+
+        /* 设置 UDP 接收端口或组播组 */
+        g_object_set(G_OBJECT(udp_ctrl_src),
+                     "multicast-group", "239.255.255.250",
+                     "port", 5000,
+                     "auto-multicast", TRUE,
+                     NULL);
+
+        GstCaps *caps = gst_caps_new_simple("application/x-json", NULL);
+        g_object_set(caps_json, "caps", caps, NULL);
+        gst_caps_unref(caps);
+
+        /* appsink 配置：异步接收并回调处理 */
+        g_object_set(G_OBJECT(json_sink),
+                     "emit-signals", TRUE,
+                     "sync", FALSE,
+                     NULL);
+        g_signal_connect(json_sink, "new-sample",
+                         G_CALLBACK(on_control_data), appCtx);
+
+        /* 加入 pipeline 并链接 */
+        gst_bin_add_many(GST_BIN(pipeline->pipeline),
+                         udp_ctrl_src, queue, caps_json, json_sink, NULL);
+        if (!gst_element_link_many(udp_ctrl_src, queue, caps_json, json_sink, NULL))
+        {
+            NVGSTDS_ERR_MSG_V("Failed to link UDP JSON control elements");
+            goto done;
+        }
+    }
+    /* --- END: UDP JSON 控制报文接收分支 --- */
 
     for (guint i = 0; i < config->num_sink_sub_bins; i++)
     {
