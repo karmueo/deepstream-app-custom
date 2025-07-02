@@ -34,6 +34,20 @@ GQuark _dsmeta_quark;
 
 static GstFlowReturn on_control_data(GstElement *sink, AppCtx *appCtx)
 {
+    // 控制速率,比如每秒处理30次
+    static GTimer *timer = NULL;
+    static gdouble last_time = 0;
+    static int count = 0;
+    if (!timer) timer = g_timer_new();
+    gdouble now = g_timer_elapsed(timer, NULL);
+    // 只处理每秒30次
+    if (now - last_time < 1.0/30.0) {
+        GstSample *sample = gst_app_sink_pull_sample(GST_APP_SINK(sink));
+        if (sample) gst_sample_unref(sample);
+        return GST_FLOW_OK;
+    }
+    last_time = now;
+
     GstSample *sample = gst_app_sink_pull_sample(GST_APP_SINK(sink));
     GstBuffer *buffer = gst_sample_get_buffer(sample);
     GstMapInfo map;
@@ -566,6 +580,7 @@ bus_callback(GstBus *bus, GstMessage *message, gpointer data)
         }
         break;
     }
+    // TODO: 根据解析的JSON报文进行实际的处理
     case GST_MESSAGE_APPLICATION:
     {
         const GstStructure *s = gst_message_get_structure(message);
@@ -2037,6 +2052,11 @@ create_pipeline(AppCtx *appCtx,
             NVGSTDS_ERR_MSG_V("Failed to create UDP control elements");
             goto done;
         }
+
+        // leaky=2 表示丢弃最新数据（downstream），leaky=1 表示丢弃最旧数据（upstream）。
+        g_object_set(G_OBJECT(queue),
+                     "max-size-buffers", 10,
+                     "leaky", 1, NULL);
 
         /* 设置 UDP 接收端口或组播组 */
         g_object_set(G_OBJECT(udp_ctrl_src),
