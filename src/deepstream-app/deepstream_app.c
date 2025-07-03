@@ -34,7 +34,7 @@ GQuark _dsmeta_quark;
 
 static GstFlowReturn on_control_data(GstElement *sink, AppCtx *appCtx)
 {
-    // 控制速率,比如每秒处理30次
+    /* // 控制速率,比如每秒处理30次
     static GTimer *timer = NULL;
     static gdouble last_time = 0;
     static int count = 0;
@@ -46,7 +46,7 @@ static GstFlowReturn on_control_data(GstElement *sink, AppCtx *appCtx)
         if (sample) gst_sample_unref(sample);
         return GST_FLOW_OK;
     }
-    last_time = now;
+    last_time = now; */
 
     GstSample *sample = gst_app_sink_pull_sample(GST_APP_SINK(sink));
     GstBuffer *buffer = gst_sample_get_buffer(sample);
@@ -88,7 +88,13 @@ static GstFlowReturn on_control_data(GstElement *sink, AppCtx *appCtx)
                 // 解析timestamp
                 if (json_object_has_member(root_obj, "timestamp"))
                 {
-                    gdouble timestamp = json_object_get_double_member(root_obj, "timestamp");
+                    guint64 timestamp = json_object_get_double_member(root_obj, "timestamp");
+                    if (!appCtx->custom_msg_data)
+                    {
+                        appCtx->custom_msg_data = g_malloc0(sizeof(CustomMessageData));
+                    }
+                    appCtx->custom_msg_data->timestamp = timestamp;
+                    // 这里可以打印或处理时间戳
                     // g_print("Timestamp: %.6f\n", timestamp);
                 }
 
@@ -120,6 +126,10 @@ static GstFlowReturn on_control_data(GstElement *sink, AppCtx *appCtx)
         }
         g_object_unref(parser);
         gst_buffer_unmap(buffer, &map);
+        
+        // NvDsBatchMeta *batch_meta = gst_buffer_get_nvds_batch_meta(buf);
+        // // 构造 user meta
+        // NvDsUserMeta *user_meta = nvds_acquire_user_meta_from_pool(appCtx->last_batch_meta);
     }
     gst_sample_unref(sample);
     return GST_FLOW_OK;
@@ -581,7 +591,7 @@ bus_callback(GstBus *bus, GstMessage *message, gpointer data)
         break;
     }
     // TODO: 根据解析的JSON报文进行实际的处理
-    case GST_MESSAGE_APPLICATION:
+    /* case GST_MESSAGE_APPLICATION:
     {
         const GstStructure *s = gst_message_get_structure(message);
         if (gst_structure_has_name(s, "reconnect-rtsp"))
@@ -607,7 +617,7 @@ bus_callback(GstBus *bus, GstMessage *message, gpointer data)
             appCtx->quit = TRUE;
         }
         break;
-    }
+    } */
     default:
         break;
     }
@@ -2569,6 +2579,11 @@ void destroy_pipeline(AppCtx *appCtx)
     if (appCtx->perf_struct.FPSInfoHash)
     {
         g_hash_table_destroy(appCtx->perf_struct.FPSInfoHash);
+    }
+    if (appCtx->custom_msg_data)
+    {
+        g_free(appCtx->custom_msg_data);
+        appCtx->custom_msg_data = NULL;
     }
 
     destroy_sink_bin();

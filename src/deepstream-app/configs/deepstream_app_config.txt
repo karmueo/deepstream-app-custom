@@ -138,10 +138,11 @@ gpu-id=0
 live-source=1
 batch-size=1
 batched-push-timeout=40000
-width=1920
-height=1080
-enable-padding=0
+width=1280
+height=720
 nvbuf-memory-type=0
+attach-sys-ts-as-ntp=1
+enable-padding=1
 
 # 直接推理
 [primary-gie]

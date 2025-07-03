@@ -81,8 +81,23 @@ GOptionEntry entries[] = {
     {NULL},
 };
 
-
 static gboolean g_pending_request = FALSE; // 是否有待处理的请求
+
+// NTP时间戳转Unix时间戳（秒.小数）
+static double ntp_to_unix(uint64_t ntp_timestamp)
+{
+    const uint32_t NTP_TO_UNIX = 2208988800U; // 1900~1970的秒差
+
+    // 提取高32位（秒）和低32位（小数）
+    uint32_t seconds = (uint32_t)(ntp_timestamp >> 32);
+    uint32_t fraction = (uint32_t)(ntp_timestamp & 0xFFFFFFFF);
+
+    // 关键步骤：确保无符号运算避免溢出
+    double unix_seconds = (double)(seconds - NTP_TO_UNIX)    // 先转double再减
+                          + (double)fraction / (1ULL << 32); // 小数部分
+
+    return unix_seconds;
+}
 
 // 冷却结束回调
 static gboolean on_cooldown_end()
@@ -270,13 +285,12 @@ meta_free_func(gpointer data, gpointer user_data)
     g_free(srcMeta);
 }
 
-
 /** TODO: 待实现
  * @brief 解析接收的消息消息
  *
  * @param data 消息数据
  * @param size 消息大小
-*/
+ */
 static void parse_cloud_message(gpointer data, guint size)
 {
     JsonNode *rootNode = NULL;
@@ -304,7 +318,7 @@ static void parse_cloud_message(gpointer data, guint size)
         NVGSTDS_ERR_MSG_V("Error in parsing json message %s", error->message);
         g_error_free(error);
         g_object_unref(parser);
-        return NULL;
+        return;
     }
 
     rootNode = json_parser_get_root(parser);
@@ -503,7 +517,6 @@ generate_event_msg_meta(AppCtx *appCtx,
     meta->objClassId = class_id;
 }
 
-
 /**
  * 所有推理（主要+次要）完成后调用的回调函数。
  * 在这里可以修改元数据。
@@ -526,6 +539,21 @@ bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
     {
         NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)l_frame->data;
         stream_id = frame_meta->source_id;
+
+        if (appCtx->custom_msg_data)
+        {
+            guint64 custom_timest = appCtx->custom_msg_data->timestamp;
+            // rtsp时间戳获取
+            guint64 ntp = frame_meta->ntp_timestamp;
+            // 转成可读的时间格式
+            char time_str[64];
+            if (custom_timest > 0 && ntp > 0)
+            {
+                // TODO:时间戳更具需要修改
+                gdouble ntp_unix = ntp_to_unix(ntp);
+                time_t t = (time_t)ntp_unix;
+            }
+        }
 
         GList *l;
         for (l = frame_meta->obj_meta_list; l != NULL; l = l->next)
