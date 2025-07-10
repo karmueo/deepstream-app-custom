@@ -534,6 +534,17 @@ bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
     guint startTime = 7;
     guint duration = 8;
 
+#ifdef ENABLE_JPEG_SAVE
+    GstMapInfo inmap = GST_MAP_INFO_INIT;
+    if (!gst_buffer_map(buf, &inmap, GST_MAP_READ))
+    {
+        GST_ERROR("input buffer mapinfo failed");
+        return;
+    }
+    NvBufSurface *ip_surf = (NvBufSurface *)inmap.data;
+    gst_buffer_unmap(buf, &inmap);
+#endif
+
     for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame != NULL;
          l_frame = l_frame->next)
     {
@@ -666,7 +677,32 @@ bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                 g_print("Error in attaching event meta to buffer\n");
             }
         }
+#ifdef ENABLE_JPEG_SAVE
+        NvDsObjEncUsrArgs frameData = {0};
+        frameData.isFrame = 1;
+        /* To be set by user */
+        frameData.saveImg = 1;
+        frameData.attachUsrMeta = FALSE;
+        /* Set if Image scaling Required */
+        frameData.scaleImg = FALSE;
+        frameData.scaledWidth = 0;
+        frameData.scaledHeight = 0;
+        /* Quality */
+        frameData.quality = 100;
+        /* Set to calculate time taken to encode JPG image. */
+        frameData.calcEncodeTime = 0;
+        /*Main Function Call */
+        nvds_obj_enc_process((gpointer)appCtx->obj_ctx_handle,
+                             &frameData,
+                             ip_surf,
+                             obj_meta,
+                             frame_meta);
+#endif
     }
+
+#ifdef ENABLE_JPEG_SAVE
+    nvds_obj_enc_finish((gpointer)appCtx->obj_ctx_handle);
+#endif
 
     /* NvDsMetaList *l_user_meta = NULL;
     NvDsUserMeta *user_meta = NULL;

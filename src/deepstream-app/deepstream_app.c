@@ -1323,7 +1323,7 @@ gie_primary_processing_done_buf_prob(GstPad *pad, GstPadProbeInfo *info,
     // 把检测框碰撞一倍
     change_gieoutput(appCtx, batch_meta);
 
-#ifdef ENABLE_JPEG_SAVE
+#ifdef ENABLE_OBJ_SAVE
     GstMapInfo inmap = GST_MAP_INFO_INIT;
     if (!gst_buffer_map(buf, &inmap, GST_MAP_READ))
     {
