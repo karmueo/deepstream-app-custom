@@ -24,4 +24,4 @@ src/Mixformer_plugin/models/profile.json
 src/gst-videorecognition/input_data.txt
 .gitignore
 src/gst-videorecognition/output.bin
-smart_rec
+smart_rec/*
