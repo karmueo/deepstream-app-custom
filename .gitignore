@@ -18,8 +18,6 @@ src/Mixformer_plugin/.idea
 src/Mixformer_plugin/cmake-build-debug
 src/Mixformer_plugin/models/profile.json
 
-.vscode
-
 *.onnx
 *.engine
 *.log

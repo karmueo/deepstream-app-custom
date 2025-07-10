@@ -1,0 +1,13 @@
+{
+    "cmake.ignoreCMakeListsMissing": true,
+    "makefile.launchConfigurations": [
+        {
+            "cwd": "/workspace/deepstream-app-custom/src/deepstream-app",
+            "binaryPath": "/workspace/deepstream-app-custom/src/deepstream-app/deepstream-app",
+            "binaryArgs": [
+                "-c",
+                "/workspace/deepstream-app-custom/src/deepstream-app/configs/deepstream_app_config.txt"
+            ]
+        }
+    ],
+}
