@@ -14,7 +14,8 @@ nvbuf-memory-type=0
 [source0]
 enable=1
 type=4
-uri=rtsp://192.168.1.110/live/test
+uri=rtsp://admin:12345yyz@192.168.1.21:554/h264/ch1/main/av_stream
+#rtsp://192.168.1.80/live/test
 #rtsp://192.168.1.193:25544/live/test
 #rtsp://192.168.1.193:25544/live/test
 #rtsp://admin:Abc.12345@192.168.1.64/ch1/stream0
@@ -176,7 +177,7 @@ operate-on-gie-id=1
 config-file=config_preprocess_sgie.txt
 
 [secondary-gie0]
-enable=0
+enable=1
 #(0): nvinfer; (1): nvinferserver
 plugin-type=0
 # Use preprocessed input tensors attached as metadata by nvdspreprocess plugin instead of preprocessing inside the nvinfer.
@@ -202,7 +203,7 @@ config-file=config_infer_secondary_classify.txt
 # config-file=config_infer_secondary_plan_engine.txt
 
 [videorecognition]
-enable=1
+enable=0
 unique-id=15
 gpu-id=0
 nvbuf-memory-type=3
@@ -210,10 +211,11 @@ processing-width=224
 processing-height=224
 model-clip-length=8
 num-clips=4
-trt-engine-file=/workspace/deepstream-app-custom/src/gst-videorecognition/models/uniformerv2_e1_end2end_fp32.engine
+trt-engine-file=/workspace/deepstream-app-custom/src/gst-videorecognition/models/uniformerv2_expand_1_softmax_fp32.engine
+keep-aspect-ratio=1
 
 [tracker]
-enable=0
+enable=1
 # For NvDCF and NvDeepSORT tracker, tracker-width and tracker-height must be a multiple of 32, respectively
 tracker-width=960
 tracker-height=480
@@ -221,23 +223,23 @@ ll-lib-file=/opt/nvidia/deepstream/deepstream/lib/libnvds_nvmultiobjecttracker.s
 # ll-config-file required to set different tracker types
 # ll-config-file=/opt/nvidia/deepstream/deepstream/samples/configs/deepstream-app/config_tracker_IOU.yml
 # ll-config-file=/opt/nvidia/deepstream/deepstream/samples/configs/deepstream-app/config_tracker_NvSORT.yml
-ll-config-file=/opt/nvidia/deepstream/deepstream/samples/configs/deepstream-app/config_tracker_NvDCF_accuracy.yml
+ll-config-file=/opt/nvidia/deepstream/deepstream/samples/configs/deepstream-app/config_tracker_NvDCF_perf.yml
 # config_tracker_NvDCF_perf.yml
 # ll-config-file=/opt/nvidia/deepstream/deepstream/samples/configs/deepstream-app/config_tracker_NvDCF_accuracy.yml
 # ll-config-file=/opt/nvidia/deepstream/deepstream/samples/configs/deepstream-app/config_tracker_NvDeepSORT.yml
 gpu-id=0
 display-tracking-id=1
 
-# 自定义的单目标跟踪
-[tracker]
-enable=1
-# For NvDCF and NvDeepSORT tracker, tracker-width and tracker-height must be a multiple of 32, respectively
-tracker-width=1920
-tracker-height=1080
-ll-lib-file=/opt/nvidia/deepstream/deepstream/lib/libsot.so
-ll-config-file=config_sot.yml
-gpu-id=0
-display-tracking-id=0
+# # 自定义的单目标跟踪
+# [tracker]
+# enable=1
+# # For NvDCF and NvDeepSORT tracker, tracker-width and tracker-height must be a multiple of 32, respectively
+# tracker-width=1920
+# tracker-height=1080
+# ll-lib-file=/opt/nvidia/deepstream/deepstream/lib/libsot.so
+# ll-config-file=config_sot.yml
+# gpu-id=0
+# display-tracking-id=0
 
 [ds-example]
 enable=0

@@ -25,3 +25,4 @@ src/gst-videorecognition/input_data.txt
 .gitignore
 src/gst-videorecognition/output.bin
 smart_rec/*
+*.cache

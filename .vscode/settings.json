@@ -7,9 +7,19 @@
             "binaryPath": "/workspace/deepstream-app-custom/src/deepstream-app/deepstream-app",
             "binaryArgs": [
                 "-c",
-                "/workspace/deepstream-app-custom/src/deepstream-app/configs/deepstream_app_config.txt"
+                // "/workspace/deepstream-app-custom/src/deepstream-app/configs/deepstream_app_config.txt"
+                "/workspace/deepstream-app-custom/src/deepstream-app/configs/rgb_app_config.txt"
+                // "/workspace/deepstream-app-custom/src/deepstream-app/configs/save_images_app.txt"
             ]
         }
+    ],
+    "makefile.compileCommandsPath": "/workspace/deepstream-app-custom/src/deepstream-app/compile_commands.json",
+    "clangd.arguments": [
+        "--compile-commands-dir=/workspace/deepstream-app-custom/src/deepstream-app",
+        "--background-index",
+        "--clang-tidy",
+        "--completion-style=detailed",
+        "--header-insertion=iwyu"
     ],
     "files.associations": {
         "*.pbtxt": "plaintext",

@@ -1,0 +1,26 @@
+[property]
+gpu-id=0
+# （如果启用了input-tensor-meta则忽略）
+net-scale-factor=0.0039215697906911373
+#onnx-file=../models/yolo_classify_110_IR.onnx
+model-engine-file=../models/yolov11m_classify_110_rgb_640_fp32.engine
+labelfile-path=classify_labels.txt
+batch-size=1
+# 0: RGB 1: BGR 2: GRAY
+# （如果启用了input-tensor-meta则忽略）
+model-color-format=1
+## 0=FP32, 1=INT8, 2=FP16 mode
+network-mode=0
+is-classifier=1
+# 1=Primary 2=Secondary（如果启用了input-tensor-meta则忽略）
+process-mode=2
+# 异步时只有启用了tracker才能生效
+classifier-async-mode=0
+classifier-threshold=0.51
+input-object-min-width=5
+input-object-min-height=4
+operate-on-gie-id=1
+# operate-on-class-ids=0;1
+classifier-type=110
+#scaling-filter=0   # （如果启用了input-tensor-meta则忽略）
+#scaling-compute-hw=0   # （如果启用了input-tensor-meta则忽略）

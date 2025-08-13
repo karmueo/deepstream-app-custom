@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   deepstream:
-    image: tl/deepstream:7.1-gc-triton-devel-waichang
+    image: tl/deepstream:7.1-gc-triton-devel
     container_name: deepstream-container
     network_mode: host  # 等效于 --net=host
     runtime: nvidia     # 启用 NVIDIA GPU 支持
