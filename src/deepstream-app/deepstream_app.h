@@ -204,6 +204,9 @@ extern "C"
         NvDsObjEncCtxHandle obj_ctx_handle;
 
         CustomMessageData *custom_msg_data;
+
+    /* Per-object classification aggregation (history smoothing) */
+    GHashTable *cls_agg_map; /* key: guint64* (object_id), value: ObjClsAgg* (defined in .c) */
     };
 
     /**
