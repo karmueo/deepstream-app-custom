@@ -2,9 +2,10 @@
 gpu-id=0
 # （如果启用了input-tensor-meta则忽略）
 net-scale-factor=0.0039215697906911373
-onnx-file=../models/yolov11m_classify_rgb.onnx
-model-engine-file=../models/yolov11m_classify_rgb.onnx_b1_gpu0_fp32.engine
-# model-engine-file=../models/yolov11m_classify_rgb_fp32.engine
+# onnx-file=../models/best.onnx
+model-engine-file=../models/yolov11m_classify_ir_fp32_3.engine
+# model-engine-file=../models/yolov11m_classify_ir_fp32.engine
+force-implicit-batch-dim=0
 labelfile-path=classify_labels.txt
 batch-size=1
 # 0: RGB 1: BGR 2: GRAY
@@ -16,13 +17,17 @@ is-classifier=1
 # 1=Primary 2=Secondary（如果启用了input-tensor-meta则忽略）
 process-mode=2
 # 异步时只有启用了tracker才能生效
-classifier-async-mode=0
-classifier-threshold=0.5
+classifier-async-mode=1
+classifier-threshold=0.51
 input-object-min-width=9
 input-object-min-height=9
 operate-on-gie-id=1
 # operate-on-class-ids=0;1
-classifier-type=110rgb
+# output-blob-names=output0
+classifier-type=110ir
 maintain-aspect-ratio=1
+symmetric-padding=1
 #scaling-filter=0   # （如果启用了input-tensor-meta则忽略）
 #scaling-compute-hw=0   # （如果启用了input-tensor-meta则忽略）
+#custom-lib-path=/workspace/deepstream-app-custom/DeepStream-Yolo/nvdsinfer_custom_impl_Yolo_cls/libnvinfer_custom_impl_yolo_cls_parser.so
+#parse-classifier-func-name=NvDsInferCustomYolov5ClsParse
