@@ -11,6 +11,7 @@
 #include "tsnTrt.h"
 #include "videorecognitionTrt.h"
 #include "process.h"
+#include "imageClsTrt.h"
 
 #define PACKAGE "videorecognition"
 #define VERSION "1.0.0"
@@ -61,6 +62,8 @@ struct _Gstvideorecognition
 
     Process *trtProcessPtr;
 
+    ImageClsTrt *frame_classifier;      // yolov11m_classify_ir_fp32.engine
+    float frame_cls_scores[3];          // 最近一帧 softmax 结果
     // 视频识别结果结构
     RECOGNITION *recognitionResultPtr;
 };

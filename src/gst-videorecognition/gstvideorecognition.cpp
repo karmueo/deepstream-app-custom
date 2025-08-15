@@ -31,6 +31,7 @@
 #include "nvbufsurftransform.h"
 #include <gst/gstelement.h>
 // #include "gstnvdsinfer.h"
+#include <opencv2/opencv.hpp>
 
 /* enable to write transformed cvmat to files */
 /* #define DSEXAMPLE_DEBUG */
@@ -70,6 +71,12 @@ GST_DEBUG_CATEGORY_STATIC(gst_videorecognition_debug);
             goto error;                                                            \
         }                                                                          \
     } while (0)
+
+// 缩放方式
+enum GstVRScaleMode {
+    GST_VR_SCALE_ASPECT = 0,   // 等比保持长宽比（可能带 padding）
+    GST_VR_SCALE_STRETCH = 1   // 直接拉伸到目标尺寸（不保持长宽比，不加 padding）
+};
 
 /* Filter signals and args */
 enum
@@ -169,6 +176,7 @@ static GstFlowReturn get_converted_mat(NvBufSurface *input_buf,
                                        gdouble &ratio,
                                        gint input_width,
                                        gint input_height,
+                                       GstVRScaleMode scale_mode,
                                        cv::Mat &out_cvMat)
 {
     NvBufSurfTransform_Error err;
@@ -188,19 +196,22 @@ static GstFlowReturn get_converted_mat(NvBufSurface *input_buf,
     gint src_width = GST_ROUND_DOWN_2((unsigned int)crop_rect_params->width);
     gint src_height = GST_ROUND_DOWN_2((unsigned int)crop_rect_params->height);
 
-    /* 保持纵横比 */
-    double hdest = self->processing_width * src_height / (double)src_width;
-    double wdest = self->processing_height * src_width / (double)src_height;
-    guint dest_width, dest_height;
-
-    if (hdest <= self->processing_height)
-    {
+    guint dest_width = self->processing_width;
+    guint dest_height = self->processing_height;
+    if (scale_mode == GST_VR_SCALE_ASPECT) {
+        // 保持纵横比
+        double hdest = self->processing_width * src_height / (double)src_width;
+        double wdest = self->processing_height * src_width / (double)src_height;
+        if (hdest <= self->processing_height) {
+            dest_width = self->processing_width;
+            dest_height = static_cast<guint>(hdest);
+        } else {
+            dest_width = static_cast<guint>(wdest);
+            dest_height = self->processing_height;
+        }
+    } else {
+        // 直接缩放填满，不保持纵横比
         dest_width = self->processing_width;
-        dest_height = hdest;
-    }
-    else
-    {
-        dest_width = wdest;
         dest_height = self->processing_height;
     }
 
@@ -219,7 +230,7 @@ static GstFlowReturn get_converted_mat(NvBufSurface *input_buf,
         goto error;
     }
 
-    /* 计算缩放比率，同时保持长宽比 */
+    /* 计算缩放比率。等比时为实际等比系数；拉伸时给出最小系数供外部参考 */
     ratio = MIN(1.0 * dest_width / src_width, 1.0 * dest_height / src_height);
 
     if ((crop_rect_params->width == 0) || (crop_rect_params->height == 0))
@@ -232,10 +243,16 @@ static GstFlowReturn get_converted_mat(NvBufSurface *input_buf,
     /* 为src和dst设置ROI */
     src_rect = {(guint)src_top, (guint)src_left, (guint)src_width, (guint)src_height};
 
-    // 计算上下左右 padding，使 dst_rect 居中
-    pad_x = (self->processing_width > dest_width ? (self->processing_width - dest_width) / 2 : 0);
-    pad_y = (self->processing_height > dest_height ? (self->processing_height - dest_height) / 2 : 0);
-    dst_rect = {pad_y, pad_x, (guint)dest_width, (guint)dest_height};
+    if (scale_mode == GST_VR_SCALE_ASPECT) {
+        // 计算上下左右 padding，使 dst_rect 居中
+        pad_x = (self->processing_width > dest_width ? (self->processing_width - dest_width) / 2 : 0);
+        pad_y = (self->processing_height > dest_height ? (self->processing_height - dest_height) / 2 : 0);
+        dst_rect = {pad_y, pad_x, (guint)dest_width, (guint)dest_height};
+    } else {
+        // 无 padding，直接填满
+        pad_x = pad_y = 0;
+        dst_rect = {0u, 0u, (guint)dest_width, (guint)dest_height};
+    }
 
     /* Set the transform parameters */
     transform_params.src_rect = &src_rect;
@@ -448,6 +465,11 @@ gst_videorecognition_init(Gstvideorecognition *self)
         trt_engine_file,
         self->processing_width);
     self->recognitionResultPtr = new RECOGNITION();
+    self->frame_classifier = new ImageClsTrt("/workspace/deepstream-app-custom/src/deepstream-app/models/yolov11m_classify_ir_fp32.engine");
+    if (!self->frame_classifier->prepare()) {
+        g_printerr("[videorecognition] frame classifier prepare failed\n");
+    }
+    memset(self->frame_cls_scores, 0, sizeof(self->frame_cls_scores));
 
     /* This quark is required to identify NvDsMeta when iterating through
      * the buffer metadatas */
@@ -515,8 +537,7 @@ gst_videorecognition_transform_ip(GstBaseTransform *btrans, GstBuffer *inbuf)
             }
         }
 
-        for (l_obj = frame_meta->obj_meta_list; l_obj != NULL;
-             l_obj = l_obj->next)
+        for (l_obj = frame_meta->obj_meta_list; l_obj != NULL; l_obj = l_obj->next)
         {
             obj_meta = (NvDsObjectMeta *)(l_obj->data);
             cv::Mat target_img;
@@ -528,13 +549,54 @@ gst_videorecognition_transform_ip(GstBaseTransform *btrans, GstBuffer *inbuf)
                                   scale_ratio,
                                   surface->surfaceList[frame_meta->batch_id].width,
                                   surface->surfaceList[frame_meta->batch_id].height,
+                                  GST_VR_SCALE_STRETCH, // 可改为 GST_VR_SCALE_STRETCH 以开启拉伸模式
                                   target_img) != GST_FLOW_OK)
             {
                 GST_ELEMENT_ERROR(self, STREAM, FAILED,
                                   ("get_converted_mat failed"), (NULL));
                 goto error;
             }
-            self->trtProcessPtr->addFrame(target_img);
+
+            // 对对象裁剪图(target_img, BGR)执行单帧分类
+            if (self->frame_classifier && !target_img.empty()) {
+                cv::Mat resized, rgb;
+                // target_img 已是 processing_height x processing_width (一般 224x224)，若不同再调整
+                if (target_img.cols != 224 || target_img.rows != 224) {
+                    cv::resize(target_img, resized, cv::Size(224, 224));
+                } else {
+                    resized = target_img;
+                }
+                cv::cvtColor(resized, rgb, cv::COLOR_BGR2RGB);
+                // 把图片保存下来
+                cv::imwrite("target_img2.jpg", rgb);
+                std::vector<float> input(3 * 224 * 224);
+                int hw = 224 * 224;
+                for (int y = 0; y < 224; ++y) {
+                    const unsigned char *row = rgb.ptr<unsigned char>(y);
+                    for (int x = 0; x < 224; ++x) {
+                        int pos = y * 224 + x; int base = x * 3;
+                        input[0 * hw + pos] = row[base + 0] / 255.0f;
+                        input[1 * hw + pos] = row[base + 1] / 255.0f;
+                        input[2 * hw + pos] = row[base + 2] / 255.0f;
+                    }
+                }
+                float output[3] = {0};
+                if (self->frame_classifier->infer(input.data(), output)) {
+                    // 直接附着到该对象，组件 ID 100
+                    NvDsClassifierMeta *cls_meta = nvds_acquire_classifier_meta_from_pool(batch_meta);
+                    cls_meta->unique_component_id = 100; // object-level single-frame cls
+                    const char *names[3] = {"未知", "鸟", "无人机"};
+                    for (int c = 0; c < 3; ++c) {
+                        NvDsLabelInfo *li = nvds_acquire_label_info_meta_from_pool(batch_meta);
+                        li->result_class_id = c;
+                        li->result_prob = output[c];
+                        strncpy(li->result_label, names[c], MAX_LABEL_SIZE - 1);
+                        li->result_label[MAX_LABEL_SIZE - 1] = '\0';
+                        nvds_add_label_info_meta_to_classifier(cls_meta, li);
+                    }
+                    nvds_add_classifier_meta_to_object(obj_meta, cls_meta);
+                }
+            }
 
             if (self->recognitionResultPtr->score >= 0.5)
             {
@@ -569,63 +631,64 @@ gst_videorecognition_transform_ip(GstBaseTransform *btrans, GstBuffer *inbuf)
         }
     }
 
-    // 多帧推理
-    if (self->trtProcessPtr->getCurrentFrameLength() == self->max_history_frames)
-    {
-        std::vector<float> input_data;
-        // 数据预处理
-        /* self->trtProcessPtr->convertCvInputToTensorRT(
-            input_data,
-            self->model_clip_length,
-            self->processing_width,
-            self->processing_height,
-            self->processing_frame_interval); */
-        self->trtProcessPtr->convertCvInputToNtchwTensorRT(
-            input_data,
-            self->model_num_clips,
-            self->model_clip_length,
-            self->processing_width,
-            self->processing_height,
-            self->processing_frame_interval);
-        /* self->trtProcessPtr->loadImagesFromDirectory2(
-            "/workspace/deepstream-app-custom/src/deepstream-app/110_video_frames/bird/bird_1/0/",
-            input_data,
-            self->model_num_clips,
-            self->model_clip_length,
-            self->processing_width,
-            self->processing_height); */
-        /* self->trtProcessPtr->loadImagesFromDirectory(
-            "/workspace/deepstream-app-custom/src/deepstream-app/110_video_frames/bird/bird_1/0/",
-            input_data,
-            self->model_clip_length,
-            self->processing_width,
-            self->processing_height,
-            self->processing_frame_interval); */
+    // self->trtProcessPtr->addFrame(target_img);
+    // // 多帧推理
+    // if (self->trtProcessPtr->getCurrentFrameLength() == self->max_history_frames)
+    // {
+    //     std::vector<float> input_data;
+    //     // 数据预处理
+    //     /* self->trtProcessPtr->convertCvInputToTensorRT(
+    //         input_data,
+    //         self->model_clip_length,
+    //         self->processing_width,
+    //         self->processing_height,
+    //         self->processing_frame_interval); */
+    //     self->trtProcessPtr->convertCvInputToNtchwTensorRT(
+    //         input_data,
+    //         self->model_num_clips,
+    //         self->model_clip_length,
+    //         self->processing_width,
+    //         self->processing_height,
+    //         self->processing_frame_interval);
+    //     /* self->trtProcessPtr->loadImagesFromDirectory2(
+    //         "/workspace/deepstream-app-custom/src/deepstream-app/110_video_frames/bird/bird_1/0/",
+    //         input_data,
+    //         self->model_num_clips,
+    //         self->model_clip_length,
+    //         self->processing_width,
+    //         self->processing_height); */
+    //     /* self->trtProcessPtr->loadImagesFromDirectory(
+    //         "/workspace/deepstream-app-custom/src/deepstream-app/110_video_frames/bird/bird_1/0/",
+    //         input_data,
+    //         self->model_clip_length,
+    //         self->processing_width,
+    //         self->processing_height,
+    //         self->processing_frame_interval); */
 
-        if (self->video_recognition)
-        {
-            tsnTrt *tsnPtr = dynamic_cast<tsnTrt *>(self->video_recognition);
-            tsnPtr->prepare_input("input", self->model_num_clips, self->model_clip_length, input_data.data());
-            tsnPtr->prepare_output("/Softmax_output_0");
-            tsnPtr->do_inference();
-            float *output_data = new float[tsnPtr->GetOutputSize()];
-            tsnPtr->get_output(output_data);
-            RECOGNITION result = tsnPtr->parse_output(output_data); // result是一个RECOGNITION对象
-            self->recognitionResultPtr->class_id = result.class_id;
-            self->recognitionResultPtr->class_name = result.class_name;
-            self->recognitionResultPtr->score = result.score;
+    //     if (self->video_recognition)
+    //     {
+    //         tsnTrt *tsnPtr = dynamic_cast<tsnTrt *>(self->video_recognition);
+    //         tsnPtr->prepare_input("input", self->model_num_clips, self->model_clip_length, input_data.data());
+    //         tsnPtr->prepare_output("/Softmax_output_0");
+    //         tsnPtr->do_inference();
+    //         float *output_data = new float[tsnPtr->GetOutputSize()];
+    //         tsnPtr->get_output(output_data);
+    //         RECOGNITION result = tsnPtr->parse_output(output_data); // result是一个RECOGNITION对象
+    //         self->recognitionResultPtr->class_id = result.class_id;
+    //         self->recognitionResultPtr->class_name = result.class_name;
+    //         self->recognitionResultPtr->score = result.score;
 
-            std::cout << "Class ID: " << self->recognitionResultPtr->class_id << ", Class Name: " << self->recognitionResultPtr->class_name
-                      << ", Score: " << self->recognitionResultPtr->score << std::endl;
+    //         std::cout << "Class ID: " << self->recognitionResultPtr->class_id << ", Class Name: " << self->recognitionResultPtr->class_name
+    //                   << ", Score: " << self->recognitionResultPtr->score << std::endl;
 
-            delete[] output_data;
-        }
-        else
-        {
-            std::cerr << "Error: video_recognition is null" << std::endl;
-        }
-        self->trtProcessPtr->clearFrames();
-    }
+    //         delete[] output_data;
+    //     }
+    //     else
+    //     {
+    //         std::cerr << "Error: video_recognition is null" << std::endl;
+    //     }
+    //     self->trtProcessPtr->clearFrames();
+    // }
 
     flow_ret = GST_FLOW_OK;
 error:
