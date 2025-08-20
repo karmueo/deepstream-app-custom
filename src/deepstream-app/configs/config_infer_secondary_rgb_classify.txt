@@ -2,16 +2,15 @@
 gpu-id=0
 # （如果启用了input-tensor-meta则忽略）
 net-scale-factor=0.0039215697906911373
-onnx-file=../models/yolov11m_classify_rgb.onnx
-model-engine-file=../models/yolov11m_classify_rgb.onnx_b1_gpu0_fp32.engine
-# model-engine-file=../models/yolov11m_classify_rgb_fp32.engine
+onnx-file=../models/yolov11m_classify_rgb_b4.onnx
+model-engine-file=../models/yolov11m_classify_rgb_b4_fp16.engine
 labelfile-path=classify_labels.txt
-batch-size=1
+batch-size=4
 # 0: RGB 1: BGR 2: GRAY
 # （如果启用了input-tensor-meta则忽略）
 model-color-format=0
 ## 0=FP32, 1=INT8, 2=FP16 mode
-network-mode=0
+network-mode=2
 is-classifier=1
 # 1=Primary 2=Secondary（如果启用了input-tensor-meta则忽略）
 process-mode=2
@@ -23,6 +22,6 @@ input-object-min-height=9
 operate-on-gie-id=1
 # operate-on-class-ids=0;1
 classifier-type=110rgb
-maintain-aspect-ratio=1
-#scaling-filter=0   # （如果启用了input-tensor-meta则忽略）
+maintain-aspect-ratio=0
+scaling-filter=1   # （如果启用了input-tensor-meta则忽略）
 #scaling-compute-hw=0   # （如果启用了input-tensor-meta则忽略）

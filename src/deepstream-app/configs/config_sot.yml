@@ -1,8 +1,8 @@
 %YAML:1.0
 
 BaseConfig:
-  modelName: 0    # { 0=sutrack, 1=ostrack, 2=mixformer_v2 }
-  modelType: 0  # { 0=FP32, 1=FP16}
+  modelName: 1    # { 0=sutrack, 1=ostrack, 2=mixformer_v2 }
+  modelType: 1  # { 0=FP32, 1=FP16}
   modelRootPath: /workspace/deepstream-app-custom/src/Mixformer_plugin/models
 
 TargetManagement:

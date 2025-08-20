@@ -42,7 +42,7 @@ scaling-pool-compute-hw=1
     # 0=NvBufSurfTransformInter_Nearest 1=NvBufSurfTransformInter_Bilinear 2=NvBufSurfTransformInter_Algo1
     # 3=NvBufSurfTransformInter_Algo2 4=NvBufSurfTransformInter_Algo3 5=NvBufSurfTransformInter_Algo4
     # 6=NvBufSurfTransformInter_Default
-scaling-filter=0
+scaling-filter=1
     # custom library .so path having custom functionality
 custom-lib-path=/opt/nvidia/deepstream/deepstream/lib/gst-plugins/libcustom2d_preprocess.so
     # custom tensor preparation function name having predefined input/outputs
