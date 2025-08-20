@@ -75,7 +75,8 @@ GST_DEBUG_CATEGORY_STATIC(gst_videorecognition_debug);
 // 缩放方式
 enum GstVRScaleMode {
     GST_VR_SCALE_ASPECT = 0,   // 等比保持长宽比（可能带 padding）
-    GST_VR_SCALE_STRETCH = 1   // 直接拉伸到目标尺寸（不保持长宽比，不加 padding）
+    GST_VR_SCALE_STRETCH = 1,  // 直接拉伸到目标尺寸（不保持长宽比，不加 padding）
+    GST_VR_SCALE_NONE = 2      // 不缩放：直接按 crop_rect 提取原始大小 ROI
 };
 
 /* Filter signals and args */
@@ -98,8 +99,8 @@ enum
 };
 
 #define DEFAULT_UNIQUE_ID 15
-#define DEFAULT_PROCESSING_WIDTH 224
-#define DEFAULT_PROCESSING_HEIGHT 224
+#define DEFAULT_PROCESSING_WIDTH 32
+#define DEFAULT_PROCESSING_HEIGHT 32
 #define DEFAULT_PROCESSING_MODEL_CLIP_LENGTH 8
 #define DEFAULT_PROCESSING_NUM_CLIPS 4
 #define DEFAULT_TRT_ENGINE_NAME "/workspace/deepstream-app-custom/src/gst-videorecognition/models/uniformerv2_e1_end2end_fp32.engine"
@@ -143,19 +144,16 @@ static GstFlowReturn gst_videorecognition_transform_ip(GstBaseTransform *btrans,
 /**
  * Scale the entire frame to the processing resolution maintaining aspect ratio.
  * Or crop and scale objects to the processing resolution maintaining the aspect
- * ratio. Remove the padding required by hardware and convert from RGBA to RGB
- * using openCV. These steps can be skipped if the algorithm can work with
- * padded data and/or can work with RGBA.
- * 等比缩放视频帧到处理分辨率。
- * 或等比裁剪和缩放的目标到处理分辨率。
- * 删除硬件所需的padding，从RGBA转换为RGB。
- * 如果算法可以直接使用padding和RGBA则可以跳过这些步骤。
+ * ratio. Remove the padding required by hardware. Previously converted RGBA to
+ * RGB/BGR via OpenCV; now the intermediate buffer is allocated directly as RGB
+ * so no extra color conversion is needed if downstream expects RGB.
+ * 等比缩放或拉伸到处理分辨率；中间缓冲区直接为 RGB 三通道，不再进行 RGBA->BGR 转换。
  */
 /**
  * @brief 获取转换后的OpenCV Mat对象，并进行缩放和格式转换。
  *
  * 该函数从输入的NvBufSurface缓冲区中提取指定索引的图像区域（可选裁剪），
- * 按照目标处理分辨率进行缩放，同时保持宽高比，并将图像格式从RGBA转换为BGR，保存到self->cvmat中。
+ * 按照目标处理分辨率进行缩放，同时保持或拉伸宽高比，直接得到 RGB (CV_8UC3) 数据保存到 out_cvMat 中。
  *
  * @param[in]  self                指向Gstvideorecognition实例的指针，包含处理参数和中间缓冲区。
  * @param[in]  input_buf           输入的NvBufSurface缓冲区指针。
@@ -198,7 +196,12 @@ static GstFlowReturn get_converted_mat(NvBufSurface *input_buf,
 
     guint dest_width = self->processing_width;
     guint dest_height = self->processing_height;
-    if (scale_mode == GST_VR_SCALE_ASPECT) {
+    if (scale_mode == GST_VR_SCALE_NONE) {
+        // 不缩放：目标尺寸用对象裁剪尺寸
+        dest_width = src_width;
+        dest_height = src_height;
+        ratio = 1.0;
+    } else if (scale_mode == GST_VR_SCALE_ASPECT) {
         // 保持纵横比
         double hdest = self->processing_width * src_height / (double)src_width;
         double wdest = self->processing_height * src_width / (double)src_height;
@@ -248,6 +251,10 @@ static GstFlowReturn get_converted_mat(NvBufSurface *input_buf,
         pad_x = (self->processing_width > dest_width ? (self->processing_width - dest_width) / 2 : 0);
         pad_y = (self->processing_height > dest_height ? (self->processing_height - dest_height) / 2 : 0);
         dst_rect = {pad_y, pad_x, (guint)dest_width, (guint)dest_height};
+    } else if (scale_mode == GST_VR_SCALE_NONE) {
+        // 不缩放：目标缓冲区即对象尺寸，无 padding
+        pad_x = pad_y = 0;
+        dst_rect = {0u, 0u, (guint)dest_width, (guint)dest_height};
     } else {
         // 无 padding，直接填满
         pad_x = pad_y = 0;
@@ -260,10 +267,27 @@ static GstFlowReturn get_converted_mat(NvBufSurface *input_buf,
     transform_params.transform_flag =
         NVBUFSURF_TRANSFORM_FILTER | NVBUFSURF_TRANSFORM_CROP_SRC |
         NVBUFSURF_TRANSFORM_CROP_DST;
-    transform_params.transform_filter = NvBufSurfTransformInter_Default;
+    transform_params.transform_filter = NvBufSurfTransformInter_Bilinear;
 
-    /* Memset the memory */
-    NvBufSurfaceMemSet(self->inter_buf, 0, 0, 0);
+    // 若 NONE 模式且对象尺寸与当前 inter_buf 不同，需要重新分配
+    if (scale_mode == GST_VR_SCALE_NONE && (self->inter_buf->surfaceList[0].width != (int)dest_width || self->inter_buf->surfaceList[0].height != (int)dest_height)) {
+        NvBufSurfaceDestroy(self->inter_buf);
+        NvBufSurfaceCreateParams create_params = {0};
+        create_params.gpuId = self->gpu_id;
+        create_params.width = dest_width;
+        create_params.height = dest_height;
+        create_params.size = 0;
+        create_params.colorFormat = NVBUF_COLOR_FORMAT_RGB;
+        create_params.layout = NVBUF_LAYOUT_PITCH;
+        create_params.memType = NVBUF_MEM_CUDA_PINNED;
+        if (NvBufSurfaceCreate(&self->inter_buf, 1, &create_params) != 0) {
+            GST_ELEMENT_ERROR(self, RESOURCE, FAILED, ("Recreate inter_buf failed"), (NULL));
+            goto error;
+        }
+    } else {
+        /* Memset the memory */
+        NvBufSurfaceMemSet(self->inter_buf, 0, 0, 0);
+    }
 
     GST_DEBUG_OBJECT(self, "Scaling and converting input buffer\n");
 
@@ -287,24 +311,17 @@ static GstFlowReturn get_converted_mat(NvBufSurface *input_buf,
         NvBufSurfaceSyncForCpu(self->inter_buf, 0, 0);
     }
 
-    /* Use openCV to remove padding and convert RGBA to BGR. Can be skipped if
-     * algorithm can handle padded RGBA data. */
-    // 判断out_cvMat是否已经分配内存
-    if (out_cvMat.empty())
-    {
-        out_cvMat = cv::Mat(self->processing_height, self->processing_width,
-                            CV_8UC4, self->inter_buf->surfaceList[0].mappedAddr.addr[0],
+    /* 直接映射为RGB三通道 (CV_8UC3)，不再使用 CV_8UC4 和额外颜色转换。*/
+    if (out_cvMat.empty()) {
+        out_cvMat = cv::Mat(dest_height, dest_width,
+                            CV_8UC3, self->inter_buf->surfaceList[0].mappedAddr.addr[0],
                             self->inter_buf->surfaceList[0].pitch);
-    }
-    else
-    {
-        // 如果已经分配了内存，则删除原有的内存
+    } else {
         out_cvMat.release();
-        out_cvMat = cv::Mat(self->processing_height, self->processing_width,
-                            CV_8UC4, self->inter_buf->surfaceList[0].mappedAddr.addr[0],
+        out_cvMat = cv::Mat(dest_height, dest_width,
+                            CV_8UC3, self->inter_buf->surfaceList[0].mappedAddr.addr[0],
                             self->inter_buf->surfaceList[0].pitch);
     }
-    cv::cvtColor(out_cvMat, out_cvMat, cv::COLOR_RGBA2BGR);
 
     if (NvBufSurfaceUnMap(self->inter_buf, 0, 0))
     {
@@ -461,15 +478,19 @@ gst_videorecognition_init(Gstvideorecognition *self)
     self->max_history_frames = self->processing_frame_interval * self->model_clip_length * self->model_num_clips + self->model_num_clips * 2;
     self->trtProcessPtr = new Process(self->max_history_frames);
     const char *trt_engine_file = DEFAULT_TRT_ENGINE_NAME;
-    self->video_recognition = new tsnTrt(
-        trt_engine_file,
-        self->processing_width);
+    strncpy(self->trt_engine_name, trt_engine_file, sizeof(self->trt_engine_name)-1);
+    self->trt_engine_name[sizeof(self->trt_engine_name)-1] = '\0';
     self->recognitionResultPtr = new RECOGNITION();
-    self->frame_classifier = new ImageClsTrt("/workspace/deepstream-app-custom/src/deepstream-app/models/yolov11m_classify_ir_fp32.engine");
+    self->frame_classifier = new ImageClsTrt(self->trt_engine_name);
     if (!self->frame_classifier->prepare()) {
         g_printerr("[videorecognition] frame classifier prepare failed\n");
     }
     memset(self->frame_cls_scores, 0, sizeof(self->frame_cls_scores));
+    // 初始化单目标分类窗口参数
+    self->cls_window_size = 10; // 保底
+    self->cls_window_index = 0;
+    self->cls_window_count = 0;
+    for (int i=0;i<10;++i){ for(int c=0;c<3;++c) self->cls_window_scores[i][c]=0.f; }
 
     /* This quark is required to identify NvDsMeta when iterating through
      * the buffer metadatas */
@@ -524,6 +545,7 @@ gst_videorecognition_transform_ip(GstBaseTransform *btrans, GstBuffer *inbuf)
     for (l_frame = batch_meta->frame_meta_list; l_frame != NULL;
          l_frame = l_frame->next)
     {
+    // 单目标，不需要历史 map 清理
         NvDsMetaList *l_obj = NULL;
         NvDsObjectMeta *obj_meta = NULL;
         frame_meta = (NvDsFrameMeta *)(l_frame->data);
@@ -557,24 +579,24 @@ gst_videorecognition_transform_ip(GstBaseTransform *btrans, GstBuffer *inbuf)
                 goto error;
             }
 
-            // 对对象裁剪图(target_img, BGR)执行单帧分类
+            // 对对象裁剪图执行单帧分类 + 多帧加权融合
             if (self->frame_classifier && !target_img.empty()) {
-                cv::Mat resized, rgb;
-                // target_img 已是 processing_height x processing_width (一般 224x224)，若不同再调整
-                if (target_img.cols != 224 || target_img.rows != 224) {
-                    cv::resize(target_img, resized, cv::Size(224, 224));
+                cv::Mat resized;
+                // target_img 现在已经是 RGB; 若尺寸不同再调整
+                if (target_img.cols != 32 || target_img.rows != 32) {
+                    cv::resize(target_img, resized, cv::Size(32, 32), 0, 0, cv::INTER_LINEAR);
                 } else {
                     resized = target_img;
                 }
-                cv::cvtColor(resized, rgb, cv::COLOR_BGR2RGB);
+                cv::Mat &rgb = resized; // 直接使用 RGB
                 // 把图片保存下来
-                cv::imwrite("target_img2.jpg", rgb);
-                std::vector<float> input(3 * 224 * 224);
-                int hw = 224 * 224;
-                for (int y = 0; y < 224; ++y) {
+                // cv::imwrite("target_img2.jpg", rgb);
+                std::vector<float> input(3 * 32 * 32);
+                int hw = 32 * 32;
+                for (int y = 0; y < 32; ++y) {
                     const unsigned char *row = rgb.ptr<unsigned char>(y);
-                    for (int x = 0; x < 224; ++x) {
-                        int pos = y * 224 + x; int base = x * 3;
+                    for (int x = 0; x < 32; ++x) {
+                        int pos = y * 32 + x; int base = x * 3;
                         input[0 * hw + pos] = row[base + 0] / 255.0f;
                         input[1 * hw + pos] = row[base + 1] / 255.0f;
                         input[2 * hw + pos] = row[base + 2] / 255.0f;
@@ -582,18 +604,41 @@ gst_videorecognition_transform_ip(GstBaseTransform *btrans, GstBuffer *inbuf)
                 }
                 float output[3] = {0};
                 if (self->frame_classifier->infer(input.data(), output)) {
-                    // 直接附着到该对象，组件 ID 100
-                    NvDsClassifierMeta *cls_meta = nvds_acquire_classifier_meta_from_pool(batch_meta);
-                    cls_meta->unique_component_id = 100; // object-level single-frame cls
                     const char *names[3] = {"未知", "鸟", "无人机"};
-                    for (int c = 0; c < 3; ++c) {
-                        NvDsLabelInfo *li = nvds_acquire_label_info_meta_from_pool(batch_meta);
-                        li->result_class_id = c;
-                        li->result_prob = output[c];
-                        strncpy(li->result_label, names[c], MAX_LABEL_SIZE - 1);
-                        li->result_label[MAX_LABEL_SIZE - 1] = '\0';
-                        nvds_add_label_info_meta_to_classifier(cls_meta, li);
+                    // 运行期保护，避免为0
+                    if (self->cls_window_size <= 0 || self->cls_window_size > 1000) {
+                        self->cls_window_size = 10;
                     }
+                    // 写入环形缓冲
+                    int idx = self->cls_window_index % self->cls_window_size;
+                    for (int c = 0; c < 3; ++c) self->cls_window_scores[idx][c] = output[c];
+                    self->cls_window_index++;
+                    if (self->cls_window_count < self->cls_window_size) self->cls_window_count++;
+                    // 计算窗口内平均分: 若未填满只统计已有；填满后统计全部环形槽
+                    int usable = self->cls_window_count;
+                    float avg[3] = {0.f,0.f,0.f};
+                    if (usable == self->cls_window_size) {
+                        // 已完整覆盖，直接累加所有槽
+                        for (int i = 0; i < self->cls_window_size; ++i) {
+                            for (int c = 0; c < 3; ++c) avg[c] += self->cls_window_scores[i][c];
+                        }
+                    } else {
+                        // 部分填充：槽按顺序 0..usable-1
+                        for (int i = 0; i < usable; ++i) {
+                            for (int c = 0; c < 3; ++c) avg[c] += self->cls_window_scores[i][c];
+                        }
+                    }
+                    for (int c = 0; c < 3; ++c) avg[c] /= (float)usable;
+                    int best = 0; for (int c = 1; c < 3; ++c) if (avg[c] > avg[best]) best = c;
+                    float best_prob = avg[best];
+                    NvDsClassifierMeta *cls_meta = nvds_acquire_classifier_meta_from_pool(batch_meta);
+                    cls_meta->unique_component_id = 100; // window accumulation result
+                    NvDsLabelInfo *li = nvds_acquire_label_info_meta_from_pool(batch_meta);
+                    li->result_class_id = best;
+                    li->result_prob = best_prob;
+                    snprintf(li->result_label, MAX_LABEL_SIZE, "%s(%.2f)W%d", names[best], best_prob, self->cls_window_count);
+                    li->result_label[MAX_LABEL_SIZE - 1] = '\0';
+                    nvds_add_label_info_meta_to_classifier(cls_meta, li);
                     nvds_add_classifier_meta_to_object(obj_meta, cls_meta);
                 }
             }
@@ -717,7 +762,8 @@ gst_videorecognition_start(GstBaseTransform *btrans)
     create_params.width = self->processing_width;
     create_params.height = self->processing_height;
     create_params.size = 0;
-    create_params.colorFormat = NVBUF_COLOR_FORMAT_RGBA;
+    // 使用 RGB 三通道中间缓冲区
+    create_params.colorFormat = NVBUF_COLOR_FORMAT_RGB;
     create_params.layout = NVBUF_LAYOUT_PITCH;
     create_params.memType = NVBUF_MEM_CUDA_PINNED;
     if (NvBufSurfaceCreate(&self->inter_buf, 1,
@@ -824,19 +870,14 @@ void gst_videorecognition_set_property(GObject *object,
         break;
     case PROP_TRT_ENGINE_NAME:
     {
-        auto s = g_value_get_string(value);
-        const gchar *trt_engine_name = s ? s : DEFAULT_TRT_ENGINE_NAME;
-        if (self->video_recognition)
-        {
-            delete self->video_recognition;
-            self->video_recognition = NULL;
-        }
-        self->video_recognition = new tsnTrt(trt_engine_name, self->processing_width);
-        if (!self->video_recognition)
-        {
-            GST_ELEMENT_ERROR(self, RESOURCE, FAILED,
-                              ("Failed to create video recognition object with engine %s", trt_engine_name), (NULL));
-            return;
+        const gchar *s = g_value_get_string(value);
+        const gchar *engine = s && *s ? s : DEFAULT_TRT_ENGINE_NAME;
+        strncpy(self->trt_engine_name, engine, sizeof(self->trt_engine_name)-1);
+        self->trt_engine_name[sizeof(self->trt_engine_name)-1] = '\0';
+        if (self->frame_classifier) { delete self->frame_classifier; self->frame_classifier = nullptr; }
+        self->frame_classifier = new ImageClsTrt(self->trt_engine_name);
+        if (!self->frame_classifier->prepare()) {
+            GST_ELEMENT_ERROR(self, RESOURCE, FAILED, ("frame classifier prepare failed for %s", self->trt_engine_name), (NULL));
         }
         break;
     }
@@ -892,6 +933,10 @@ void gst_videorecognition_finalize(GObject *object)
     {
         delete self->recognitionResultPtr;
         self->recognitionResultPtr = NULL;
+    }
+    if (self->frame_classifier) {
+        delete self->frame_classifier;
+        self->frame_classifier = NULL;
     }
 
     if (self->inter_buf)

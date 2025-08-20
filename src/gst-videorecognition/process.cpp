@@ -6,7 +6,7 @@
 
 Process::Process(int max_history_frames)
 {
-    m_input_size = cv::Size(224, 224);             // 模型输入尺寸
+    m_input_size = cv::Size(32, 32);             // 模型输入尺寸
     m_max_history_frames = max_history_frames;     // 最大保存历史帧数
     m_vTargetFrames.reserve(m_max_history_frames); // 预留空间
     m_current_dir_num = 0;                         // 当前目录编号
@@ -724,7 +724,7 @@ std::vector<float> Process::build_input_tensor(
         cv::Mat img_float;
         img.convertTo(img_float, CV_32F, 1.0 / 255); // divided by 255转float
 
-        // 遍历每个像素（H=224, W=224）
+        // 遍历每个像素（H=32, W=32）
         for (int h = 0; h < height; ++h)
         {
             for (int w = 0; w < width; ++w)

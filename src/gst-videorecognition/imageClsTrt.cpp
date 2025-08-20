@@ -2,7 +2,7 @@
 #include <cassert>
 #include <cstring>
 
-ImageClsTrt::ImageClsTrt(const std::string &engine_path) : VideoRecognitionTRT(engine_path, 224) {
+ImageClsTrt::ImageClsTrt(const std::string &engine_path) : VideoRecognitionTRT(engine_path, 32) {
     discoverIO();
 }
 
@@ -27,7 +27,7 @@ void ImageClsTrt::discoverIO() {
 
 bool ImageClsTrt::prepare() {
     if (ready_) return true;
-    input_bytes_ = 1 * 3 * 224 * 224 * sizeof(float);
+    input_bytes_ = 1 * 3 * 32 * 32 * sizeof(float);
     output_bytes_ = 1 * numClasses() * sizeof(float);
     cudaMalloc(&device_input_, input_bytes_);
     cudaMalloc(&device_output_, output_bytes_);

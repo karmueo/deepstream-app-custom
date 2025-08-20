@@ -4,7 +4,7 @@
 #include "videorecognitionTrt.h"
 #include <vector>
 
-/* 简单单帧分类模型封装：输入 [1,3,224,224]，输出 [1,3] softmax */
+/* 简单单帧分类模型封装：输入 [1,3,32,32]，输出 [1,3] softmax */
 class ImageClsTrt : public VideoRecognitionTRT {
 public:
     explicit ImageClsTrt(const std::string &engine_path);
@@ -12,8 +12,8 @@ public:
 
     bool prepare();               // 绑定输入输出缓冲区（一次）
     bool infer(const float *host_input, float *host_output); // 同步推理
-    inline int inputH() const { return 224; }
-    inline int inputW() const { return 224; }
+    inline int inputH() const { return 32; }
+    inline int inputW() const { return 32; }
     inline int numClasses() const { return 3; }
     inline const std::string &inputName() const { return input_name_; }
     inline const std::string &outputName() const { return output_name_; }
