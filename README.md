@@ -121,7 +121,7 @@ make
             "binaryPath": "/workspace/deepstream-app-custom/src/deepstream-app/deepstream-app",
             "binaryArgs": [
                 "-c",
-                "/workspace/deepstream-app-custom/src/deepstream-app/configs/deepstream_app_config.txt"
+                "/workspace/deepstream-app-custom/src/deepstream-app/configs/ir_app_config.txt"
             ]
         }
     ],
