@@ -32,6 +32,24 @@ GQuark _dsmeta_quark;
 
 #define CEIL(a, b) ((a + b - 1) / b)
 
+/* 调试: udpsrc probe 回调，统计 buffer */
+static GstPadProbeReturn udpsrc_probe_cb(GstPad *pad, GstPadProbeInfo *info, gpointer user_data)
+{
+    static guint64 cnt = 0;
+    if (info->type & GST_PAD_PROBE_TYPE_BUFFER) {
+        GstBuffer *b = GST_BUFFER(info->data);
+        gsize sz = 0; GstMapInfo map;
+        if (gst_buffer_map(b, &map, GST_MAP_READ)) { sz = map.size; gst_buffer_unmap(b, &map);}        
+        if (G_UNLIKELY(cnt < 20 || (cnt < 1000 && (cnt % 50)==0) || (cnt % 500)==0)) {
+            GstCaps *caps = gst_pad_get_current_caps(pad);
+            gchar *caps_str = caps ? gst_caps_to_string(caps) : g_strdup("(null)");
+            g_print("[udpsrc-multicast][probe] #%" G_GUINT64_FORMAT " size=%zu caps=%s\n", ++cnt, sz, caps_str);
+            g_free(caps_str); if (caps) gst_caps_unref(caps);
+        } else { cnt++; }
+    }
+    return GST_PAD_PROBE_OK;
+}
+
 static GstFlowReturn on_control_data(GstElement *sink, AppCtx *appCtx)
 {
     /* // 控制速率,比如每秒处理30次
@@ -1319,8 +1337,111 @@ gie_primary_processing_done_buf_prob(GstPad *pad, GstPadProbeInfo *info,
         return GST_PAD_PROBE_OK;
     }
 
-    // write_kitti_output(appCtx, batch_meta);
-    // 把检测框碰撞一倍
+    // ==== 可选：在修改框尺寸/写出之前执行 NMS 去重 ====
+    // 简单 NMS: 同类别框按置信度排序，IoU>阈值则删除低置信度框
+    const gfloat IOU_THRESH = 0.6f;  // 可调，>0 且 <1
+    // 统计 & 处理每个帧
+    for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame; l_frame = l_frame->next) {
+        NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)l_frame->data;
+        // 收集对象指针
+        GArray *objs = g_array_new(FALSE, FALSE, sizeof(NvDsObjectMeta*));
+        for (NvDsMetaList *l = frame_meta->obj_meta_list; l; l = l->next) {
+            NvDsObjectMeta *o = (NvDsObjectMeta*)l->data;
+            g_array_append_val(objs, o);
+        }
+        guint n = objs->len;
+        if (n > 1) {
+            // 简单冒泡/插入排序，按 confidence 降序 (对象数量通常较少; 若多可改为快速排序)
+            for (guint i=1;i<n;i++) {
+                NvDsObjectMeta *key = g_array_index(objs, NvDsObjectMeta*, i);
+                gfloat kc = key->confidence;
+                gint j = i - 1;
+                while (j >= 0) {
+                    NvDsObjectMeta *pj = g_array_index(objs, NvDsObjectMeta*, j);
+                    if (pj->confidence >= kc) break;
+                    g_array_index(objs, NvDsObjectMeta*, j+1) = pj;
+                    j--;
+                }
+                g_array_index(objs, NvDsObjectMeta*, j+1) = key;
+            }
+            // 标记保留
+            GByteArray *keep = g_byte_array_sized_new(n); keep->len = n; memset(keep->data, 1, n);
+            for (guint i=0;i<n;i++) {
+                if (!keep->data[i]) continue;
+                NvDsObjectMeta *a = g_array_index(objs, NvDsObjectMeta*, i);
+                float ax1 = a->rect_params.left;
+                float ay1 = a->rect_params.top;
+                float aw  = a->rect_params.width;
+                float ah  = a->rect_params.height;
+                float ax2 = ax1 + aw;
+                float ay2 = ay1 + ah;
+                if (aw <= 0 || ah <=0) { keep->data[i]=0; continue; }
+                for (guint j=i+1;j<n;j++) {
+                    if (!keep->data[j]) continue;
+                    NvDsObjectMeta *b = g_array_index(objs, NvDsObjectMeta*, j);
+                    if (b->class_id != a->class_id) continue; // 只同类别抑制
+                    float bx1 = b->rect_params.left;
+                    float by1 = b->rect_params.top;
+                    float bw  = b->rect_params.width;
+                    float bh  = b->rect_params.height;
+                    if (bw <=0 || bh <=0) { keep->data[j]=0; continue; }
+                    float bx2 = bx1 + bw; float by2 = by1 + bh;
+                    float ix1 = ax1 > bx1 ? ax1 : bx1;
+                    float iy1 = ay1 > by1 ? ay1 : by1;
+                    float ix2 = ax2 < bx2 ? ax2 : bx2;
+                    float iy2 = ay2 < by2 ? ay2 : by2;
+                    float iw = ix2 - ix1; float ih = iy2 - iy1;
+                    if (iw <= 0 || ih <= 0) continue;
+                    float inter = iw * ih;
+                    float uni = aw*ah + bw*bh - inter;
+                    float iou = (uni <= 0.f) ? 0.f : inter / uni;
+                    if (iou > IOU_THRESH) {
+                        keep->data[j] = 0; // 抑制低置信度的 (排序保证 j>i 置信度不高于 i)
+                    }
+                }
+            }
+            // 删除被抑制的 meta
+            for (guint i=0;i<n;i++) {
+                if (!keep->data[i]) {
+                    NvDsObjectMeta *o = g_array_index(objs, NvDsObjectMeta*, i);
+                    nvds_remove_obj_meta_from_frame(frame_meta, o);
+                }
+            }
+            g_byte_array_unref(keep);
+        }
+        g_array_free(objs, TRUE);
+    }
+
+    // 边界 clamp + 最小尺寸过滤 (>=4) 确保后续 SGIE/OSD 安全
+    for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame; l_frame = l_frame->next) {
+        NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)l_frame->data;
+        gint frame_w = frame_meta->source_frame_width;
+        gint frame_h = frame_meta->source_frame_height;
+        if (frame_w <= 0 || frame_h <= 0) continue;
+        for (NvDsMetaList *l_obj_it = frame_meta->obj_meta_list; l_obj_it != NULL; ) {
+            NvDsMetaList *l_next = l_obj_it->next;
+            NvDsObjectMeta *obj = (NvDsObjectMeta *)l_obj_it->data;
+            NvOSD_RectParams *r = &obj->rect_params;
+            if (r->left < 0) r->left = 0;
+            if (r->top  < 0) r->top  = 0;
+            if (r->width < 0) r->width = 0;
+            if (r->height < 0) r->height = 0;
+            if (r->left + r->width > frame_w) {
+                r->width = frame_w - r->left;
+                if (r->width < 0) r->width = 0;
+            }
+            if (r->top + r->height > frame_h) {
+                r->height = frame_h - r->top;
+                if (r->height < 0) r->height = 0;
+            }
+            if (r->width < 4 || r->height < 4) {
+                nvds_remove_obj_meta_from_frame(frame_meta, obj);
+            }
+            l_obj_it = l_next;
+        }
+    }
+
+    // 后续自定义变换（示例：把检测框扩大一倍）
     change_gieoutput(appCtx, batch_meta);
 
 #ifdef ENABLE_OBJ_SAVE
@@ -1701,6 +1822,115 @@ done:
     return ret;
 }
 
+/* 创建并插入自定义 udpmulticast 源到 pipeline (简单版：单独一个源 -> streammux) */
+/* 独立的 udpmulticast 分支（不接入主视频推理链） */
+static GstFlowReturn on_udpmulticast_sample(GstElement *sink, AppCtx *appCtx)
+{
+    GstSample *sample = NULL;
+    g_signal_emit_by_name(sink, "pull-sample", &sample);
+    if (!sample)
+        return GST_FLOW_OK;
+    /* 调试：每次收到 sample 都打印一次（可按需改为取模减少日志） */
+    static guint frame_cnt = 0;
+    GstBuffer *buf = gst_sample_get_buffer(sample);
+    gsize size = 0;
+    if (buf) {
+        GstMapInfo map;
+        if (gst_buffer_map(buf, &map, GST_MAP_READ)) {
+            size = map.size;
+            gst_buffer_unmap(buf, &map);
+        }
+    }
+    g_print("[udpmulticast] new-sample #%u buffer-size=%zu bytes\n", ++frame_cnt, size);
+    /* TODO: 在这里解析真实业务数据（当前插件还未把 UDP 载荷填入 buffer，仅生成黑帧） */
+    gst_sample_unref(sample);
+    return GST_FLOW_OK;
+}
+
+static gboolean
+add_udpmulticast_source(AppCtx *appCtx)
+{
+    NvDsConfig *config = &appCtx->config;
+    if (!config->udpmulticast_config.enable)
+        return TRUE; /* 未启用直接返回 */
+
+    /* --- 调试辅助：记录函数进入 --- */
+    g_print("[udpsrc-multicast] add_udpmulticast_source() enter\n");
+
+    /* 改为使用内置 udpsrc 直接加入组播，不再依赖自定义插件 */
+    GstElement *udpsrc = gst_element_factory_make("udpsrc", "app_udpmulticast_src");
+    GstElement *queue = gst_element_factory_make("queue", "udpmulti_queue");
+    GstElement *sink = gst_element_factory_make("appsink", "udpmulti_sink");
+    if (!udpsrc || !queue || !sink)
+    {
+        NVGSTDS_ERR_MSG_V("Failed to create udpmulticast branch elements");
+        return FALSE;
+    }
+
+    if (config->udpmulticast_config.multicast_ip) {
+        g_object_set(G_OBJECT(udpsrc), "multicast-group", config->udpmulticast_config.multicast_ip, NULL);
+    }
+    if (config->udpmulticast_config.port)
+        g_object_set(G_OBJECT(udpsrc), "port", config->udpmulticast_config.port, NULL);
+    /* iface: 若提供的是网卡名(如 eth0), 直接赋给 multicast-iface; 如果看起来像 IPv4 地址, 做提示 */
+    if (config->udpmulticast_config.iface) {
+        const gchar *iface = config->udpmulticast_config.iface;
+        gboolean looks_ip = FALSE;
+        int dot_cnt = 0; for (const char *p = iface; *p; ++p) if (*p=='.') dot_cnt++;
+        if (dot_cnt == 3) looks_ip = TRUE; /* 粗略判断 */
+        if (looks_ip) {
+            g_print("[udpsrc-multicast][warn] iface='%s' 像是IP地址; udpsrc 的 multicast-iface 期望网卡名 (如 eth0). 建议改为设备名.\n", iface);
+        }
+        g_object_set(G_OBJECT(udpsrc), "multicast-iface", iface, NULL);
+    }
+    /* auto-multicast 让 udpsrc 自动 bind 与 setsockopt */
+    g_object_set(G_OBJECT(udpsrc), "auto-multicast", TRUE, NULL);
+    /* 允许地址重用 (多个监听 / 容器重启) */
+    g_object_set(G_OBJECT(udpsrc), "reuse", TRUE, NULL);
+    if (config->udpmulticast_config.recv_buf_size)
+        g_object_set(G_OBJECT(udpsrc), "buffer-size", config->udpmulticast_config.recv_buf_size, NULL);
+
+    /* 可选：设置超时时间（毫秒）-> 如果想让套接字更快产出数据或探测空闲，可用 timeout 属性 (GStreamer 1.22+ 支持) */
+#ifdef GST_1_22
+    g_object_set(G_OBJECT(udpsrc), "timeout", (guint64)5 * 1000 * 1000 * 1000ULL, NULL); /* 5s 无数据发送 GST_EVENT_EOS (调试可关闭) */
+#endif
+
+    /* queue 做节流，防止阻塞 (50Hz+ 可以适当调小缓冲) */
+    // g_object_set(G_OBJECT(queue), "max-size-buffers", 100, "leaky", 2, NULL);
+
+    /* appsink 设置 */
+    g_object_set(G_OBJECT(sink), "emit-signals", TRUE, "sync", FALSE, NULL);
+    g_signal_connect(sink, "new-sample", G_CALLBACK(on_udpmulticast_sample), appCtx);
+
+    GstElement *pipeline = appCtx->pipeline.pipeline;
+    gst_bin_add_many(GST_BIN(pipeline), udpsrc, queue, sink, NULL);
+    if (!gst_element_link_many(udpsrc, queue, sink, NULL))
+    {
+        NVGSTDS_ERR_MSG_V("Failed to link udpmulticast branch elements");
+        return FALSE;
+    }
+
+    /* 同步状态 */
+    gst_element_sync_state_with_parent(udpsrc);
+    gst_element_sync_state_with_parent(queue);
+    gst_element_sync_state_with_parent(sink);
+    /* 在源 pad 上加探针 */
+    // GstPad *srcpad = gst_element_get_static_pad(udpsrc, "src");
+    // if (srcpad) {
+    //     gst_pad_add_probe(srcpad, GST_PAD_PROBE_TYPE_BUFFER, udpsrc_probe_cb, NULL, NULL);
+    //     gst_object_unref(srcpad);
+    // }
+
+    /* 打印最终属性 */
+    gchar *group = NULL; gchar *iface = NULL; gboolean auto_mc = FALSE; gboolean reuse = FALSE; gint port = 0; guint bufsize=0;
+    g_object_get(udpsrc, "multicast-group", &group, "multicast-iface", &iface, "auto-multicast", &auto_mc, "reuse", &reuse, "port", &port, "buffer-size", &bufsize, NULL);
+    g_print("[udpsrc-multicast] started group=%s port=%d iface=%s auto=%d reuse=%d bufsize=%u (NOT linked to streammux)\n",
+            group?group:"(null)", port, iface?iface:"(null)", auto_mc, reuse, bufsize);
+    if (group) g_free(group); if (iface) g_free(iface);
+
+    return TRUE;
+}
+
 /**
  * Function to create common elements(Primary infer, tracker, secondary infer)
  * of the pipeline. These components operate on muxed data from all the
@@ -2072,51 +2302,50 @@ create_pipeline(AppCtx *appCtx,
     }
 
     /* --- BEGIN: UDP JSON 控制报文接收分支 --- */
-    {
-        GstElement *udp_ctrl_src = gst_element_factory_make("udpsrc", "udp_ctrl_src");
-        GstElement *queue = gst_element_factory_make("queue", "ctrl_queue");
-        GstElement *caps_json = gst_element_factory_make("capsfilter", "caps_json");
-        GstElement *json_sink = gst_element_factory_make("appsink", "json_ctrl_sink");
+    // {
+    //     GstElement *udp_ctrl_src =
+    //         gst_element_factory_make("udpsrc", "udp_ctrl_src");
+    //     GstElement *queue = gst_element_factory_make("queue", "ctrl_queue");
+    //     GstElement *caps_json =
+    //         gst_element_factory_make("capsfilter", "caps_json");
+    //     GstElement *json_sink =
+    //         gst_element_factory_make("appsink", "json_ctrl_sink");
 
-        if (!udp_ctrl_src || !caps_json || !json_sink || !queue)
-        {
-            NVGSTDS_ERR_MSG_V("Failed to create UDP control elements");
-            goto done;
-        }
+    //     if (!udp_ctrl_src || !caps_json || !json_sink || !queue)
+    //     {
+    //         NVGSTDS_ERR_MSG_V("Failed to create UDP control elements");
+    //         goto done;
+    //     }
 
-        // leaky=2 表示丢弃最新数据（downstream），leaky=1 表示丢弃最旧数据（upstream）。
-        g_object_set(G_OBJECT(queue),
-                     "max-size-buffers", 10,
-                     "leaky", 1, NULL);
+    //     // leaky=2 表示丢弃最新数据（downstream），leaky=1
+    //     // 表示丢弃最旧数据（upstream）。
+    //     g_object_set(G_OBJECT(queue), "max-size-buffers", 10, "leaky", 1, NULL);
 
-        /* 设置 UDP 接收端口或组播组 */
-        g_object_set(G_OBJECT(udp_ctrl_src),
-                     "multicast-group", "239.255.255.250",
-                     "port", 5000,
-                     "auto-multicast", TRUE,
-                     NULL);
+    //     /* 设置 UDP 接收端口或组播组 */
+    //     g_object_set(G_OBJECT(udp_ctrl_src), "multicast-group",
+    //                  "239.255.255.250", "port", 5000, "auto-multicast", TRUE,
+    //                  NULL);
 
-    GstCaps *caps = gst_caps_new_empty_simple("application/x-json");
-        g_object_set(caps_json, "caps", caps, NULL);
-        gst_caps_unref(caps);
+    //     GstCaps *caps = gst_caps_new_empty_simple("application/x-json");
+    //     g_object_set(caps_json, "caps", caps, NULL);
+    //     gst_caps_unref(caps);
 
-        /* appsink 配置：异步接收并回调处理 */
-        g_object_set(G_OBJECT(json_sink),
-                     "emit-signals", TRUE,
-                     "sync", FALSE,
-                     NULL);
-        g_signal_connect(json_sink, "new-sample",
-                         G_CALLBACK(on_control_data), appCtx);
+    //     /* appsink 配置：异步接收并回调处理 */
+    //     g_object_set(G_OBJECT(json_sink), "emit-signals", TRUE, "sync", FALSE,
+    //                  NULL);
+    //     g_signal_connect(json_sink, "new-sample", G_CALLBACK(on_control_data),
+    //                      appCtx);
 
-        /* 加入 pipeline 并链接 */
-        gst_bin_add_many(GST_BIN(pipeline->pipeline),
-                         udp_ctrl_src, queue, caps_json, json_sink, NULL);
-        if (!gst_element_link_many(udp_ctrl_src, queue, caps_json, json_sink, NULL))
-        {
-            NVGSTDS_ERR_MSG_V("Failed to link UDP JSON control elements");
-            goto done;
-        }
-    }
+    //     /* 加入 pipeline 并链接 */
+    //     gst_bin_add_many(GST_BIN(pipeline->pipeline), udp_ctrl_src, queue,
+    //                      caps_json, json_sink, NULL);
+    //     if (!gst_element_link_many(udp_ctrl_src, queue, caps_json, json_sink,
+    //                                NULL))
+    //     {
+    //         NVGSTDS_ERR_MSG_V("Failed to link UDP JSON control elements");
+    //         goto done;
+    //     }
+    // }
     /* --- END: UDP JSON 控制报文接收分支 --- */
 
     for (guint i = 0; i < config->num_sink_sub_bins; i++)
@@ -2210,6 +2439,13 @@ create_pipeline(AppCtx *appCtx,
             goto done;
     }
     gst_bin_add(GST_BIN(pipeline->pipeline), pipeline->multi_src_bin.bin);
+
+    /* 如果启用了[udpmulticast]，在streammux之后添加 */
+    if (!add_udpmulticast_source(appCtx))
+    {
+        NVGSTDS_ERR_MSG_V("add_udpmulticast_source failed");
+        goto done;
+    }
 
     if (config->streammux_config.is_parsed)
     {

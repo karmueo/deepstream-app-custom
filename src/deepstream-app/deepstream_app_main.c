@@ -1364,6 +1364,8 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
                                  NvDsBatchMeta *batch_meta, guint index)
 {
     int srcIndex = appCtx->active_source_index;
+    // if (srcIndex == -1)
+    //     return TRUE;
 
     /* 为每个对象生成完整的分类标签(概率)文本，覆盖原来的 bbox_generated_probe_after_analytics 中逻辑 */
     for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame != NULL; l_frame = l_frame->next)

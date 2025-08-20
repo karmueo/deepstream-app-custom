@@ -803,6 +803,11 @@ parse_config_file(NvDsConfig *config, gchar *cfg_file_path)
             parse_err = !parse_videorecognition(&config->videorecognition_config, cfg_file);
         }
 
+        if (!g_strcmp0(*group, CONFIG_GROUP_UDPMULTICAST))
+        {
+            parse_err = !parse_udpmulticast(&config->udpmulticast_config, cfg_file);
+        }
+
         if (!g_strcmp0(*group, CONFIG_GROUP_MSG_CONVERTER))
         {
             parse_err =
