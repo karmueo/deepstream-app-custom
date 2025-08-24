@@ -1,11 +1,12 @@
 [application]
 enable-perf-measurement=1
 perf-measurement-interval-sec=5
+enable-jpeg-save=1
 
 [source0]
 enable=1
 type=4
-uri=rtsp://192.168.1.80/live/rgb
+uri=rtsp://admin:12345yyz@192.168.1.21:554/h264/ch1/main/av_stream
 #rtsp://192.168.1.80/live/rgb
 #rtsp://admin:12345yyz@192.168.1.21:554/h264/ch1/main/av_stream
 #rtsp://192.168.2.9:8554/ds-test
@@ -19,7 +20,7 @@ cudadec-memtype=0
 rtsp-reconnect-interval-sec=3
 rtsp-reconnect-attempts=-1
 latency=500
-select-rtp-protocol=4
+select-rtp-protocol=0
 smart-record=3
 smart-rec-dir-path=/workspace/deepstream-app-custom/smart_rec_rgb
 smart-rec-duration=20
@@ -108,7 +109,7 @@ attach-sys-ts-as-ntp=0
 
 [pre-process]
 enable=1
-config-file=config_preprocess.txt
+config-file=config_preprocess_rgb_primary.txt
 
 # 直接推理
 [primary-gie]
@@ -149,7 +150,7 @@ tracker-height=1080
 ll-lib-file=/opt/nvidia/deepstream/deepstream/lib/libsot.so
 ll-config-file=config_sot.yml
 gpu-id=0
-display-tracking-id=0
+display-tracking-id=1
 
 # [secondary-pre-process0]
 # enable=0
@@ -173,12 +174,17 @@ enable=0
 unique-id=15
 gpu-id=0
 nvbuf-memory-type=3
-processing-width=32
-processing-height=32
+#processing-width=32
+#processing-height=32
+processing-width=224
+processing-height=224
 model-clip-length=8
 # keep-aspect-ratio=1
 num-clips=4
-trt-engine-file=/workspace/deepstream-app-custom/src/deepstream-app/models/yolov11m_classify_rgb_fp32.engine
+# model-type: 0=multi-frame image classification (默认), 1=video recognition
+model-type=1
+#trt-engine-file=/workspace/deepstream-app-custom/src/deepstream-app/models/yolov11m_classify_rgb_b4_v2_fp16.engine
+trt-engine-file=/workspace/deepstream-app-custom/src/gst-videorecognition/models/uniformerv2_softmax_rgb_fp16.engine
 
 
 [tests]

@@ -1,6 +1,7 @@
 [application]
 enable-perf-measurement=1
 perf-measurement-interval-sec=5
+enable-jpeg-save=1
 
 [tiled-display]
 enable=0
@@ -14,7 +15,8 @@ nvbuf-memory-type=0
 [source0]
 enable=1
 type=4
-uri=rtsp://192.168.1.80/live/test
+uri=rtsp://admin:12345yyz@192.168.1.21:554/h264/ch1/main/av_stream
+#rtsp://admin:12345yyz@192.168.1.21:554/h264/ch1/main/av_stream
 #rtsp://192.168.1.80/live/test
 #rtsp://192.168.1.193:25544/live/test
 #rtsp://192.168.1.193:25544/live/test
@@ -143,7 +145,7 @@ enable-padding=1
 
 [pre-process]
 enable=1
-config-file=config_preprocess.txt
+config-file=config_preprocess_ir_primary.txt
 
 # 直接推理
 [primary-gie]
@@ -211,7 +213,7 @@ plugin-type=0
 # input-tensor-meta=1
 # nvinferserserver's gpu-id can only set from its own config-file
 gpu-id=0
-batch-size=1
+batch-size=4
 gie-unique-id=4
 operate-on-gie-id=1
 # operate-on-class-ids=0;1;2
@@ -238,7 +240,9 @@ processing-width=32
 processing-height=32
 model-clip-length=8
 num-clips=4
-trt-engine-file=/workspace/deepstream-app-custom/src/deepstream-app/models/yolov11m_classify_ir_fp32.engine
+# model-type: 0=multi-frame image classification (默认), 1=video recognition
+model-type=0
+trt-engine-file=/workspace/deepstream-app-custom/src/deepstream-app/models/yolov11m_classify_ir_b4_v2_fp16.engine
 
 # 新增的 UDP Multicast 源配置示例
 [udpmulticast]
