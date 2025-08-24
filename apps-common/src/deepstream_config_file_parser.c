@@ -677,18 +677,35 @@ parse_source(NvDsSourceConfig *config, GKeyFile *key_file, gchar *group,
                 g_key_file_get_string(key_file, group,
                                       CONFIG_GROUP_SOURCE_SMART_RECORD_DIRPATH, &error);
             CHECK_ERROR(error);
-
+            /* 若目录不存在则尝试自动创建 */
             if (access(config->dir_path, W_OK))
             {
                 if (errno == ENOENT || errno == ENOTDIR)
                 {
-                    g_print("ERROR: Directory (%s) doesn't exist.\n", config->dir_path);
+                    if (g_mkdir_with_parents(config->dir_path, 0775) != 0)
+                    {
+                        g_print("ERROR: Failed to create directory %s (errno=%d)\n", config->dir_path, errno);
+                        goto done;
+                    }
+                    else
+                    {
+                        g_print("Created smart record directory: %s\n", config->dir_path);
+                    }
                 }
-                else if (errno == EACCES)
+
+                /* 再次检测写权限 */
+                if (access(config->dir_path, W_OK))
                 {
-                    g_print("ERROR: No write permission in %s\n", config->dir_path);
+                    if (errno == EACCES)
+                    {
+                        g_print("ERROR: No write permission in %s\n", config->dir_path);
+                    }
+                    else
+                    {
+                        g_print("ERROR: Directory %s not writable (errno=%d)\n", config->dir_path, errno);
+                    }
+                    goto done;
                 }
-                goto done;
             }
         }
         else if (!g_strcmp0(*key, CONFIG_GROUP_SOURCE_SMART_RECORD_FILE_PREFIX))
