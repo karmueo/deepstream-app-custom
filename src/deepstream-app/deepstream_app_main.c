@@ -537,16 +537,16 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
     guint             startTime = 7;
     guint             duration = 8;
 
-#ifdef ENABLE_JPEG_SAVE
-    GstMapInfo inmap = GST_MAP_INFO_INIT;
-    if (!gst_buffer_map(buf, &inmap, GST_MAP_READ))
-    {
-        GST_ERROR("input buffer mapinfo failed");
-        return;
+    NvBufSurface *ip_surf = NULL;
+    if (appCtx->config.enable_jpeg_save) {
+        GstMapInfo inmap = GST_MAP_INFO_INIT;
+        if (!gst_buffer_map(buf, &inmap, GST_MAP_READ)) {
+            GST_ERROR("input buffer mapinfo failed");
+            return;
+        }
+        ip_surf = (NvBufSurface *)inmap.data;
+        gst_buffer_unmap(buf, &inmap);
     }
-    NvBufSurface *ip_surf = (NvBufSurface *)inmap.data;
-    gst_buffer_unmap(buf, &inmap);
-#endif
 
     for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame != NULL;
          l_frame = l_frame->next)
@@ -554,7 +554,7 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
         NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)l_frame->data;
         stream_id = frame_meta->source_id;
 
-        if (appCtx->custom_msg_data)
+        /* if (appCtx->custom_msg_data)
         {
             guint64 custom_timest = appCtx->custom_msg_data->timestamp;
             // rtsp时间戳获取
@@ -567,7 +567,7 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                 gdouble ntp_unix = ntp_to_unix(ntp);
                 time_t  t = (time_t)ntp_unix;
             }
-        }
+        } */
 
         GList *l;
         for (l = frame_meta->obj_meta_list; l != NULL; l = l->next)
@@ -600,6 +600,44 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                                     // g_timeout_add(30000,
                                     // smart_record_event_generator, src_bin);
                                     smart_record_event_generator(src_bin);
+
+                                    if (appCtx->config.enable_jpeg_save && ip_surf) {
+                                        /* 5 秒节流：同一 source 在 5 秒内只执行一次保存 */
+                                        static GstClockTime last_save_pts_per_src[MAX_SOURCE_BINS] = {0};
+                                        guint sid = frame_meta->source_id;
+                                        if (sid < MAX_SOURCE_BINS) {
+                                            GstClockTime now_pts = frame_meta->buf_pts; /* 纳秒 */
+                                            if (last_save_pts_per_src[sid] == 0 ||
+                                                now_pts - last_save_pts_per_src[sid] >= 5 * GST_SECOND) {
+                                                last_save_pts_per_src[sid] = now_pts;
+                                                NvDsObjEncUsrArgs frameData = {0};
+                                                frameData.isFrame = 1;
+                                                frameData.saveImg = 1;
+                                                frameData.attachUsrMeta = FALSE;
+                                                frameData.scaleImg = FALSE;
+                                                frameData.scaledWidth = 0;
+                                                frameData.scaledHeight = 0;
+                                                frameData.quality = 100;
+                                                frameData.objNum = (int)obj_meta->object_id; /* 用跟踪ID/对象ID 作为 objNum */
+                                                frameData.calcEncodeTime = 0;
+                                                /* 自定义文件名: <sanitized-uri>_<pts_ms>_f<frame>_o<obj>.jpg */
+                                                const char *raw_uri = appCtx->config.multi_source_config[frame_meta->source_id].uri ? appCtx->config.multi_source_config[frame_meta->source_id].uri : "unknown";
+                                                char uri_sanitized[256];
+                                                size_t rlen = strlen(raw_uri);
+                                                if (rlen >= sizeof(uri_sanitized)) rlen = sizeof(uri_sanitized)-1;
+                                                for (size_t si=0; si<rlen; ++si) {
+                                                    char c = raw_uri[si];
+                                                    if ((c>='a'&&c<='z')||(c>='A'&&c<='Z')||(c>='0'&&c<='9')) uri_sanitized[si]=c; else uri_sanitized[si]='_';
+                                                }
+                                                uri_sanitized[rlen]='\0';
+                                                unsigned long long pts_ms = (unsigned long long)(frame_meta->buf_pts/1000000ULL);
+                                                snprintf(frameData.fileNameImg, sizeof(frameData.fileNameImg),
+                                                         "%s_%llu_f%u_o%d.jpg", uri_sanitized, pts_ms, frame_meta->frame_num, frameData.objNum);
+                                                nvds_obj_enc_process((gpointer)appCtx->obj_ctx_handle,
+                                                                    &frameData, ip_surf, obj_meta, frame_meta);
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -607,7 +645,8 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                 }
             }
 
-            /* NOTE: 分类显示逻辑已移至 overlay_graphics 中统一处理，这里不再拼接文本。 */
+            /* NOTE: 分类显示逻辑已移至 overlay_graphics
+             * 中统一处理，这里不再拼接文本。 */
 
             /* 分类结果历史加权平滑：仅在 tracker 与 secondary-gie 开启时启用 */
             gboolean tracker_on = appCtx->config.tracker_config.enable;
@@ -841,29 +880,11 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                 g_print("Error in attaching event meta to buffer\n");
             }
         }
-#ifdef ENABLE_JPEG_SAVE
-        NvDsObjEncUsrArgs frameData = {0};
-        frameData.isFrame = 0;
-        /* To be set by user */
-        frameData.saveImg = 1;
-        frameData.attachUsrMeta = FALSE;
-        /* Set if Image scaling Required */
-        frameData.scaleImg = FALSE;
-        frameData.scaledWidth = 0;
-        frameData.scaledHeight = 0;
-        /* Quality */
-        frameData.quality = 100;
-        /* Set to calculate time taken to encode JPG image. */
-        frameData.calcEncodeTime = 0;
-        /*Main Function Call */
-        nvds_obj_enc_process((gpointer)appCtx->obj_ctx_handle, &frameData,
-                             ip_surf, obj_meta, frame_meta);
-#endif
     }
 
-#ifdef ENABLE_JPEG_SAVE
-    nvds_obj_enc_finish((gpointer)appCtx->obj_ctx_handle);
-#endif
+    if (appCtx->config.enable_jpeg_save) {
+        nvds_obj_enc_finish((gpointer)appCtx->obj_ctx_handle);
+    }
 
     /* NvDsMetaList *l_user_meta = NULL;
     NvDsUserMeta *user_meta = NULL;

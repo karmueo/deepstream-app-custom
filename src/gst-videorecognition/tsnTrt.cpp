@@ -13,27 +13,35 @@ tsnTrt::~tsnTrt()
         delete[] this->output_;
         this->output_ = nullptr;
     }
+    if (output_dev_buffer_)
+    {
+        cudaFree(output_dev_buffer_);
+        output_dev_buffer_ = nullptr;
+    }
 }
 
 bool tsnTrt::prepare_output(const std::string &output_name)
 {
     assert(engine_->getTensorDataType(output_name.c_str()) == nvinfer1::DataType::kFLOAT);
 
-    // 应该等于类别数量
-    auto out_dims = this->engine_->getTensorShape("/Softmax_output_0");
+    // 如果已经准备过（设备缓冲区存在）直接返回成功
+    if (output_dev_buffer_ != nullptr && this->output_size_ > 0)
+    {
+        // 再次绑定一次以防上下文重置
+        return context_->setTensorAddress(output_name.c_str(), output_dev_buffer_);
+    }
 
+    auto out_dims = this->engine_->getTensorShape("/Softmax_output_0");
     int output_num = 1;
     for (int j = 0; j < out_dims.nbDims; j++)
-    {
         output_num *= out_dims.d[j];
-    }
-    this->output_ = new float[output_num];
+
+    // 只分配一次主机缓存
+    if (!this->output_)
+        this->output_ = new float[output_num];
     this->output_size_ = output_num * sizeof(float);
     CHECK(cudaMalloc(&output_dev_buffer_, this->output_size_));
-
-    bool res = context_->setTensorAddress(output_name.c_str(), output_dev_buffer_);
-
-    return res;
+    return context_->setTensorAddress(output_name.c_str(), output_dev_buffer_);
 }
 
 bool tsnTrt::prepare_input(const std::string &input_name,
@@ -58,6 +66,12 @@ bool tsnTrt::prepare_input(const std::string &input_name,
     }
     assert(input_num * sizeof(float) == input_size);
 
+    // 若上一次输入缓冲尚未释放，先释放（理论上 get_output 会释放）
+    if (intput_dev_buffer_)
+    {
+        CHECK(cudaFree(intput_dev_buffer_));
+        intput_dev_buffer_ = nullptr;
+    }
     CHECK(cudaMalloc(&intput_dev_buffer_, input_size));
     // DMA（直接内存访问）输入批处理数据到设备，在异步上推断批处理，然后DMA输出回到主机
     CHECK(cudaMemcpyAsync(intput_dev_buffer_, input_data, input_size, cudaMemcpyHostToDevice, stream_));
@@ -69,16 +83,20 @@ bool tsnTrt::prepare_input(const std::string &input_name,
 
 void tsnTrt::get_output(float *output_data)
 {
+    if (!output_dev_buffer_)
+    {
+        std::cerr << "[tsnTrt] get_output called with null output_dev_buffer_" << std::endl;
+        return;
+    }
     CHECK(cudaMemcpyAsync(output_data, output_dev_buffer_, this->output_size_, cudaMemcpyDeviceToHost, stream_));
+    cudaStreamSynchronize(stream_); // 等待复制完成
 
-    // 等待流完成
-    cudaStreamSynchronize(stream_);
-
-    // release buffers
-    CHECK(cudaFree(intput_dev_buffer_));
-    CHECK(cudaFree(output_dev_buffer_));
-    intput_dev_buffer_ = nullptr;
-    output_dev_buffer_ = nullptr;
+    // 仅释放一次性输入缓冲，输出缓冲保留供下次推理复用
+    if (intput_dev_buffer_)
+    {
+        CHECK(cudaFree(intput_dev_buffer_));
+        intput_dev_buffer_ = nullptr;
+    }
 }
 
 RECOGNITION tsnTrt::parse_output(const float *output_data)

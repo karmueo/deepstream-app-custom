@@ -1442,7 +1442,7 @@ gie_primary_processing_done_buf_prob(GstPad *pad, GstPadProbeInfo *info,
     }
 
     // 后续自定义变换（示例：把检测框扩大一倍）
-    change_gieoutput(appCtx, batch_meta);
+    // change_gieoutput(appCtx, batch_meta);
 
 #ifdef ENABLE_OBJ_SAVE
     GstMapInfo inmap = GST_MAP_INFO_INIT;

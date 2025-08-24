@@ -120,6 +120,7 @@ extern "C"
         gchar   *reid_track_dir_path;
         gchar   *terminated_track_output_path;
         gchar   *shadow_track_output_path;
+        gboolean enable_jpeg_save; /* runtime JPEG save switch */
 
         gchar              **uri_list;
         gchar              **sensor_id_list;

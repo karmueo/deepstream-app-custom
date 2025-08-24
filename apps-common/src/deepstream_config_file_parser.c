@@ -1144,6 +1144,9 @@ parse_videorecognition(NvDsVideoRecognitionConfig *config, GKeyFile *key_file)
     gchar **key = NULL;
     GError *error = NULL;
 
+    // 默认值：0 = multi-frame image classification
+    config->model_type = 0;
+
     keys = g_key_file_get_keys(key_file, CONFIG_GROUP_VIDEORECOGNITION, NULL, &error);
     CHECK_ERROR(error);
     for (key = keys; *key; key++)
@@ -1209,6 +1212,13 @@ parse_videorecognition(NvDsVideoRecognitionConfig *config, GKeyFile *key_file)
             config->model_num_clips =
                 g_key_file_get_integer(key_file, CONFIG_GROUP_VIDEORECOGNITION,
                                        "num-clips", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "model-type"))
+        {
+            config->model_type =
+                g_key_file_get_integer(key_file, CONFIG_GROUP_VIDEORECOGNITION,
+                                       "model-type", &error);
             CHECK_ERROR(error);
         }
         else if (!g_strcmp0(*key, "trt-engine-file"))

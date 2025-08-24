@@ -74,6 +74,8 @@ struct _Gstvideorecognition
     int cls_window_count = 0;           // 已填充帧数 (<= window_size)
     // 分类器 TensorRT 引擎路径（来自 trt-engine-name 属性）
     char trt_engine_name[512];
+    // 0 = 多帧图片分类模式 (默认)，1 = 视频时序识别模式
+    gint model_type;
 };
 
 struct _GstvideorecognitionClass
