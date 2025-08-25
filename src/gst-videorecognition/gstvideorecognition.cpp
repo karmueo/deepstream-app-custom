@@ -539,15 +539,6 @@ static void gst_videorecognition_init(Gstvideorecognition *self)
     self->frame_classifier =
         nullptr; // 延迟到 set_property 根据 model-type 初始化
     self->video_recognition = nullptr;
-    // 如果默认是分类模式，初始化分类器
-    if (self->model_type == 0)
-    {
-        self->frame_classifier = new ImageClsTrt(self->trt_engine_name);
-        if (!self->frame_classifier->prepare())
-        {
-            g_printerr("[videorecognition] frame classifier prepare failed\n");
-        }
-    }
     memset(self->frame_cls_scores, 0, sizeof(self->frame_cls_scores));
     // 初始化单目标分类窗口参数
     self->cls_window_size = 10; // 保底
