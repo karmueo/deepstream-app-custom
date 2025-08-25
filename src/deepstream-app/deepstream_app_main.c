@@ -1411,16 +1411,72 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
             }
             if (gstr->len > 0)
             {
+                /* 改进：
+                 * 1) 根据目标尺寸自适应缩小字体，避免小框被整块文字遮住。
+                 * 2) 小目标时尝试把标签放在框外（先上方, 若不足则下方）。
+                 * 3) 背景半透明以减少遮挡感。 */
                 if (obj_meta->text_params.display_text)
                     g_free(obj_meta->text_params.display_text);
                 obj_meta->text_params.display_text = g_strdup(gstr->str);
-                obj_meta->text_params.x_offset = (gint)obj_meta->rect_params.left;
-                obj_meta->text_params.y_offset = MAX(0, (gint)obj_meta->rect_params.top - 12);
-                obj_meta->text_params.font_params.font_color = (NvOSD_ColorParams){1.0,1.0,1.0,1.0};
-                obj_meta->text_params.font_params.font_size = 12;
+
+                int frame_w = frame_meta->source_frame_width > 0 ? frame_meta->source_frame_width : 1920;
+                int frame_h = frame_meta->source_frame_height > 0 ? frame_meta->source_frame_height : 1080;
+
+                float bw = obj_meta->rect_params.width;
+                float bh = obj_meta->rect_params.height;
+                float min_side = bw < bh ? bw : bh;
+                int base_font = appCtx->config.osd_config.text_size > 0 ? appCtx->config.osd_config.text_size : 12;
+                float scale = 1.0f;
+                if (min_side < 40) scale = 0.6f; else if (min_side < 80) scale = 0.8f; /* 可根据需要再细化 */
+                int font_size = (int)(base_font * scale);
+                if (font_size < 8) font_size = 8; /* 最小字号 */
+
+                obj_meta->text_params.font_params.font_color = (NvOSD_ColorParams){1.0f,1.0f,1.0f,1.0f};
+                obj_meta->text_params.font_params.font_size = font_size;
                 obj_meta->text_params.font_params.font_name = "Serif";
                 obj_meta->text_params.set_bg_clr = 1;
-                obj_meta->text_params.text_bg_clr = (NvOSD_ColorParams){0,0,0,0.6};
+                /* 透明度稍低，减轻遮挡 (A=0.4) */
+                obj_meta->text_params.text_bg_clr = (NvOSD_ColorParams){0.f,0.f,0.f,0.4f};
+
+                /* 估算文本高度：字号 + 顶/底边距(简单) */
+                int text_h = font_size + 4;
+                int x = (int)obj_meta->rect_params.left;
+                if (x < 0) x = 0;
+                if (x > frame_w - 4) x = frame_w - 4;
+
+                /* 判断小目标比例阈值（例如 <1% 认为小） */
+                float area_ratio = (bw * bh) / ((float)frame_w * (float)frame_h + 1e-3f);
+                int y;
+                if (area_ratio < 0.01f) {
+                    /* 优先放在框外上方 */
+                    int y_above = (int)obj_meta->rect_params.top - text_h - 2;
+                    if (y_above >= 0) {
+                        y = y_above;
+                    } else {
+                        /* 上面放不下，放框下方 */
+                        y = (int)(obj_meta->rect_params.top + obj_meta->rect_params.height + 2);
+                        if (y > frame_h - text_h) y = frame_h - text_h;
+                    }
+                } else {
+                    /* 大一点的框，仍尝试放到上方内部或外侧 */
+                    int y_try = (int)obj_meta->rect_params.top - text_h - 2;
+                    if (y_try < 0) {
+                        y = (int)obj_meta->rect_params.top + 2; /* 放到框内靠上 */
+                        if (y + text_h > frame_h) y = frame_h - text_h;
+                    } else {
+                        y = y_try;
+                    }
+                }
+                obj_meta->text_params.x_offset = x;
+                obj_meta->text_params.y_offset = y;
+
+                /* 如果目标极窄而文本会超出右边界，可左移 */
+                int estimated_text_w = (int)(strlen(obj_meta->text_params.display_text) * font_size * 0.55f);
+                if (estimated_text_w > 0 && x + estimated_text_w > frame_w) {
+                    int new_x = frame_w - estimated_text_w - 2;
+                    if (new_x < 0) new_x = 0;
+                    obj_meta->text_params.x_offset = new_x;
+                }
             }
             g_string_free(gstr, TRUE);
         }
