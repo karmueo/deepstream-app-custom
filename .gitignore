@@ -27,3 +27,4 @@ src/gst-videorecognition/output.bin
 smart_rec/*
 *.cache
 src/trt_classify
+*.out
