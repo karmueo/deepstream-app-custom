@@ -24,6 +24,7 @@
 #include <gst/gstinfo.h>
 #include "nvbufsurface.h"
 #include "gstmynetwork.h"
+
 #include "cuda_runtime_api.h"
 #include <math.h>
 #include <map>
@@ -60,7 +61,9 @@ enum
 enum
 {
     PROP_0,
-    PROP_SILENT
+    PROP_SILENT,
+    PROP_IP,
+    PROP_PORT
 };
 
 /* the capabilities of the inputs and outputs.
@@ -123,6 +126,17 @@ gst_mynetwork_class_init(GstmynetworkClass *klass)
                                          "ShenChangli "
                                          "@ karmueo@163.com");
 
+    /* install properties */
+    g_object_class_install_property(gobject_class, PROP_SILENT,
+                                    g_param_spec_boolean("silent", "Silent", "Produce verbose output ?",
+                                                         TRUE, G_PARAM_READWRITE));
+    g_object_class_install_property(gobject_class, PROP_IP,
+                                    g_param_spec_string("ip", "Multicast IP", "Multicast destination IP",
+                                                       "239.255.255.250", (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(gobject_class, PROP_PORT,
+                                    g_param_spec_uint("port", "Multicast Port", "Multicast destination port",
+                                                     1, 65535, 5000, (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
     _detctAnalysis.minPixel = 9999;
 }
 
@@ -140,6 +154,9 @@ gst_mynetwork_init(Gstmynetwork *self)
 {
     // 初始化一些参数
     self->gpu_id = 0;
+    // default values
+    self->ip = g_strdup("239.255.255.250");
+    self->port = 5000;
 
     // 创建UDP Socket
     self->sockfd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -152,8 +169,8 @@ gst_mynetwork_init(Gstmynetwork *self)
     // 设置组播地址
     memset(&self->multicast_addr, 0, sizeof(self->multicast_addr));
     self->multicast_addr.sin_family = AF_INET;
-    self->multicast_addr.sin_addr.s_addr = inet_addr("239.255.255.250");
-    self->multicast_addr.sin_port = htons(5000);
+    self->multicast_addr.sin_addr.s_addr = inet_addr(self->ip);
+    self->multicast_addr.sin_port = htons(self->port);
 
     // 设置TTL（可选）
     int ttl = 32;
@@ -213,8 +230,8 @@ gst_mynetwork_render(GstBaseSink *sink, GstBuffer *buf)
         guint source_width = frame_meta->source_frame_width;
         guint source_height = frame_meta->source_frame_height;
         // 计算视频中心点坐标
-        float center_x = source_width / 2;
-        float center_y = source_height / 2;
+    float center_x = (float)source_width / 2.0f;
+    float center_y = (float)source_height / 2.0f;
 
         NvOSD_RectParams rect_params;
 
@@ -233,14 +250,19 @@ gst_mynetwork_render(GstBaseSink *sink, GstBuffer *buf)
                 {
                     obj2center_distance = distance;
                     memset(&send_data, 0, sizeof(send_data));
-                    send_data.class_id = obj_meta->class_id;
-                    send_data.confidence = obj_meta->confidence;
+                    // Detection info
+                    send_data.class_id = obj_meta->class_id;            // legacy field
+                    send_data.detect_class_id = obj_meta->class_id;     // explicit detection class id
+                    send_data.confidence = obj_meta->confidence;        // detection confidence
                     send_data.ntp_timestamp = frame_meta->ntp_timestamp;
                     send_data.source_id = frame_meta->source_id;
                     send_data.detect_info.left = obj_meta->rect_params.left;
                     send_data.detect_info.top = obj_meta->rect_params.top;
                     send_data.detect_info.width = obj_meta->rect_params.width;
                     send_data.detect_info.height = obj_meta->rect_params.height;
+                    // classification defaults
+                    send_data.classify_class_id = 0;
+                    send_data.classify_confidence = 0.0f;
                     center_obj_meta = obj_meta;
                 }
             }
@@ -262,24 +284,24 @@ gst_mynetwork_render(GstBaseSink *sink, GstBuffer *buf)
                 _detctAnalysis.primaryClassCountMap.insert(std::pair<guint16, guint>(center_obj_meta->class_id, 1));
             }
 
-            for (NvDsMetaList *l_class = center_obj_meta->classifier_meta_list; l_class != NULL;
-                 l_class = l_class->next)
+            // 处理二次分类，取第一个 classifier 的第一个 label 作为输出（若存在）
+            for (NvDsMetaList *l_class = center_obj_meta->classifier_meta_list; l_class != NULL; l_class = l_class->next)
             {
                 NvDsClassifierMeta *cmeta = (NvDsClassifierMeta *)l_class->data;
-                for (NvDsMetaList *l_label = cmeta->label_info_list; l_label != NULL;
-                     l_label = l_label->next)
+                for (NvDsMetaList *l_label = cmeta->label_info_list; l_label != NULL; l_label = l_label->next)
                 {
                     NvDsLabelInfo *label = (NvDsLabelInfo *)l_label->data;
-                    std::map<guint16, guint>::iterator it = _detctAnalysis.secondaryClassCountMap.find(label->result_class_id);
-                    if (it != _detctAnalysis.secondaryClassCountMap.end())
-                    {
-                        // 如果找到了，就+1
-                        it->second++;
-                    }
+                    // 统计计数
+                    auto it2 = _detctAnalysis.secondaryClassCountMap.find(label->result_class_id);
+                    if (it2 != _detctAnalysis.secondaryClassCountMap.end())
+                        it2->second++;
                     else
-                    {
-                        // 如果没找到，就插入一个新的
                         _detctAnalysis.secondaryClassCountMap.insert(std::pair<guint16, guint>(label->result_class_id, 1));
+                    // 若还未填充分类结果，则记录
+                    if (send_data.classify_class_id == 0)
+                    {
+                        send_data.classify_class_id = label->result_class_id;
+                        send_data.classify_confidence = label->result_prob;
                     }
                 }
             }
@@ -364,37 +386,64 @@ error:
     return FALSE;
 }
 
-void gst_mynetwork_set_property(GObject *object,
-                                guint property_id,
-                                const GValue *value,
-                                GParamSpec *pspec)
+static void gst_mynetwork_set_property(GObject *object,
+                                       guint property_id,
+                                       const GValue *value,
+                                       GParamSpec *pspec)
 {
     Gstmynetwork *self = GST_MYNETWORK(object);
-
-    GST_DEBUG_OBJECT(self, "set_property");
+    switch (property_id)
+    {
+    case PROP_SILENT:
+        /* self->silent = g_value_get_boolean(value); */
+        break;
+    case PROP_IP:
+        g_free(self->ip);
+        self->ip = g_value_dup_string(value);
+        if (self->ip)
+            self->multicast_addr.sin_addr.s_addr = inet_addr(self->ip);
+        break;
+    case PROP_PORT:
+        self->port = g_value_get_uint(value);
+        self->multicast_addr.sin_port = htons(self->port);
+        break;
+    default:
+        G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
+    }
 }
 
-void gst_mynetwork_get_property(GObject *object, guint property_id,
-                                GValue *value, GParamSpec *pspec)
+static void gst_mynetwork_get_property(GObject *object,
+                                       guint property_id,
+                                       GValue *value,
+                                       GParamSpec *pspec)
 {
     Gstmynetwork *self = GST_MYNETWORK(object);
-
-    GST_DEBUG_OBJECT(self, "get_property");
+    switch (property_id)
+    {
+    case PROP_SILENT:
+        /* g_value_set_boolean(value, self->silent); */
+        break;
+    case PROP_IP:
+        g_value_set_string(value, self->ip);
+        break;
+    case PROP_PORT:
+        g_value_set_uint(value, self->port);
+        break;
+    default:
+        G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
+    }
 }
 
-// 对象销毁前的清理回调函数
-void gst_mynetwork_finalize(GObject *object)
+static void gst_mynetwork_finalize(GObject *object)
 {
     Gstmynetwork *self = GST_MYNETWORK(object);
-
     if (self->sockfd >= 0)
     {
         close(self->sockfd);
         self->sockfd = -1;
     }
-
+    g_clear_pointer(&self->ip, g_free);
     GST_DEBUG_OBJECT(self, "finalize");
-
     G_OBJECT_CLASS(parent_class)->finalize(object);
 }
 
