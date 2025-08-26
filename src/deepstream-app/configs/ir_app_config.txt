@@ -15,7 +15,7 @@ nvbuf-memory-type=0
 [source0]
 enable=1
 type=4
-uri=rtsp://admin:12345yyz@192.168.1.21:554/h264/ch1/main/av_stream
+uri=rtsp://192.168.1.80/live/test
 #rtsp://admin:12345yyz@192.168.1.21:554/h264/ch1/main/av_stream
 #rtsp://192.168.1.80/live/test
 #rtsp://192.168.1.193:25544/live/test
@@ -28,7 +28,7 @@ rtsp-reconnect-interval-sec=3
 rtsp-reconnect-attempts=-1
 latency=300
 select-rtp-protocol=4
-smart-record=3
+smart-record=0
 smart-rec-dir-path=/workspace/deepstream-app-custom/smart_rec_ir
 smart-rec-duration=20
 smart-rec-start-time=5

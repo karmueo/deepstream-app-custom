@@ -132,9 +132,11 @@ make
 
 ## 准备模型
 ### 目标检测模型
-把目标检测模型onnx文件放入src/deepstream-app/models目录下，根据实际的onnx文件名修改convert2trt.sh
+把目标检测模型onnx文件放入src/deepstream-app/models目录下，根据实际的模型名称修改下面的参数：
+动态 batch: ./convert2trt.sh <ONNX_PATH> <ENGINE_PATH> dynamic [min_batch] [opt_batch] [max_batch] [fp16]
 ```sh
-./convert2trt.sh
+./convert2trt.sh yolov11m_detect_ir_640_v1.onnx yolov11m_detect_ir_640_b4_v1_fp16.engine 
+dynamic 1 4 4 fp16
 ```
 然后根据实际的engine文件名修改src/deepstream-app/configs/config_infer_primary_yoloV11.txt中model-engine-file的值
 

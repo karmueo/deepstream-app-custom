@@ -6,7 +6,7 @@ enable-jpeg-save=1
 [source0]
 enable=1
 type=4
-uri=rtsp://admin:12345yyz@192.168.1.21:554/h264/ch1/main/av_stream
+uri=rtsp://192.168.1.80/live/rgb
 #rtsp://192.168.1.80/live/rgb
 #rtsp://admin:12345yyz@192.168.1.21:554/h264/ch1/main/av_stream
 #rtsp://192.168.2.9:8554/ds-test
@@ -21,7 +21,7 @@ rtsp-reconnect-interval-sec=3
 rtsp-reconnect-attempts=-1
 latency=500
 select-rtp-protocol=0
-smart-record=3
+smart-record=0
 smart-rec-dir-path=/workspace/deepstream-app-custom/smart_rec_rgb
 smart-rec-duration=20
 smart-rec-start-time=5
@@ -44,29 +44,32 @@ height=1080
 profile=4
 udp-buffer-size=524288
 
-# redis
-[sink1]
-enable=0
-#Type - 1=FakeSink 2=EglSink 3=File 4=UDPSink 5=nvdrmvideosink 6=MsgConvBroker
-type=6
-msg-conv-config=dstest5_msgconv_sample_config.txt
-#(0): PAYLOAD_DEEPSTREAM - Deepstream schema payload
-#(1): PAYLOAD_DEEPSTREAM_MINIMAL - Deepstream schema payload minimal
-#(256): PAYLOAD_RESERVED - Reserved type
-#(257): PAYLOAD_CUSTOM   - Custom schema payload
-msg-conv-payload-type=0
-msg-broker-proto-lib=/opt/nvidia/deepstream/deepstream/lib/libnvds_redis_proto.so
-#Provide your msg-broker-conn-str here
-msg-broker-conn-str=127.0.0.1;6379;dddd
-topic=dddd
-#Optional:
-#msg-broker-config=../../deepstream-test4/cfg_kafka.txt
+## redis
+#[sink1]
+#enable=0
+##Type - 1=FakeSink 2=EglSink 3=File 4=UDPSink 5=nvdrmvideosink 6=MsgConvBroker
+#type=6
+#msg-conv-config=dstest5_msgconv_sample_config.txt
+##(0): PAYLOAD_DEEPSTREAM - Deepstream schema payload
+##(1): PAYLOAD_DEEPSTREAM_MINIMAL - Deepstream schema payload minimal
+##(256): PAYLOAD_RESERVED - Reserved type
+##(257): PAYLOAD_CUSTOM   - Custom schema payload
+#msg-conv-payload-type=0
+#msg-broker-proto-lib=/opt/nvidia/deepstream/deepstream/lib/libnvds_redis_proto.so
+##Provide your msg-broker-conn-str here
+#msg-broker-conn-str=127.0.0.1;6379;dddd
+#topic=dddd
+##Optional:
+##msg-broker-config=../../deepstream-test4/cfg_kafka.txt
 
 # 自定义的udp组播
 [sink2]
-enable=0
+enable=1
 #Type - 1=FakeSink 2=EglSink 3=File 4=UDPSink 5=nvdrmvideosink 6=MsgConvBroker 7=MyNetwork
 type=7
+ip=239.255.10.10
+multicast-port=6000
+# multicast-ttl=32
 
 [message-converter]
 enable=0
@@ -150,7 +153,7 @@ tracker-height=1080
 ll-lib-file=/opt/nvidia/deepstream/deepstream/lib/libsot.so
 ll-config-file=config_sot.yml
 gpu-id=0
-display-tracking-id=1
+display-tracking-id=0
 
 # [secondary-pre-process0]
 # enable=0

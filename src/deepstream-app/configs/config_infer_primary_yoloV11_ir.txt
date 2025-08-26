@@ -2,8 +2,8 @@
 gpu-id=0
 net-scale-factor=0.0039215697906911373
 model-color-format=0
-onnx-file=../models/yolov11m_detect_ir_640.onnx
-model-engine-file=../models/yolov11m_detect_ir_640_b4_fp16.engine
+#onnx-file=../models/yolov11m_detect_ir_640_v1.onnx
+model-engine-file=../models/yolov11m_detect_ir_640_b4_v1_fp16.engine
 #int8-calib-file=calib.table
 labelfile-path=./labels.txt
 batch-size=4
@@ -26,4 +26,4 @@ engine-create-func-name=NvDsInferYoloCudaEngineGet
 
 [class-attrs-all]
 nms-iou-threshold=0.45
-pre-cluster-threshold=0.51
+pre-cluster-threshold=0.25
