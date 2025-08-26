@@ -2542,6 +2542,20 @@ parse_sink(NvDsSinkSubBinConfig *config, GKeyFile *key_file, gchar *group,
                                        CONFIG_GROUP_SINK_MSG_BROKER_SLEEP_TIME, &error);
             CHECK_ERROR(error);
         }
+        else if (!g_strcmp0(*key, "ip"))
+        {
+            // 设置报文发送组播地址
+            config->mynetwork_config.ip =
+                g_key_file_get_string(key_file, group, "ip", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "multicast-port"))
+        {
+            // 设置报文发送组播端口
+            config->mynetwork_config.multicast_port =
+                g_key_file_get_integer(key_file, group, "multicast-port", &error);
+            CHECK_ERROR(error);
+        }
         else
         {
             NVGSTDS_WARN_MSG_V("Unknown key '%s' for group [%s]", *key, group);

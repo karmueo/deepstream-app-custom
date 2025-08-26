@@ -145,6 +145,10 @@ extern "C"
         gboolean conv_msg2p_new_api;
         guint conv_frame_interval;
         gboolean conv_dummy_payload;
+        // 组播ip
+        gchar *ip;
+        // 组播port
+        guint multicast_port;
     } NvDsMyNetworkConfig;
 
     typedef struct

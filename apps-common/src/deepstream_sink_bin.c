@@ -405,6 +405,16 @@ create_mynework_bin(NvDsMyNetworkConfig *config,
     // 链接消息转换器到自定义消息发送ELEMENT
     NVGSTDS_LINK_ELEMENT(bin->transform, bin->sink);
 
+    // 如果解析到了配置里的组播 ip 和端口，设置给 element 属性（需要 element 支持同名属性）
+    if (config->ip)
+    {
+        g_object_set(G_OBJECT(bin->sink), "ip", config->ip, NULL);
+    }
+    if (config->multicast_port)
+    {
+        g_object_set(G_OBJECT(bin->sink), "port", config->multicast_port, NULL);
+    }
+
     // 添加一个虚拟pad
     NVGSTDS_BIN_ADD_GHOST_PAD(bin->bin, bin->queue, "sink");
 
