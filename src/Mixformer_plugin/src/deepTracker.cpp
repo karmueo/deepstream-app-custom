@@ -46,8 +46,9 @@ DeepTracker::DeepTracker(const std::string    &engine_name,
     frameNum_ = 0;
     list_ = nullptr;
     list_size_ = 0;
-    enableTrackCenterStable_ = true; // 默认启用跟踪中心位置稳定判断
-    trackCenterStablePixelThreshold_ = 3;
+    // 来自配置的开关与阈值（由 parseConfigFile 填充默认值）
+    enableTrackCenterStable_ = trackerConfig_.enableTrackCenterStable; // 是否启用跟踪中心稳定判断
+    trackCenterStablePixelThreshold_ = trackerConfig_.trackCenterStablePixelThreshold; // 像素阈值
 }
 
 DeepTracker::~DeepTracker()

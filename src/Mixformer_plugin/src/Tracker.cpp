@@ -25,6 +25,10 @@ int parseConfigFile(const char *pCustomConfigFilePath, TRACKER_CONFIG &trackerCo
         std::cerr << "BaseConfig section not found in config file." << std::endl;
         return -1;
     }
+    // 先初始化新增字段默认值
+    trackerConfig.enableTrackCenterStable = true;
+    trackerConfig.trackCenterStablePixelThreshold = 3;
+
     for (YAML::const_iterator itr = configyml["BaseConfig"].begin();
          itr != configyml["BaseConfig"].end(); ++itr)
     {
@@ -52,6 +56,19 @@ int parseConfigFile(const char *pCustomConfigFilePath, TRACKER_CONFIG &trackerCo
         {
             // 这里可以添加对模型路径的处理
             trackerConfig.modelRootPath = itr->second.as<std::string>();
+        }
+        else if (key == "enableTrackCenterStable")
+        {
+            trackerConfig.enableTrackCenterStable = itr->second.as<int>() != 0; // 0 视为 false 其它为 true
+        }
+        else if (key == "trackCenterStablePixelThreshold")
+        {
+            trackerConfig.trackCenterStablePixelThreshold = itr->second.as<uint32_t>();
+            if (trackerConfig.trackCenterStablePixelThreshold == 0)
+            {
+                trackerConfig.trackCenterStablePixelThreshold = 3; // 防止为0
+                std::cerr << "Invalid trackCenterStablePixelThreshold in config file, set to default 3" << std::endl;
+            }
         }
         else
         {
