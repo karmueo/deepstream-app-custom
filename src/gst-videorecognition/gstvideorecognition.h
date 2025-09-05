@@ -11,6 +11,8 @@
 #include "tsnTrt.h"
 #include "videorecognitionTrt.h"
 #include "process.h"
+#include "imageClsTrt.h"
+#include "nvbufsurface.h"
 
 #define PACKAGE "videorecognition"
 #define VERSION "1.0.0"
@@ -61,8 +63,19 @@ struct _Gstvideorecognition
 
     Process *trtProcessPtr;
 
+    ImageClsTrt *frame_classifier;      // yolov11m_classify_ir_fp32.engine
+    float frame_cls_scores[3];          // 最近一帧 softmax 结果
     // 视频识别结果结构
     RECOGNITION *recognitionResultPtr;
+    // 单目标分类: 最近 N(<=10) 帧窗口加权
+    int cls_window_size = 10;           // 固定窗口长度
+    float cls_window_scores[10][3];     // 环形缓冲保存 softmax
+    int cls_window_index = 0;           // 写入位置
+    int cls_window_count = 0;           // 已填充帧数 (<= window_size)
+    // 分类器 TensorRT 引擎路径（来自 trt-engine-name 属性）
+    char trt_engine_name[512];
+    // 0 = 多帧图片分类模式 (默认)，1 = 视频时序识别模式
+    gint model_type;
 };
 
 struct _GstvideorecognitionClass

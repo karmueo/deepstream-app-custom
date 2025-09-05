@@ -121,7 +121,7 @@ make
             "binaryPath": "/workspace/deepstream-app-custom/src/deepstream-app/deepstream-app",
             "binaryArgs": [
                 "-c",
-                "/workspace/deepstream-app-custom/src/deepstream-app/configs/deepstream_app_config.txt"
+                "/workspace/deepstream-app-custom/src/deepstream-app/configs/ir_app_config.txt"
             ]
         }
     ],
@@ -132,9 +132,11 @@ make
 
 ## 准备模型
 ### 目标检测模型
-把目标检测模型onnx文件放入src/deepstream-app/models目录下，根据实际的onnx文件名修改convert2trt.sh
+把目标检测模型onnx文件放入src/deepstream-app/models目录下，根据实际的模型名称修改下面的参数：
+动态 batch: ./convert2trt.sh <ONNX_PATH> <ENGINE_PATH> dynamic [min_batch] [opt_batch] [max_batch] [fp16]
 ```sh
-./convert2trt.sh
+./convert2trt.sh yolov11m_detect_ir_640_v1.onnx yolov11m_detect_ir_640_b4_v1_fp16.engine 
+dynamic 1 4 4 fp16
 ```
 然后根据实际的engine文件名修改src/deepstream-app/configs/config_infer_primary_yoloV11.txt中model-engine-file的值
 
@@ -165,4 +167,46 @@ trtyolo export -w yolov11.pt -v ultralytics -o output --max_boxes 100 --iou_thre
 ./convert2trt.sh
 ```
 
-## 运行程序
+## 开机自启动
+创建和编辑文件/etc/systemd/system/deepstream-compose.service
+
+```
+[Unit]
+Description=DeepStream Compose Stack
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/tl/work/workspace/deepstream-app-custom
+RemainAfterExit=yes
+ExecStart=/usr/bin/docker compose up -d
+ExecStop=/usr/bin/docker compose down
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target
+```
+
+启用:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable deepstream-compose.service
+sudo systemctl start deepstream-compose.service
+```
+
+状态检查：
+```
+systemctl status deepstream-compose.service
+```
+
+停止:
+```bash
+docker compose down
+```
+
+彻底取消自动重启（本次与下次开机都不拉起）
+```
+systemctl stop deepstream-compose.service
+systemctl disable deepstream-compose.service
+```

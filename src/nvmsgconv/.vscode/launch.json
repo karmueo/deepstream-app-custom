@@ -11,8 +11,8 @@
             "program": "/workspace/deepstream-app-custom/src/deepstream-app/deepstream-app",
             "args": [
                 "-c",
-                "/workspace/deepstream-app-custom/src/deepstream-app/configs/deepstream_app_config.txt"
-                // "${workspaceFolder}/src/deepstream-app/configs/deepstream_app_config.txt"
+                "/workspace/deepstream-app-custom/src/deepstream-app/configs/ir_app_config.txt"
+                // "${workspaceFolder}/src/deepstream-app/configs/ir_app_config.txt"
             ],
             "cwd": "/workspace/deepstream-app-custom"
         },

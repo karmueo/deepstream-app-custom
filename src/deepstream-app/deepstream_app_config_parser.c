@@ -24,6 +24,7 @@
 
 #define CONFIG_GROUP_APP_TERMINATED_TRACK_OUTPUT_DIR "terminated-track-output-dir"
 #define CONFIG_GROUP_APP_SHADOW_TRACK_OUTPUT_DIR "shadow-track-output-dir"
+#define CONFIG_GROUP_APP_ENABLE_JPEG_SAVE "enable-jpeg-save"
 
 #define CONFIG_GROUP_TESTS "tests"
 #define CONFIG_GROUP_TESTS_FILE_LOOP "file-loop"
@@ -399,6 +400,12 @@ parse_app(NvDsConfig *config, GKeyFile *key_file, gchar *cfg_file_path)
             config->shadow_track_output_path = get_absolute_file_path(cfg_file_path,
                                                                       g_key_file_get_string(key_file, CONFIG_GROUP_APP,
                                                                                             CONFIG_GROUP_APP_SHADOW_TRACK_OUTPUT_DIR, &error));
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, CONFIG_GROUP_APP_ENABLE_JPEG_SAVE))
+        {
+            config->enable_jpeg_save = g_key_file_get_integer(key_file, CONFIG_GROUP_APP,
+                                                              CONFIG_GROUP_APP_ENABLE_JPEG_SAVE, &error);
             CHECK_ERROR(error);
         }
         else
@@ -801,6 +808,11 @@ parse_config_file(NvDsConfig *config, gchar *cfg_file_path)
             /** if gpu_id for dsexample component is present,
              * it will override the value set using global_gpu_id in parse_dsexample function */
             parse_err = !parse_videorecognition(&config->videorecognition_config, cfg_file);
+        }
+
+        if (!g_strcmp0(*group, CONFIG_GROUP_UDPMULTICAST))
+        {
+            parse_err = !parse_udpmulticast(&config->udpmulticast_config, cfg_file);
         }
 
         if (!g_strcmp0(*group, CONFIG_GROUP_MSG_CONVERTER))

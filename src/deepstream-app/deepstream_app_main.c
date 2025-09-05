@@ -1,6 +1,7 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2024 NVIDIA CORPORATION &
+ * AFFILIATES. All rights reserved. SPDX-License-Identifier:
+ * LicenseRef-NvidiaProprietary
  *
  * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
  * property and proprietary rights in and to this material, related
@@ -12,17 +13,18 @@
 
 #include "deepstream_app.h"
 #include "deepstream_config_file_parser.h"
-#include <cuda_runtime_api.h>
+#include "gst-nvdssr.h"
 #include "nvds_version.h"
-#include <string.h>
-#include <unistd.h>
-#include <time.h>
-#include <termios.h>
+#include "nvdsmeta_schema.h"
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
-#include "nvdsmeta_schema.h"
-#include "gst-nvdssr.h"
+#include <cuda_runtime_api.h>
 #include <json-glib/json-glib.h>
+#include <math.h>
+#include <string.h>
+#include <termios.h>
+#include <time.h>
+#include <unistd.h>
 
 #ifdef EN_DEBUG
 #define LOGD(...) printf(__VA_ARGS__)
@@ -37,29 +39,29 @@
 #define DEFAULT_X_WINDOW_WIDTH 1920
 #define DEFAULT_X_WINDOW_HEIGHT 1080
 
-AppCtx *appCtx[MAX_INSTANCES];
-static guint cintr = FALSE;
+AppCtx           *appCtx[MAX_INSTANCES];
+static guint      cintr = FALSE;
 static GMainLoop *main_loop = NULL;
-static gchar **cfg_files = NULL;
-static gchar **input_uris = NULL;
-static gboolean print_version = FALSE;
-static gboolean show_bbox_text = FALSE;
-static gboolean print_dependencies_version = FALSE;
-static gboolean quit = FALSE;
-static gint return_value = 0;
-static guint num_instances;
-static guint num_input_uris;
-static GMutex fps_lock;
-static gdouble fps[MAX_SOURCE_BINS];
-static gdouble fps_avg[MAX_SOURCE_BINS];
+static gchar    **cfg_files = NULL;
+static gchar    **input_uris = NULL;
+static gboolean   print_version = FALSE;
+static gboolean   show_bbox_text = FALSE;
+static gboolean   print_dependencies_version = FALSE;
+static gboolean   quit = FALSE;
+static gint       return_value = 0;
+static guint      num_instances;
+static guint      num_input_uris;
+static GMutex     fps_lock;
+static gdouble    fps[MAX_SOURCE_BINS];
+static gdouble    fps_avg[MAX_SOURCE_BINS];
 
 static Display *display = NULL;
-static Window windows[MAX_INSTANCES] = {0};
+static Window   windows[MAX_INSTANCES] = {0};
 
 static GThread *x_event_thread = NULL;
-static GMutex disp_lock;
+static GMutex   disp_lock;
 
-static guint rrow, rcol, rcfg;
+static guint    rrow, rcol, rcfg;
 static gboolean rrowsel = FALSE, selecting = FALSE;
 
 static gint frame_number = 0;
@@ -93,7 +95,7 @@ static double ntp_to_unix(uint64_t ntp_timestamp)
     uint32_t fraction = (uint32_t)(ntp_timestamp & 0xFFFFFFFF);
 
     // 关键步骤：确保无符号运算避免溢出
-    double unix_seconds = (double)(seconds - NTP_TO_UNIX)    // 先转double再减
+    double unix_seconds = (double)(seconds - NTP_TO_UNIX) // 先转double再减
                           + (double)fraction / (1ULL << 32); // 小数部分
 
     return unix_seconds;
@@ -109,8 +111,7 @@ static gboolean on_cooldown_end()
     return G_SOURCE_REMOVE;
 }
 
-static gboolean
-smart_record_event_generator(NvDsSrcBin *src_bin)
+static gboolean smart_record_event_generator(NvDsSrcBin *src_bin)
 {
     if (g_pending_request)
     {
@@ -118,8 +119,8 @@ smart_record_event_generator(NvDsSrcBin *src_bin)
     }
 
     NvDsSRSessionId sessId = 0;
-    guint startTime = 7;
-    guint duration = 8;
+    guint           startTime = 7;
+    guint           duration = 8;
 
     if (src_bin->config->smart_rec_duration >= 0)
         duration = src_bin->config->smart_rec_duration;
@@ -142,10 +143,9 @@ smart_record_event_generator(NvDsSrcBin *src_bin)
     return TRUE;
 }
 
-static gpointer
-meta_copy_func(gpointer data, gpointer user_data)
+static gpointer meta_copy_func(gpointer data, gpointer user_data)
 {
-    NvDsUserMeta *user_meta = (NvDsUserMeta *)data;
+    NvDsUserMeta     *user_meta = (NvDsUserMeta *)data;
     NvDsEventMsgMeta *srcMeta = (NvDsEventMsgMeta *)user_meta->user_meta_data;
     NvDsEventMsgMeta *dstMeta = NULL;
 
@@ -156,8 +156,8 @@ meta_copy_func(gpointer data, gpointer user_data)
 
     if (srcMeta->objSignature.size > 0)
     {
-        dstMeta->objSignature.signature = (gdouble *)g_memdup2(srcMeta->objSignature.signature,
-                                                               srcMeta->objSignature.size);
+        dstMeta->objSignature.signature = (gdouble *)g_memdup2(
+            srcMeta->objSignature.signature, srcMeta->objSignature.size);
         dstMeta->objSignature.size = srcMeta->objSignature.size;
     }
 
@@ -219,10 +219,9 @@ meta_copy_func(gpointer data, gpointer user_data)
     return dstMeta;
 }
 
-static void
-meta_free_func(gpointer data, gpointer user_data)
+static void meta_free_func(gpointer data, gpointer user_data)
 {
-    NvDsUserMeta *user_meta = (NvDsUserMeta *)data;
+    NvDsUserMeta     *user_meta = (NvDsUserMeta *)data;
     NvDsEventMsgMeta *srcMeta = (NvDsEventMsgMeta *)user_meta->user_meta_data;
     user_meta->user_meta_data = NULL;
 
@@ -294,10 +293,10 @@ meta_free_func(gpointer data, gpointer user_data)
 static void parse_cloud_message(gpointer data, guint size)
 {
     JsonNode *rootNode = NULL;
-    GError *error = NULL;
-    gchar *sensorStr = NULL;
-    gint start, duration;
-    gboolean startRec, ret;
+    GError   *error = NULL;
+    gchar    *sensorStr = NULL;
+    gint      start, duration;
+    gboolean  startRec, ret;
 
     /**
      * Following minimum json message is expected to trigger the start / stop
@@ -329,7 +328,8 @@ static void parse_cloud_message(gpointer data, guint size)
         object = json_node_get_object(rootNode);
         if (json_object_has_member(object, "command"))
         {
-            const gchar *type = json_object_get_string_member(object, "command");
+            const gchar *type =
+                json_object_get_string_member(object, "command");
             if (!g_strcmp0(type, "start-recording"))
                 startRec = TRUE;
             else if (!g_strcmp0(type, "stop-recording"))
@@ -348,10 +348,12 @@ static void parse_cloud_message(gpointer data, guint size)
 
         if (json_object_has_member(object, "sensor"))
         {
-            JsonObject *tempObj = json_object_get_object_member(object, "sensor");
+            JsonObject *tempObj =
+                json_object_get_object_member(object, "sensor");
             if (json_object_has_member(tempObj, "id"))
             {
-                sensorStr = g_strdup(json_object_get_string_member(tempObj, "id"));
+                sensorStr =
+                    g_strdup(json_object_get_string_member(tempObj, "id"));
                 if (!sensorStr)
                 {
                     NVGSTDS_WARN_MSG_V("wrong sensor.id value");
@@ -367,13 +369,15 @@ static void parse_cloud_message(gpointer data, guint size)
             }
             else
             {
-                NVGSTDS_WARN_MSG_V("wrong message format, missing 'sensor.id' field.");
+                NVGSTDS_WARN_MSG_V(
+                    "wrong message format, missing 'sensor.id' field.");
                 goto error;
             }
         }
         else
         {
-            NVGSTDS_WARN_MSG_V("wrong message format, missing 'sensor.id' field.");
+            NVGSTDS_WARN_MSG_V(
+                "wrong message format, missing 'sensor.id' field.");
             goto error;
         }
     }
@@ -393,15 +397,16 @@ error:
  */
 static void generate_ts_rfc3339(char *buf, int buf_size)
 {
-    time_t tloc;
-    struct tm tm_log;
+    time_t          tloc;
+    struct tm       tm_log;
     struct timespec ts;
-    char strmsec[6]; // .nnnZ\0
+    char            strmsec[6]; // .nnnZ\0
 
     clock_gettime(CLOCK_REALTIME, &ts);
-    tloc = ts.tv_sec;                                        // 直接赋值即可，无需 memcpy
-    localtime_r(&tloc, &tm_log);                             // 使用本地时区
-    strftime(buf, buf_size, "%Y-%m-%dT%H:%M:%S%z", &tm_log); // %z 输出时区偏移（如 +0800）
+    tloc = ts.tv_sec;            // 直接赋值即可，无需 memcpy
+    localtime_r(&tloc, &tm_log); // 使用本地时区
+    strftime(buf, buf_size, "%Y-%m-%dT%H:%M:%S%z",
+             &tm_log); // %z 输出时区偏移（如 +0800）
     int ms = ts.tv_nsec / 1000000;
     g_snprintf(strmsec, sizeof(strmsec), ".%.3d", ms);
     strncat(buf, strmsec, buf_size);
@@ -423,22 +428,15 @@ static void generate_ts_rfc3339(char *buf, int buf_size)
  * @param scaleH 高度缩放比例
  * @param frame_meta 帧元数据
  */
-static void
-generate_event_msg_meta(AppCtx *appCtx,
-                        gpointer data,
-                        gint class_id,
-                        gboolean useTs,
-                        GstClockTime ts,
-                        gchar *src_uri,
-                        gint stream_id,
-                        guint sensor_id,
-                        NvDsObjectMeta *obj_params,
-                        float scaleW,
-                        float scaleH,
-                        NvDsFrameMeta *frame_meta)
+static void generate_event_msg_meta(AppCtx *appCtx, gpointer data,
+                                    gint class_id, gboolean useTs,
+                                    GstClockTime ts, gchar *src_uri,
+                                    gint stream_id, guint sensor_id,
+                                    NvDsObjectMeta *obj_params, float scaleW,
+                                    float scaleH, NvDsFrameMeta *frame_meta)
 {
     NvDsEventMsgMeta *meta = (NvDsEventMsgMeta *)data;
-    GstClockTime ts_generated = 0;
+    GstClockTime      ts_generated = 0;
 
     meta->objType = NVDS_OBJECT_TYPE_UNKNOWN; /**< object unknown */
     /* The sensor_id is parsed from the source group name which has the format
@@ -453,19 +451,23 @@ generate_event_msg_meta(AppCtx *appCtx,
 
     // strncpy(meta->objectId, obj_params->obj_label, MAX_LABEL_SIZE);
     meta->videoPath = (gchar *)g_malloc0(256);
-    strncpy(meta->videoPath, appCtx->config.multi_source_config[stream_id].uri, 256);
+    strncpy(meta->videoPath, appCtx->config.multi_source_config[stream_id].uri,
+            256);
 
-    for (NvDsClassifierMetaList *cl = obj_params->classifier_meta_list; cl; cl = cl->next)
+    for (NvDsClassifierMetaList *cl = obj_params->classifier_meta_list; cl;
+         cl = cl->next)
     {
         NvDsClassifierMeta *cl_meta = (NvDsClassifierMeta *)cl->data;
-        for (NvDsLabelInfoList *ll = cl_meta->label_info_list; ll; ll = ll->next)
+        for (NvDsLabelInfoList *ll = cl_meta->label_info_list; ll;
+             ll = ll->next)
         {
             NvDsLabelInfo *ll_meta = (NvDsLabelInfo *)ll->data;
             if (ll_meta->result_label[0] != '\0')
             {
                 if (ll_meta->result_prob > 0.5)
                 {
-                    strncpy(meta->objectId, ll_meta->result_label, MAX_LABEL_SIZE);
+                    strncpy(meta->objectId, ll_meta->result_label,
+                            MAX_LABEL_SIZE);
                     meta->confidence = ll_meta->result_prob;
                     break;
                 }
@@ -480,12 +482,12 @@ generate_event_msg_meta(AppCtx *appCtx,
     /**
      * Valid attributes in the metadata sent over nvmsgbroker:
      * a) Sensor ID (shall be configured in nvmsgconv config file)
-     * b) bbox info (meta->bbox) <- obj_params->rect_params (attr_info have sgie info)
-     * c) tracking ID (meta->trackingId) <- obj_params->object_id
-     * 通过 nvmsgbroker 发送的元数据中的有效属性：
-     * a) 传感器 ID（应在 nvmsgconv 配置文件中配置）
-     * b) bbox 信息（meta->bbox）<- obj_params->rect_params（attr_info 有 sgie 信息）
-     * c) 跟踪 ID（meta->trackingId）<- obj_params->object_id
+     * b) bbox info (meta->bbox) <- obj_params->rect_params (attr_info have sgie
+     * info) c) tracking ID (meta->trackingId) <- obj_params->object_id 通过
+     * nvmsgbroker 发送的元数据中的有效属性： a) 传感器 ID（应在 nvmsgconv
+     * 配置文件中配置） b) bbox 信息（meta->bbox）<-
+     * obj_params->rect_params（attr_info 有 sgie 信息） c) 跟踪
+     * ID（meta->trackingId）<- obj_params->object_id
      */
 
     /** bbox - 分辨率由 nvinfer 缩放到了 streammux 提供的分辨率
@@ -505,7 +507,8 @@ generate_event_msg_meta(AppCtx *appCtx,
     if (sensorInfo)
     {
         /** 此数据流是使用REST API添加的；我们有传感器信息！ */
-        LOGD("this stream [%d:%s] was added using REST API; we have Sensor Info\n",
+        LOGD("this stream [%d:%s] was added using REST API; we have Sensor "
+             "Info\n",
              sensorInfo->source_id, sensorInfo->sensor_id);
         meta->sensorStr = g_strdup(sensorInfo->sensor_id);
     }
@@ -521,29 +524,29 @@ generate_event_msg_meta(AppCtx *appCtx,
  * 所有推理（主要+次要）完成后调用的回调函数。
  * 在这里可以修改元数据。
  */
-static void
-bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
-                                     NvDsBatchMeta *batch_meta, guint index)
+static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
+                                                 NvDsBatchMeta *batch_meta,
+                                                 guint          index)
 {
-    NvDsObjectMeta *obj_meta = NULL;
-    GstClockTime buffer_pts = 0;
-    guint32 stream_id = 0;
-    NvDsSRSessionId sessId = 0;
+    NvDsObjectMeta   *obj_meta = NULL;
+    GstClockTime      buffer_pts = 0;
+    guint32           stream_id = 0;
+    NvDsSRSessionId   sessId = 0;
     NvDsSrcParentBin *bin = &appCtx->pipeline.multi_src_bin;
-    NvDsSrcBin *src_bin = &bin->sub_bins[index];
-    guint startTime = 7;
-    guint duration = 8;
+    NvDsSrcBin       *src_bin = &bin->sub_bins[index];
+    guint             startTime = 7;
+    guint             duration = 8;
 
-#ifdef ENABLE_JPEG_SAVE
-    GstMapInfo inmap = GST_MAP_INFO_INIT;
-    if (!gst_buffer_map(buf, &inmap, GST_MAP_READ))
-    {
-        GST_ERROR("input buffer mapinfo failed");
-        return;
+    NvBufSurface *ip_surf = NULL;
+    if (appCtx->config.enable_jpeg_save) {
+        GstMapInfo inmap = GST_MAP_INFO_INIT;
+        if (!gst_buffer_map(buf, &inmap, GST_MAP_READ)) {
+            GST_ERROR("input buffer mapinfo failed");
+            return;
+        }
+        ip_surf = (NvBufSurface *)inmap.data;
+        gst_buffer_unmap(buf, &inmap);
     }
-    NvBufSurface *ip_surf = (NvBufSurface *)inmap.data;
-    gst_buffer_unmap(buf, &inmap);
-#endif
 
     for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame != NULL;
          l_frame = l_frame->next)
@@ -551,7 +554,7 @@ bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
         NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)l_frame->data;
         stream_id = frame_meta->source_id;
 
-        if (appCtx->custom_msg_data)
+        /* if (appCtx->custom_msg_data)
         {
             guint64 custom_timest = appCtx->custom_msg_data->timestamp;
             // rtsp时间戳获取
@@ -562,9 +565,9 @@ bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
             {
                 // TODO:时间戳更具需要修改
                 gdouble ntp_unix = ntp_to_unix(ntp);
-                time_t t = (time_t)ntp_unix;
+                time_t  t = (time_t)ntp_unix;
             }
-        }
+        } */
 
         GList *l;
         for (l = frame_meta->obj_meta_list; l != NULL; l = l->next)
@@ -575,10 +578,14 @@ bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
             bool isTrueTarget = false;
             if (g_list_length(obj_meta->classifier_meta_list) > 0)
             {
-                for (NvDsClassifierMetaList *cl = obj_meta->classifier_meta_list; cl; cl = cl->next)
+                for (NvDsClassifierMetaList *cl =
+                         obj_meta->classifier_meta_list;
+                     cl; cl = cl->next)
                 {
-                    NvDsClassifierMeta *cl_meta = (NvDsClassifierMeta *)cl->data;
-                    for (NvDsLabelInfoList *ll = cl_meta->label_info_list; ll; ll = ll->next)
+                    NvDsClassifierMeta *cl_meta =
+                        (NvDsClassifierMeta *)cl->data;
+                    for (NvDsLabelInfoList *ll = cl_meta->label_info_list; ll;
+                         ll = ll->next)
                     {
                         NvDsLabelInfo *ll_meta = (NvDsLabelInfo *)ll->data;
                         if (ll_meta->result_label[0] != '\0')
@@ -590,8 +597,47 @@ bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                                 if (src_bin->config->smart_record == 3)
                                 {
                                     // 启用智能视频记录
-                                    // g_timeout_add(30000, smart_record_event_generator, src_bin);
+                                    // g_timeout_add(30000,
+                                    // smart_record_event_generator, src_bin);
                                     smart_record_event_generator(src_bin);
+
+                                    if (appCtx->config.enable_jpeg_save && ip_surf) {
+                                        /* 5 秒节流：同一 source 在 5 秒内只执行一次保存 */
+                                        static GstClockTime last_save_pts_per_src[MAX_SOURCE_BINS] = {0};
+                                        guint sid = frame_meta->source_id;
+                                        if (sid < MAX_SOURCE_BINS) {
+                                            GstClockTime now_pts = frame_meta->buf_pts; /* 纳秒 */
+                                            if (last_save_pts_per_src[sid] == 0 ||
+                                                now_pts - last_save_pts_per_src[sid] >= 5 * GST_SECOND) {
+                                                last_save_pts_per_src[sid] = now_pts;
+                                                NvDsObjEncUsrArgs frameData = {0};
+                                                frameData.isFrame = 1;
+                                                frameData.saveImg = 1;
+                                                frameData.attachUsrMeta = FALSE;
+                                                frameData.scaleImg = FALSE;
+                                                frameData.scaledWidth = 0;
+                                                frameData.scaledHeight = 0;
+                                                frameData.quality = 100;
+                                                frameData.objNum = (int)obj_meta->object_id; /* 用跟踪ID/对象ID 作为 objNum */
+                                                frameData.calcEncodeTime = 0;
+                                                /* 自定义文件名: <sanitized-uri>_<pts_ms>_f<frame>_o<obj>.jpg */
+                                                const char *raw_uri = appCtx->config.multi_source_config[frame_meta->source_id].uri ? appCtx->config.multi_source_config[frame_meta->source_id].uri : "unknown";
+                                                char uri_sanitized[256];
+                                                size_t rlen = strlen(raw_uri);
+                                                if (rlen >= sizeof(uri_sanitized)) rlen = sizeof(uri_sanitized)-1;
+                                                for (size_t si=0; si<rlen; ++si) {
+                                                    char c = raw_uri[si];
+                                                    if ((c>='a'&&c<='z')||(c>='A'&&c<='Z')||(c>='0'&&c<='9')) uri_sanitized[si]=c; else uri_sanitized[si]='_';
+                                                }
+                                                uri_sanitized[rlen]='\0';
+                                                unsigned long long pts_ms = (unsigned long long)(frame_meta->buf_pts/1000000ULL);
+                                                snprintf(frameData.fileNameImg, sizeof(frameData.fileNameImg),
+                                                         "%s_%llu_f%u_o%d.jpg", uri_sanitized, pts_ms, frame_meta->frame_num, frameData.objNum);
+                                                nvds_obj_enc_process((gpointer)appCtx->obj_ctx_handle,
+                                                                    &frameData, ip_surf, obj_meta, frame_meta);
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -599,12 +645,174 @@ bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                 }
             }
 
-            /* if (!isTrueTarget)
+            /* NOTE: 分类显示逻辑已移至 overlay_graphics
+             * 中统一处理，这里不再拼接文本。 */
+
+            /* 分类结果历史加权平滑：仅在 tracker 与 secondary-gie 开启时启用 */
+            gboolean tracker_on = appCtx->config.tracker_config.enable;
+            gboolean sgie_on = FALSE;
+            for (guint si = 0; si < appCtx->config.num_secondary_gie_sub_bins;
+                 ++si)
             {
-                // g_print("Skipping object\n");
-                nvds_remove_obj_meta_from_frame(frame_meta, obj_meta);
-                break; // 如果不是目标，则跳过
-            } */
+                if (appCtx->config.secondary_gie_sub_bin_config[si].enable)
+                {
+                    sgie_on = TRUE;
+                    break;
+                }
+            }
+
+            // FIXME:
+            sgie_on = FALSE;
+            if (tracker_on && sgie_on &&
+                obj_meta->object_id != UNTRACKED_OBJECT_ID)
+            {
+                /* 定义对象聚合结构 */
+                typedef struct _ObjClsAgg
+                {
+                    GHashTable *label_scores; /* key: gchar*, value: gdouble* */
+                    guint       last_seen_frame;
+                } ObjClsAgg;
+
+                /* 懒初始化全局缓存表 */
+                if (!appCtx->cls_agg_map)
+                {
+                    appCtx->cls_agg_map = g_hash_table_new_full(
+                        g_int64_hash, g_int64_equal, g_free, (GDestroyNotify)NULL /* value freed below when destroying map at exit */);
+                }
+
+                guint64    oid = obj_meta->object_id;
+                ObjClsAgg *agg =
+                    (ObjClsAgg *)g_hash_table_lookup(appCtx->cls_agg_map, &oid);
+                if (!agg)
+                {
+                    guint64 *key = (guint64 *)g_malloc(sizeof(guint64));
+                    *key = oid;
+                    agg = g_new0(ObjClsAgg, 1);
+                    agg->label_scores = g_hash_table_new_full(
+                        g_str_hash, g_str_equal, g_free, g_free);
+                    agg->last_seen_frame = frame_meta->frame_num;
+                    g_hash_table_insert(appCtx->cls_agg_map, key, agg);
+                }
+
+                /* 计算归一化目标面积作为权重之一，并进行可调平衡 */
+                gdouble area = (gdouble)(obj_meta->rect_params.width *
+                                         obj_meta->rect_params.height);
+                gdouble pW =
+                    appCtx->config.streammux_config.pipeline_width
+                        ? appCtx->config.streammux_config.pipeline_width
+                        : frame_meta->pipeline_width;
+                gdouble pH =
+                    appCtx->config.streammux_config.pipeline_height
+                        ? appCtx->config.streammux_config.pipeline_height
+                        : frame_meta->pipeline_height;
+                gdouble norm_area =
+                    (pW > 0 && pH > 0) ? (area / (pW * pH)) : 1.0;
+                if (norm_area < 0.0)
+                    norm_area = 0.0;
+                /* clip 到 [eps, 1]，避免极端缩小目标权重为0 */
+                const gdouble eps = 1e-6;
+                if (norm_area < eps)
+                    norm_area = eps;
+
+                /* 平衡参数：alpha 控制对分类置信度的偏好，beta 控制对面积的偏好
+                    ref_area 用来拉升小目标的面积贡献（例如 0.02 表示 2% 画面）
+                 */
+                const gdouble alpha = 0.8;     /* 推荐范围 [0.6, 0.95] */
+                const gdouble beta = 0.2;      /* 推荐范围 [0.05, 0.4] */
+                const gdouble ref_area = 0.02; /* 推荐范围 [0.01, 0.05] */
+
+                /* 面积项映射：使用归一化后除以参考面积，限制上限，避免过大 */
+                gdouble area_term =
+                    norm_area / ref_area; /* 小目标 <1，大目标 >1 */
+                if (area_term > 1.0)
+                    area_term = 1.0;
+
+                /* 累加每个分类标签的加权得分：score += prob * norm_area */
+                for (NvDsClassifierMetaList *cl =
+                         obj_meta->classifier_meta_list;
+                     cl; cl = cl->next)
+                {
+                    NvDsClassifierMeta *cl_meta =
+                        (NvDsClassifierMeta *)cl->data;
+                    for (NvDsLabelInfoList *ll = cl_meta->label_info_list; ll;
+                         ll = ll->next)
+                    {
+                        NvDsLabelInfo *ll_meta = (NvDsLabelInfo *)ll->data;
+                        if (ll_meta->result_label[0] == '\0')
+                            continue;
+                        if (ll_meta->result_prob <= 0.0)
+                            continue;
+
+                        gchar   *label_key = g_strdup(ll_meta->result_label);
+                        gdouble *sum_ptr = (gdouble *)g_hash_table_lookup(
+                            agg->label_scores, label_key);
+                        if (!sum_ptr)
+                        {
+                            sum_ptr = g_new0(gdouble, 1);
+                            g_hash_table_insert(agg->label_scores, label_key,
+                                                sum_ptr);
+                        }
+                        else
+                        {
+                            g_free(label_key); /* key already exists */
+                        }
+                        /* 可调融合：置信度^alpha 与 面积项^beta 的加权几何式 */
+                        gdouble prob_term = ll_meta->result_prob;
+                        if (prob_term < eps)
+                            prob_term = eps;
+                        gdouble fused =
+                            pow(prob_term, alpha) * pow(area_term, beta);
+                        *sum_ptr += fused;
+                    }
+                }
+                agg->last_seen_frame = frame_meta->frame_num;
+
+                /* 选择累计得分最高的标签，并用归一化后概率替换当前结果 */
+                GHashTableIter it;
+                gpointer       k, v;
+                gdouble        best_score = -1.0, total_score = 0.0;
+                gchar         *best_label = NULL;
+                g_hash_table_iter_init(&it, agg->label_scores);
+                while (g_hash_table_iter_next(&it, &k, &v))
+                {
+                    gdouble s = *((gdouble *)v);
+                    total_score += s;
+                    if (s > best_score)
+                    {
+                        best_score = s;
+                        best_label = (gchar *)k;
+                    }
+                }
+                if (best_label && total_score > 0.0)
+                {
+                    gdouble best_prob = best_score / total_score; /* 归一化 */
+                    /* 将该对象的分类列表中的概率重写：仅保留最佳标签为
+                     * best_prob，其它置0 */
+                    for (NvDsClassifierMetaList *cl =
+                             obj_meta->classifier_meta_list;
+                         cl; cl = cl->next)
+                    {
+                        NvDsClassifierMeta *cl_meta =
+                            (NvDsClassifierMeta *)cl->data;
+                        for (NvDsLabelInfoList *ll = cl_meta->label_info_list;
+                             ll; ll = ll->next)
+                        {
+                            NvDsLabelInfo *ll_meta = (NvDsLabelInfo *)ll->data;
+                            if (ll_meta->result_label[0] == '\0')
+                                continue;
+                            if (g_strcmp0(ll_meta->result_label, best_label) ==
+                                0)
+                            {
+                                ll_meta->result_prob = best_prob;
+                            }
+                            else
+                            {
+                                ll_meta->result_prob = 0.0;
+                            }
+                        }
+                    }
+                }
+            }
 
             /**
              * 仅在此回调在 tiler 之后启用
@@ -620,37 +828,32 @@ bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
              * 此处消息每30帧发送一次给第一个对象。
              */
             buffer_pts = frame_meta->buf_pts;
-            if (!appCtx->config.streammux_config.pipeline_width || !appCtx->config.streammux_config.pipeline_height)
+            if (!appCtx->config.streammux_config.pipeline_width ||
+                !appCtx->config.streammux_config.pipeline_height)
             {
                 g_print("invalid pipeline params\n");
                 return;
             }
-            LOGD("stream %d==source_frame_width:%d [%d X %d]\n", frame_meta->source_id,
-                 frame_meta->pad_index, frame_meta->source_frame_width,
+            LOGD("stream %d==source_frame_width:%d [%d X %d]\n",
+                 frame_meta->source_id, frame_meta->pad_index,
+                 frame_meta->source_frame_width,
                  frame_meta->source_frame_height);
-            scaleW =
-                (float)frame_meta->source_frame_width /
-                appCtx->config.streammux_config.pipeline_width;
-            scaleH =
-                (float)frame_meta->source_frame_height /
-                appCtx->config.streammux_config.pipeline_height;
+            scaleW = (float)frame_meta->source_frame_width /
+                     appCtx->config.streammux_config.pipeline_width;
+            scaleH = (float)frame_meta->source_frame_height /
+                     appCtx->config.streammux_config.pipeline_height;
 
             /** 为每个检测对象生成 NvDsEventMsgMeta */
             NvDsEventMsgMeta *msg_meta =
                 (NvDsEventMsgMeta *)g_malloc0(sizeof(NvDsEventMsgMeta));
-            generate_event_msg_meta(appCtx,
-                                    msg_meta,
-                                    obj_meta->class_id,
-                                    TRUE,
-                                    /**< useTs NOTE: Pass FALSE for files without base-timestamp in URI */
-                                    buffer_pts,
-                                    appCtx->config.multi_source_config[stream_id].uri,
-                                    stream_id,
-                                    appCtx->config.multi_source_config[stream_id].camera_id,
-                                    obj_meta,
-                                    scaleW,
-                                    scaleH,
-                                    frame_meta);
+            generate_event_msg_meta(
+                appCtx, msg_meta, obj_meta->class_id, TRUE,
+                /**< useTs NOTE: Pass FALSE for files without base-timestamp in
+                   URI */
+                buffer_pts, appCtx->config.multi_source_config[stream_id].uri,
+                stream_id,
+                appCtx->config.multi_source_config[stream_id].camera_id,
+                obj_meta, scaleW, scaleH, frame_meta);
             NvDsUserMeta *user_event_meta =
                 nvds_acquire_user_meta_from_pool(batch_meta);
             if (user_event_meta)
@@ -677,32 +880,11 @@ bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                 g_print("Error in attaching event meta to buffer\n");
             }
         }
-#ifdef ENABLE_JPEG_SAVE
-        NvDsObjEncUsrArgs frameData = {0};
-        frameData.isFrame = 1;
-        /* To be set by user */
-        frameData.saveImg = 1;
-        frameData.attachUsrMeta = FALSE;
-        /* Set if Image scaling Required */
-        frameData.scaleImg = FALSE;
-        frameData.scaledWidth = 0;
-        frameData.scaledHeight = 0;
-        /* Quality */
-        frameData.quality = 100;
-        /* Set to calculate time taken to encode JPG image. */
-        frameData.calcEncodeTime = 0;
-        /*Main Function Call */
-        nvds_obj_enc_process((gpointer)appCtx->obj_ctx_handle,
-                             &frameData,
-                             ip_surf,
-                             obj_meta,
-                             frame_meta);
-#endif
     }
 
-#ifdef ENABLE_JPEG_SAVE
-    nvds_obj_enc_finish((gpointer)appCtx->obj_ctx_handle);
-#endif
+    if (appCtx->config.enable_jpeg_save) {
+        nvds_obj_enc_finish((gpointer)appCtx->obj_ctx_handle);
+    }
 
     /* NvDsMetaList *l_user_meta = NULL;
     NvDsUserMeta *user_meta = NULL;
@@ -727,24 +909,22 @@ bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
  * 所有推理（主要+次要）完成后调用的回调函数。
  * 在这是可以修改元数据内容。
  */
-static void
-all_bbox_generated(AppCtx *appCtx, GstBuffer *buf,
-                   NvDsBatchMeta *batch_meta, guint index)
+static void all_bbox_generated(AppCtx *appCtx, GstBuffer *buf,
+                               NvDsBatchMeta *batch_meta, guint index)
 {
-    guint num_male = 0;
-    guint num_female = 0;
-    guint num_objects[128];
-    guint num_rects = 0; // 矩形数量
+    // guint num_male = 0;
+    // guint num_female = 0;
+    // guint num_objects[128];
+    // guint num_rects = 0; // 矩形数量
 
-    memset(num_objects, 0, sizeof(num_objects));
+    // memset(num_objects, 0, sizeof(num_objects));
 }
 
 /**
  * Function to handle program interrupt signal.
  * It installs default handler after handling the interrupt.
  */
-static void
-_intr_handler(int signum)
+static void _intr_handler(int signum)
 {
     struct sigaction action;
 
@@ -761,13 +941,12 @@ _intr_handler(int signum)
 /**
  * callback function to print the performance numbers of each stream.
  */
-static void
-perf_cb(gpointer context, NvDsAppPerfStruct *str)
+static void perf_cb(gpointer context, NvDsAppPerfStruct *str)
 {
     static guint header_print_cnt = 0;
-    guint i;
-    AppCtx *appCtx = (AppCtx *)context;
-    guint numf = str->num_instances;
+    guint        i;
+    AppCtx      *appCtx = (AppCtx *)context;
+    guint        numf = str->num_instances;
 
     g_mutex_lock(&fps_lock);
     for (i = 0; i < numf; i++)
@@ -804,8 +983,7 @@ perf_cb(gpointer context, NvDsAppPerfStruct *str)
  * Loop function to check the status of interrupts.
  * It comes out of loop if application got interrupted.
  */
-static gboolean
-check_for_interrupt(gpointer data)
+static gboolean check_for_interrupt(gpointer data)
 {
     if (quit)
     {
@@ -827,8 +1005,7 @@ check_for_interrupt(gpointer data)
 /*
  * Function to install custom handler for program interrupt signal.
  */
-static void
-_intr_setup(void)
+static void _intr_setup(void)
 {
     struct sigaction action;
 
@@ -838,11 +1015,10 @@ _intr_setup(void)
     sigaction(SIGINT, &action, NULL);
 }
 
-static gboolean
-kbhit(void)
+static gboolean kbhit(void)
 {
     struct timeval tv;
-    fd_set rdfs;
+    fd_set         rdfs;
 
     tv.tv_sec = 0;
     tv.tv_usec = 0;
@@ -859,8 +1035,7 @@ kbhit(void)
  * In non canonical mode input is available immediately (without the user
  * having to type a line-delimiter character).
  */
-static void
-changemode(int dir)
+static void changemode(int dir)
 {
     static struct termios oldt, newt;
 
@@ -875,8 +1050,7 @@ changemode(int dir)
         tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
 }
 
-static void
-print_runtime_commands(void)
+static void print_runtime_commands(void)
 {
     g_print("\nRuntime commands:\n"
             "\th: Print this help\n"
@@ -886,19 +1060,20 @@ print_runtime_commands(void)
 
     if (appCtx[0]->config.tiled_display_config.enable)
     {
-        g_print("NOTE: To expand a source in the 2D tiled display and view object details,"
+        g_print("NOTE: To expand a source in the 2D tiled display and view "
+                "object details,"
                 " left-click on the source.\n"
-                "      To go back to the tiled display, right-click anywhere on the window.\n\n");
+                "      To go back to the tiled display, right-click anywhere "
+                "on the window.\n\n");
     }
 }
 
 /**
  * Loop function to check keyboard inputs and status of each pipeline.
  */
-static gboolean
-event_thread_func(gpointer arg)
+static gboolean event_thread_func(gpointer arg)
 {
-    guint i;
+    guint    i;
     gboolean ret = TRUE;
 
     // Check if all instances have quit
@@ -923,7 +1098,7 @@ event_thread_func(gpointer arg)
     int c = fgetc(stdin);
     g_print("\n");
 
-    gint source_id;
+    gint        source_id;
     GstElement *tiler = appCtx[rcfg]->pipeline.tiled_display_bin.tiler;
     if (appCtx[rcfg]->config.tiled_display_config.enable)
     {
@@ -943,7 +1118,9 @@ event_thread_func(gpointer arg)
                     }
                     else
                     {
-                        g_print("--selected source  row %d out of bound, reenter\n", rrow);
+                        g_print(
+                            "--selected source  row %d out of bound, reenter\n",
+                            rrow);
                     }
                 }
             }
@@ -951,15 +1128,18 @@ event_thread_func(gpointer arg)
             {
                 if (c >= '0' && c <= '9')
                 {
-                    unsigned int tile_num_columns = appCtx[rcfg]->config.tiled_display_config.columns;
+                    unsigned int tile_num_columns =
+                        appCtx[rcfg]->config.tiled_display_config.columns;
                     rcol = c - '0';
                     if (rcol < tile_num_columns)
                     {
                         selecting = FALSE;
                         rrowsel = FALSE;
                         source_id = tile_num_columns * rrow + rcol;
-                        g_print("--selecting source  col %d sou=%d--\n", rcol, source_id);
-                        if (source_id >= (gint)appCtx[rcfg]->config.num_source_sub_bins)
+                        g_print("--selecting source  col %d sou=%d--\n", rcol,
+                                source_id);
+                        if (source_id >=
+                            (gint)appCtx[rcfg]->config.num_source_sub_bins)
                         {
                             source_id = -1;
                         }
@@ -967,12 +1147,15 @@ event_thread_func(gpointer arg)
                         {
                             appCtx[rcfg]->show_bbox_text = TRUE;
                             appCtx[rcfg]->active_source_index = source_id;
-                            g_object_set(G_OBJECT(tiler), "show-source", source_id, NULL);
+                            g_object_set(G_OBJECT(tiler), "show-source",
+                                         source_id, NULL);
                         }
                     }
                     else
                     {
-                        g_print("--selected source  col %d out of bound, reenter\n", rcol);
+                        g_print(
+                            "--selected source  col %d out of bound, reenter\n",
+                            rcol);
                     }
                 }
             }
@@ -997,7 +1180,8 @@ event_thread_func(gpointer arg)
         ret = FALSE;
         break;
     case 'c':
-        if (appCtx[rcfg]->config.tiled_display_config.enable && selecting == FALSE && source_id == -1)
+        if (appCtx[rcfg]->config.tiled_display_config.enable &&
+            selecting == FALSE && source_id == -1)
         {
             g_print("--selecting config file --\n");
             c = fgetc(stdin);
@@ -1010,14 +1194,16 @@ event_thread_func(gpointer arg)
                 }
                 else
                 {
-                    g_print("--selected config file %d out of bound, reenter\n", rcfg);
+                    g_print("--selected config file %d out of bound, reenter\n",
+                            rcfg);
                     rcfg = 0;
                 }
             }
         }
         break;
     case 'z':
-        if (appCtx[rcfg]->config.tiled_display_config.enable && source_id == -1 && selecting == FALSE)
+        if (appCtx[rcfg]->config.tiled_display_config.enable &&
+            source_id == -1 && selecting == FALSE)
         {
             g_print("--selecting source --\n");
             selecting = TRUE;
@@ -1039,8 +1225,8 @@ event_thread_func(gpointer arg)
     return ret;
 }
 
-static int
-get_source_id_from_coordinates(float x_rel, float y_rel, AppCtx *appCtx)
+static int get_source_id_from_coordinates(float x_rel, float y_rel,
+                                          AppCtx *appCtx)
 {
     int tile_num_rows = appCtx->config.tiled_display_config.rows;
     int tile_num_columns = appCtx->config.tiled_display_config.columns;
@@ -1058,14 +1244,13 @@ get_source_id_from_coordinates(float x_rel, float y_rel, AppCtx *appCtx)
 /**
  * Thread to monitor X window events.
  */
-static gpointer
-nvds_x_event_thread(gpointer data)
+static gpointer nvds_x_event_thread(gpointer data)
 {
     g_mutex_lock(&disp_lock);
     while (display)
     {
         XEvent e;
-        guint index;
+        guint  index;
         memset(&e, 0, sizeof(XEvent));
         while (XPending(display))
         {
@@ -1075,9 +1260,9 @@ nvds_x_event_thread(gpointer data)
             case ButtonPress:
             {
                 XWindowAttributes win_attr;
-                XButtonEvent ev = e.xbutton;
-                gint source_id;
-                GstElement *tiler;
+                XButtonEvent      ev = e.xbutton;
+                gint              source_id;
+                GstElement       *tiler;
                 memset(&win_attr, 0, sizeof(XWindowAttributes));
 
                 XGetWindowAttributes(display, ev.window, &win_attr);
@@ -1089,14 +1274,16 @@ nvds_x_event_thread(gpointer data)
                 tiler = appCtx[index]->pipeline.tiled_display_bin.tiler;
                 g_object_get(G_OBJECT(tiler), "show-source", &source_id, NULL);
 
-                if (ev.button == Button1 && source_id == -1 && (index >= 0 && index < MAX_INSTANCES))
+                if (ev.button == Button1 && source_id == -1 &&
+                    (index >= 0 && index < MAX_INSTANCES))
                 {
-                    source_id =
-                        get_source_id_from_coordinates(ev.x * 1.0 / win_attr.width,
-                                                       ev.y * 1.0 / win_attr.height, appCtx[index]);
+                    source_id = get_source_id_from_coordinates(
+                        ev.x * 1.0 / win_attr.width,
+                        ev.y * 1.0 / win_attr.height, appCtx[index]);
                     if (source_id > -1)
                     {
-                        g_object_set(G_OBJECT(tiler), "show-source", source_id, NULL);
+                        g_object_set(G_OBJECT(tiler), "show-source", source_id,
+                                     NULL);
                         appCtx[index]->active_source_index = source_id;
                         appCtx[index]->show_bbox_text = TRUE;
                     }
@@ -1114,7 +1301,7 @@ nvds_x_event_thread(gpointer data)
             case KeyPress:
             {
                 KeySym p, r, q;
-                guint i;
+                guint  i;
                 p = XKeysymToKeycode(display, XK_P);
                 r = XKeysymToKeycode(display, XK_R);
                 q = XKeysymToKeycode(display, XK_Q);
@@ -1162,7 +1349,8 @@ nvds_x_event_thread(gpointer data)
     return NULL;
 }
 
-static void msg_broker_subscribe_cb(NvMsgBrokerErrorType status, void *msg, int msglen, char *topic, void *user_ptr)
+static void msg_broker_subscribe_cb(NvMsgBrokerErrorType status, void *msg,
+                                    int msglen, char *topic, void *user_ptr)
 {
     // 判断topic是否为事件消息主题
     if (strcmp(topic, "command") != 0)
@@ -1174,7 +1362,7 @@ static void msg_broker_subscribe_cb(NvMsgBrokerErrorType status, void *msg, int 
     if (msg && msglen > 0)
     {
         NvDsEventMsgMeta *event_msg_meta = (NvDsEventMsgMeta *)msg;
-        AppCtx *appCtx = (AppCtx *)user_ptr;
+        AppCtx           *appCtx = (AppCtx *)user_ptr;
 
         // TODO:待实现
         parse_cloud_message(msg, msglen);
@@ -1193,75 +1381,169 @@ static void msg_broker_subscribe_cb(NvMsgBrokerErrorType status, void *msg, int 
  * 该回调函数用于添加应用程序特定的元数据。
  * 这里演示了如何显示源的URI以及推理后生成的文本。
  */
-static gboolean
-overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
-                 NvDsBatchMeta *batch_meta, guint index)
+static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
+                                 NvDsBatchMeta *batch_meta, guint index)
 {
     int srcIndex = appCtx->active_source_index;
+    // if (srcIndex == -1)
+    //     return TRUE;
+
+    /* 为每个对象生成完整的分类标签(概率)文本，覆盖原来的 bbox_generated_probe_after_analytics 中逻辑 */
+    for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame != NULL; l_frame = l_frame->next)
+    {
+        NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)l_frame->data;
+        for (NvDsMetaList *l_obj = frame_meta->obj_meta_list; l_obj != NULL; l_obj = l_obj->next)
+        {
+            NvDsObjectMeta *obj_meta = (NvDsObjectMeta *)l_obj->data;
+            if (!obj_meta->classifier_meta_list)
+                continue;
+
+            GString *gstr = g_string_new(NULL);
+            for (NvDsClassifierMetaList *cl = obj_meta->classifier_meta_list; cl; cl = cl->next)
+            {
+                NvDsClassifierMeta *cl_meta = (NvDsClassifierMeta *)cl->data;
+                for (NvDsLabelInfoList *ll = cl_meta->label_info_list; ll; ll = ll->next)
+                {
+                    NvDsLabelInfo *li = (NvDsLabelInfo *)ll->data;
+                    if (li->result_label[0] == '\0') continue;
+                    g_string_append_printf(gstr, "%s(%.2f) ", li->result_label, li->result_prob);
+                }
+            }
+            if (gstr->len > 0)
+            {
+                /* 改进：
+                 * 1) 根据目标尺寸自适应缩小字体，避免小框被整块文字遮住。
+                 * 2) 小目标时尝试把标签放在框外（先上方, 若不足则下方）。
+                 * 3) 背景半透明以减少遮挡感。 */
+                if (obj_meta->text_params.display_text)
+                    g_free(obj_meta->text_params.display_text);
+                obj_meta->text_params.display_text = g_strdup(gstr->str);
+
+                int frame_w = frame_meta->source_frame_width > 0 ? frame_meta->source_frame_width : 1920;
+                int frame_h = frame_meta->source_frame_height > 0 ? frame_meta->source_frame_height : 1080;
+
+                float bw = obj_meta->rect_params.width;
+                float bh = obj_meta->rect_params.height;
+                float min_side = bw < bh ? bw : bh;
+                int base_font = appCtx->config.osd_config.text_size > 0 ? appCtx->config.osd_config.text_size : 12;
+                float scale = 1.0f;
+                if (min_side < 40) scale = 0.6f; else if (min_side < 80) scale = 0.8f; /* 可根据需要再细化 */
+                int font_size = (int)(base_font * scale);
+                if (font_size < 8) font_size = 8; /* 最小字号 */
+
+                obj_meta->text_params.font_params.font_color = (NvOSD_ColorParams){1.0f,1.0f,1.0f,1.0f};
+                obj_meta->text_params.font_params.font_size = font_size;
+                obj_meta->text_params.font_params.font_name = "Serif";
+                obj_meta->text_params.set_bg_clr = 1;
+                /* 透明度稍低，减轻遮挡 (A=0.4) */
+                obj_meta->text_params.text_bg_clr = (NvOSD_ColorParams){0.f,0.f,0.f,0.4f};
+
+                /* 估算文本高度：字号 + 顶/底边距(简单) */
+                int text_h = font_size + 4;
+                int x = (int)obj_meta->rect_params.left;
+                if (x < 0) x = 0;
+                if (x > frame_w - 4) x = frame_w - 4;
+
+                /* 判断小目标比例阈值（例如 <1% 认为小） */
+                float area_ratio = (bw * bh) / ((float)frame_w * (float)frame_h + 1e-3f);
+                int y;
+                if (area_ratio < 0.01f) {
+                    /* 优先放在框外上方 */
+                    int y_above = (int)obj_meta->rect_params.top - text_h - 2;
+                    if (y_above >= 0) {
+                        y = y_above;
+                    } else {
+                        /* 上面放不下，放框下方 */
+                        y = (int)(obj_meta->rect_params.top + obj_meta->rect_params.height + 2);
+                        if (y > frame_h - text_h) y = frame_h - text_h;
+                    }
+                } else {
+                    /* 大一点的框，仍尝试放到上方内部或外侧 */
+                    int y_try = (int)obj_meta->rect_params.top - text_h - 2;
+                    if (y_try < 0) {
+                        y = (int)obj_meta->rect_params.top + 2; /* 放到框内靠上 */
+                        if (y + text_h > frame_h) y = frame_h - text_h;
+                    } else {
+                        y = y_try;
+                    }
+                }
+                obj_meta->text_params.x_offset = x;
+                obj_meta->text_params.y_offset = y;
+
+                /* 如果目标极窄而文本会超出右边界，可左移 */
+                int estimated_text_w = (int)(strlen(obj_meta->text_params.display_text) * font_size * 0.55f);
+                if (estimated_text_w > 0 && x + estimated_text_w > frame_w) {
+                    int new_x = frame_w - estimated_text_w - 2;
+                    if (new_x < 0) new_x = 0;
+                    obj_meta->text_params.x_offset = new_x;
+                }
+            }
+            g_string_free(gstr, TRUE);
+        }
+    }
+
     if (srcIndex == -1)
         return TRUE;
 
     NvDsFrameLatencyInfo *latency_info = NULL;
-    NvDsDisplayMeta *display_meta =
+    NvDsDisplayMeta      *display_meta =
         nvds_acquire_display_meta_from_pool(batch_meta);
 
     display_meta->num_labels = 1;
-    display_meta->text_params[0].display_text = g_strdup_printf("Source: %s",
-                                                                appCtx->config.multi_source_config[srcIndex].uri);
+    display_meta->text_params[0].display_text = g_strdup_printf(
+        "Source: %s", appCtx->config.multi_source_config[srcIndex].uri);
 
     display_meta->text_params[0].y_offset = 20;
     display_meta->text_params[0].x_offset = 20;
-    display_meta->text_params[0].font_params.font_color = (NvOSD_ColorParams){
-        0, 1, 0, 1};
+    display_meta->text_params[0].font_params.font_color =
+        (NvOSD_ColorParams){0, 1, 0, 1};
     display_meta->text_params[0].font_params.font_size =
         appCtx->config.osd_config.text_size * 1.5;
     display_meta->text_params[0].font_params.font_name = "Serif";
     display_meta->text_params[0].set_bg_clr = 1;
-    display_meta->text_params[0].text_bg_clr = (NvOSD_ColorParams){
-        0, 0, 0, 1.0};
+    display_meta->text_params[0].text_bg_clr =
+        (NvOSD_ColorParams){0, 0, 0, 1.0};
 
     if (nvds_enable_latency_measurement)
     {
         g_mutex_lock(&appCtx->latency_lock);
         latency_info = &appCtx->latency_info[index];
         display_meta->num_labels++;
-        display_meta->text_params[1].display_text = g_strdup_printf("Latency: %lf",
-                                                                    latency_info->latency);
+        display_meta->text_params[1].display_text =
+            g_strdup_printf("Latency: %lf", latency_info->latency);
         g_mutex_unlock(&appCtx->latency_lock);
 
-        display_meta->text_params[1].y_offset = (display_meta->text_params[0].y_offset * 2) +
-                                                display_meta->text_params[0].font_params.font_size;
+        display_meta->text_params[1].y_offset =
+            (display_meta->text_params[0].y_offset * 2) +
+            display_meta->text_params[0].font_params.font_size;
         display_meta->text_params[1].x_offset = 20;
-        display_meta->text_params[1].font_params.font_color = (NvOSD_ColorParams){
-            0, 1, 0, 1};
+        display_meta->text_params[1].font_params.font_color =
+            (NvOSD_ColorParams){0, 1, 0, 1};
         display_meta->text_params[1].font_params.font_size =
             appCtx->config.osd_config.text_size * 1.5;
         display_meta->text_params[1].font_params.font_name = "Arial";
         display_meta->text_params[1].set_bg_clr = 1;
-        display_meta->text_params[1].text_bg_clr = (NvOSD_ColorParams){
-            0, 0, 0, 1.0};
+        display_meta->text_params[1].text_bg_clr =
+            (NvOSD_ColorParams){0, 0, 0, 1.0};
     }
 
-    nvds_add_display_meta_to_frame(nvds_get_nth_frame_meta(batch_meta->frame_meta_list, 0), display_meta);
+    nvds_add_display_meta_to_frame(
+        nvds_get_nth_frame_meta(batch_meta->frame_meta_list, 0), display_meta);
     return TRUE;
 }
 
-static gboolean
-recreate_pipeline_thread_func(gpointer arg)
+static gboolean recreate_pipeline_thread_func(gpointer arg)
 {
-    guint i;
+    guint    i;
     gboolean ret = TRUE;
-    AppCtx *appCtx = (AppCtx *)arg;
+    AppCtx  *appCtx = (AppCtx *)arg;
 
     g_print("Destroy pipeline\n");
     destroy_pipeline(appCtx);
 
     g_print("Recreate pipeline\n");
-    if (!create_pipeline(appCtx,
-                         bbox_generated_probe_after_analytics,
-                         all_bbox_generated,
-                         perf_cb,
-                         overlay_graphics,
+    if (!create_pipeline(appCtx, bbox_generated_probe_after_analytics,
+                         all_bbox_generated, perf_cb, overlay_graphics,
                          msg_broker_subscribe_cb))
     {
         NVGSTDS_ERR_MSG_V("Failed to create pipeline");
@@ -1269,8 +1551,8 @@ recreate_pipeline_thread_func(gpointer arg)
         return FALSE;
     }
 
-    if (gst_element_set_state(appCtx->pipeline.pipeline,
-                              GST_STATE_PAUSED) == GST_STATE_CHANGE_FAILURE)
+    if (gst_element_set_state(appCtx->pipeline.pipeline, GST_STATE_PAUSED) ==
+        GST_STATE_CHANGE_FAILURE)
     {
         NVGSTDS_ERR_MSG_V("Failed to set pipeline to PAUSED");
         return_value = -1;
@@ -1279,18 +1561,22 @@ recreate_pipeline_thread_func(gpointer arg)
 
     for (i = 0; i < appCtx->config.num_sink_sub_bins; i++)
     {
-        if (!GST_IS_VIDEO_OVERLAY(appCtx->pipeline.instance_bins[0].sink_bin.sub_bins[i].sink))
+        if (!GST_IS_VIDEO_OVERLAY(
+                appCtx->pipeline.instance_bins[0].sink_bin.sub_bins[i].sink))
         {
             continue;
         }
 
-        gst_video_overlay_set_window_handle(GST_VIDEO_OVERLAY(appCtx->pipeline.instance_bins[0].sink_bin.sub_bins[i].sink),
-                                            (gulong)windows[appCtx->index]);
-        gst_video_overlay_expose(GST_VIDEO_OVERLAY(appCtx->pipeline.instance_bins[0].sink_bin.sub_bins[i].sink));
+        gst_video_overlay_set_window_handle(
+            GST_VIDEO_OVERLAY(
+                appCtx->pipeline.instance_bins[0].sink_bin.sub_bins[i].sink),
+            (gulong)windows[appCtx->index]);
+        gst_video_overlay_expose(GST_VIDEO_OVERLAY(
+            appCtx->pipeline.instance_bins[0].sink_bin.sub_bins[i].sink));
     }
 
-    if (gst_element_set_state(appCtx->pipeline.pipeline,
-                              GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE)
+    if (gst_element_set_state(appCtx->pipeline.pipeline, GST_STATE_PLAYING) ==
+        GST_STATE_CHANGE_FAILURE)
     {
 
         g_print("\ncan't set pipeline to playing state.\n");
@@ -1304,9 +1590,9 @@ recreate_pipeline_thread_func(gpointer arg)
 int main(int argc, char *argv[])
 {
     GOptionContext *ctx = NULL;
-    GOptionGroup *group = NULL;
-    GError *error = NULL;
-    guint i;
+    GOptionGroup   *group = NULL;
+    GError         *error = NULL;
+    guint           i;
 
     ctx = g_option_context_new("Nvidia DeepStream Demo");
     group = g_option_group_new("abc", NULL, NULL, NULL, NULL);
@@ -1330,16 +1616,16 @@ int main(int argc, char *argv[])
 
     if (print_version)
     {
-        g_print("deepstream-app version %d.%d.%d\n",
-                NVDS_APP_VERSION_MAJOR, NVDS_APP_VERSION_MINOR, NVDS_APP_VERSION_MICRO);
+        g_print("deepstream-app version %d.%d.%d\n", NVDS_APP_VERSION_MAJOR,
+                NVDS_APP_VERSION_MINOR, NVDS_APP_VERSION_MICRO);
         nvds_version_print();
         return 0;
     }
 
     if (print_dependencies_version)
     {
-        g_print("deepstream-app version %d.%d.%d\n",
-                NVDS_APP_VERSION_MAJOR, NVDS_APP_VERSION_MINOR, NVDS_APP_VERSION_MICRO);
+        g_print("deepstream-app version %d.%d.%d\n", NVDS_APP_VERSION_MAJOR,
+                NVDS_APP_VERSION_MINOR, NVDS_APP_VERSION_MICRO);
         nvds_version_print();
         nvds_dependencies_version_print();
         return 0;
@@ -1373,6 +1659,9 @@ int main(int argc, char *argv[])
             appCtx[i]->show_bbox_text = TRUE;
         }
 
+        /* init classification aggregator map */
+        appCtx[i]->cls_agg_map = NULL; /* lazy init in probe */
+
         if (input_uris && input_uris[i])
         {
             appCtx[i]->config.multi_source_config[0].uri =
@@ -1385,7 +1674,8 @@ int main(int argc, char *argv[])
         {
             if (!parse_config_file_yaml(&appCtx[i]->config, cfg_files[i]))
             {
-                NVGSTDS_ERR_MSG_V("Failed to parse config file '%s'", cfg_files[i]);
+                NVGSTDS_ERR_MSG_V("Failed to parse config file '%s'",
+                                  cfg_files[i]);
                 appCtx[i]->return_value = -1;
                 goto done;
             }
@@ -1394,7 +1684,8 @@ int main(int argc, char *argv[])
         {
             if (!parse_config_file(&appCtx[i]->config, cfg_files[i]))
             {
-                NVGSTDS_ERR_MSG_V("Failed to parse config file '%s'", cfg_files[i]);
+                NVGSTDS_ERR_MSG_V("Failed to parse config file '%s'",
+                                  cfg_files[i]);
                 appCtx[i]->return_value = -1;
                 goto done;
             }
@@ -1403,11 +1694,8 @@ int main(int argc, char *argv[])
 
     for (i = 0; i < num_instances; i++)
     {
-        if (!create_pipeline(appCtx[i],
-                             bbox_generated_probe_after_analytics,
-                             all_bbox_generated,
-                             perf_cb,
-                             overlay_graphics,
+        if (!create_pipeline(appCtx[i], bbox_generated_probe_after_analytics,
+                             all_bbox_generated, perf_cb, overlay_graphics,
                              msg_broker_subscribe_cb))
         {
             NVGSTDS_ERR_MSG_V("Failed to create pipeline");
@@ -1438,11 +1726,14 @@ int main(int argc, char *argv[])
         for (j = 0; j < appCtx[i]->config.num_sink_sub_bins; j++)
         {
             XTextProperty xproperty;
-            gchar *title;
-            guint width, height;
-            XSizeHints hints = {0};
+            gchar        *title;
+            guint         width, height;
+            XSizeHints    hints = {0};
 
-            if (!GST_IS_VIDEO_OVERLAY(appCtx[i]->pipeline.instance_bins[0].sink_bin.sub_bins[j].sink))
+            if (!GST_IS_VIDEO_OVERLAY(appCtx[i]
+                                          ->pipeline.instance_bins[0]
+                                          .sink_bin.sub_bins[j]
+                                          .sink))
             {
                 continue;
             }
@@ -1454,15 +1745,21 @@ int main(int argc, char *argv[])
                 goto done;
             }
 
-            if (appCtx[i]->config.sink_bin_sub_bin_config[j].render_config.width)
-                width =
-                    appCtx[i]->config.sink_bin_sub_bin_config[j].render_config.width;
+            if (appCtx[i]
+                    ->config.sink_bin_sub_bin_config[j]
+                    .render_config.width)
+                width = appCtx[i]
+                            ->config.sink_bin_sub_bin_config[j]
+                            .render_config.width;
             else
                 width = appCtx[i]->config.tiled_display_config.width;
 
-            if (appCtx[i]->config.sink_bin_sub_bin_config[j].render_config.height)
-                height =
-                    appCtx[i]->config.sink_bin_sub_bin_config[j].render_config.height;
+            if (appCtx[i]
+                    ->config.sink_bin_sub_bin_config[j]
+                    .render_config.height)
+                height = appCtx[i]
+                             ->config.sink_bin_sub_bin_config[j]
+                             .render_config.height;
             else
                 height = appCtx[i]->config.tiled_display_config.height;
 
@@ -1470,14 +1767,18 @@ int main(int argc, char *argv[])
             height = (height) ? height : DEFAULT_X_WINDOW_HEIGHT;
 
             hints.flags = PPosition | PSize;
-            hints.x = appCtx[i]->config.sink_bin_sub_bin_config[j].render_config.offset_x;
-            hints.y = appCtx[i]->config.sink_bin_sub_bin_config[j].render_config.offset_y;
+            hints.x = appCtx[i]
+                          ->config.sink_bin_sub_bin_config[j]
+                          .render_config.offset_x;
+            hints.y = appCtx[i]
+                          ->config.sink_bin_sub_bin_config[j]
+                          .render_config.offset_y;
             hints.width = width;
             hints.height = height;
 
-            windows[i] =
-                XCreateSimpleWindow(display, RootWindow(display, DefaultScreen(display)), hints.x, hints.y, width, height, 2,
-                                    0x00000000, 0x00000000);
+            windows[i] = XCreateSimpleWindow(
+                display, RootWindow(display, DefaultScreen(display)), hints.x,
+                hints.y, width, height, 2, 0x00000000, 0x00000000);
 
             XSetNormalHints(display, windows[i], &hints);
 
@@ -1506,20 +1807,25 @@ int main(int argc, char *argv[])
             }
             XChangeWindowAttributes(display, windows[i], CWEventMask, &attr);
 
-            Atom wmDeleteMessage = XInternAtom(display, "WM_DELETE_WINDOW", False);
+            Atom wmDeleteMessage =
+                XInternAtom(display, "WM_DELETE_WINDOW", False);
             if (wmDeleteMessage != None)
             {
                 XSetWMProtocols(display, windows[i], &wmDeleteMessage, 1);
             }
             XMapRaised(display, windows[i]);
             XSync(display, 1); // discard the events for now
-            gst_video_overlay_set_window_handle(GST_VIDEO_OVERLAY(appCtx
-                                                                      [i]
-                                                                          ->pipeline.instance_bins[0]
-                                                                          .sink_bin.sub_bins[j]
-                                                                          .sink),
-                                                (gulong)windows[i]);
-            gst_video_overlay_expose(GST_VIDEO_OVERLAY(appCtx[i]->pipeline.instance_bins[0].sink_bin.sub_bins[j].sink));
+            gst_video_overlay_set_window_handle(
+                GST_VIDEO_OVERLAY(appCtx[i]
+                                      ->pipeline.instance_bins[0]
+                                      .sink_bin.sub_bins[j]
+                                      .sink),
+                (gulong)windows[i]);
+            gst_video_overlay_expose(
+                GST_VIDEO_OVERLAY(appCtx[i]
+                                      ->pipeline.instance_bins[0]
+                                      .sink_bin.sub_bins[j]
+                                      .sink));
             if (!x_event_thread)
                 x_event_thread = g_thread_new("nvds-window-event-thread",
                                               nvds_x_event_thread, NULL);
@@ -1528,7 +1834,8 @@ int main(int argc, char *argv[])
         if (!prop.integrated)
         {
             if (gst_element_set_state(appCtx[i]->pipeline.pipeline,
-                                      GST_STATE_PAUSED) == GST_STATE_CHANGE_FAILURE)
+                                      GST_STATE_PAUSED) ==
+                GST_STATE_CHANGE_FAILURE)
             {
                 NVGSTDS_ERR_MSG_V("Failed to set pipeline to PAUSED");
                 return_value = -1;
@@ -1544,7 +1851,8 @@ int main(int argc, char *argv[])
         for (i = 0; i < num_instances; i++)
         {
             if (gst_element_set_state(appCtx[i]->pipeline.pipeline,
-                                      GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE)
+                                      GST_STATE_PLAYING) ==
+                GST_STATE_CHANGE_FAILURE)
             {
 
                 g_print("\ncan't set pipeline to playing state.\n");
@@ -1574,6 +1882,35 @@ done:
         if (appCtx[i]->return_value == -1)
             return_value = -1;
         destroy_pipeline(appCtx[i]);
+
+        /* free classification aggregator cache */
+        if (appCtx[i]->cls_agg_map)
+        {
+            /* free values: ObjClsAgg */
+            GHashTableIter it;
+            gpointer       k, v;
+            g_hash_table_iter_init(&it, appCtx[i]->cls_agg_map);
+            while (g_hash_table_iter_next(&it, &k, &v))
+            {
+                /* free key */
+                g_free(k);
+                /* free value */
+                typedef struct _ObjClsAgg
+                {
+                    GHashTable *label_scores;
+                    guint       last_seen_frame;
+                } ObjClsAgg;
+                ObjClsAgg *agg = (ObjClsAgg *)v;
+                if (agg)
+                {
+                    if (agg->label_scores)
+                        g_hash_table_destroy(agg->label_scores);
+                    g_free(agg);
+                }
+            }
+            g_hash_table_destroy(appCtx[i]->cls_agg_map);
+            appCtx[i]->cls_agg_map = NULL;
+        }
 
         g_mutex_lock(&disp_lock);
         if (windows[i])

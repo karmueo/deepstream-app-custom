@@ -1,6 +1,7 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2024 NVIDIA CORPORATION &
+ * AFFILIATES. All rights reserved. SPDX-License-Identifier:
+ * LicenseRef-NvidiaProprietary
  *
  * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
  * property and proprietary rights in and to this material, related
@@ -17,27 +18,28 @@
 #include <stdio.h>
 
 #include "deepstream_app_version.h"
+#include "deepstream_c2d_msg.h"
 #include "deepstream_common.h"
 #include "deepstream_config.h"
+#include "deepstream_dsanalytics.h"
+#include "deepstream_dsexample.h"
+#include "deepstream_image_save.h"
 #include "deepstream_osd.h"
-#include "deepstream_segvisual.h"
 #include "deepstream_perf.h"
 #include "deepstream_preprocess.h"
 #include "deepstream_primary_gie.h"
+#include "deepstream_secondary_gie.h"
+#include "deepstream_secondary_preprocess.h"
+#include "deepstream_segvisual.h"
 #include "deepstream_sinks.h"
 #include "deepstream_sources.h"
 #include "deepstream_streammux.h"
 #include "deepstream_tiled_display.h"
-#include "deepstream_dsanalytics.h"
-#include "deepstream_dsexample.h"
-#include "deepstream_videorecognition.h"
 #include "deepstream_tracker.h"
-#include "deepstream_secondary_gie.h"
-#include "deepstream_secondary_preprocess.h"
-#include "deepstream_c2d_msg.h"
-#include "deepstream_image_save.h"
-#include "gst-nvdscustommessage.h"
+#include "deepstream_udpmulticast.h"
+#include "deepstream_videorecognition.h"
 #include "gst-nvdscommonconfig.h"
+#include "gst-nvdscustommessage.h"
 #include "nvbufsurface.h"
 #include "nvds_obj_encode.h"
 
@@ -49,107 +51,115 @@ extern "C"
     typedef struct _AppCtx AppCtx;
 
     typedef void (*bbox_generated_callback)(AppCtx *appCtx, GstBuffer *buf,
-                                            NvDsBatchMeta *batch_meta, guint index);
-    typedef gboolean (*overlay_graphics_callback)(AppCtx *appCtx, GstBuffer *buf,
-                                                  NvDsBatchMeta *batch_meta, guint index);
+                                            NvDsBatchMeta *batch_meta,
+                                            guint          index);
+    typedef gboolean (*overlay_graphics_callback)(AppCtx        *appCtx,
+                                                  GstBuffer     *buf,
+                                                  NvDsBatchMeta *batch_meta,
+                                                  guint          index);
 
     typedef struct
     {
-        guint index;
-        gulong all_bbox_buffer_probe_id;
-        gulong primary_bbox_buffer_probe_id;
-        gulong fps_buffer_probe_id;
-        GstElement *bin;
-        GstElement *tee;
-        GstElement *msg_conv;
-        NvDsPreProcessBin preprocess_bin;
-        NvDsPrimaryGieBin primary_gie_bin;
-        NvDsOSDBin osd_bin;
-        NvDsSegVisualBin segvisual_bin;
-        NvDsSecondaryGieBin secondary_gie_bin;
+        guint                      index;
+        gulong                     all_bbox_buffer_probe_id;
+        gulong                     primary_bbox_buffer_probe_id;
+        gulong                     fps_buffer_probe_id;
+        GstElement                *bin;
+        GstElement                *tee;
+        GstElement                *msg_conv;
+        NvDsPreProcessBin          preprocess_bin;
+        NvDsPrimaryGieBin          primary_gie_bin;
+        NvDsOSDBin                 osd_bin;
+        NvDsSegVisualBin           segvisual_bin;
+        NvDsSecondaryGieBin        secondary_gie_bin;
         NvDsSecondaryPreProcessBin secondary_preprocess_bin;
-        NvDsTrackerBin tracker_bin;
-        NvDsSinkBin sink_bin;
-        NvDsSinkBin demux_sink_bin;
-        NvDsDsAnalyticsBin dsanalytics_bin;
-        NvDsDsExampleBin dsexample_bin;
-        NvDsVideoRecognitionBin videorecognition_bin;
-        AppCtx *appCtx;
+        NvDsTrackerBin             tracker_bin;
+        NvDsSinkBin                sink_bin;
+        NvDsSinkBin                demux_sink_bin;
+        NvDsDsAnalyticsBin         dsanalytics_bin;
+        NvDsDsExampleBin           dsexample_bin;
+        NvDsVideoRecognitionBin    videorecognition_bin;
+        AppCtx                    *appCtx;
     } NvDsInstanceBin;
 
     typedef struct
     {
-        gulong primary_bbox_buffer_probe_id;
-        guint bus_id;
-        GstElement *pipeline;
-        NvDsSrcParentBin multi_src_bin;
-        NvDsInstanceBin instance_bins[MAX_SOURCE_BINS];
-        NvDsInstanceBin demux_instance_bins[MAX_SOURCE_BINS];
-        NvDsInstanceBin common_elements;
-        GstElement *tiler_tee;
+        gulong              primary_bbox_buffer_probe_id;
+        guint               bus_id;
+        GstElement         *pipeline;
+        NvDsSrcParentBin    multi_src_bin;
+        NvDsInstanceBin     instance_bins[MAX_SOURCE_BINS];
+        NvDsInstanceBin     demux_instance_bins[MAX_SOURCE_BINS];
+        NvDsInstanceBin     common_elements;
+        GstElement         *tiler_tee;
         NvDsTiledDisplayBin tiled_display_bin;
-        GstElement *demuxer;
-        NvDsDsExampleBin dsexample_bin;
-        AppCtx *appCtx;
+        GstElement         *demuxer;
+        NvDsDsExampleBin    dsexample_bin;
+        AppCtx             *appCtx;
     } NvDsPipeline;
 
     typedef struct
     {
         gboolean enable_perf_measurement;
-        gint file_loop;
-        gint pipeline_recreate_sec;
+        gint     file_loop;
+        gint     pipeline_recreate_sec;
         gboolean source_list_enabled;
-        guint total_num_sources;
-        guint num_source_sub_bins;
-        guint num_secondary_gie_sub_bins;
-        guint num_secondary_preprocess_sub_bins;
-        guint num_sink_sub_bins;
-        guint num_message_consumers;
-        guint perf_measurement_interval_sec;
-        guint sgie_batch_size;
+        guint    total_num_sources;
+        guint    num_source_sub_bins;
+        guint    num_secondary_gie_sub_bins;
+        guint    num_secondary_preprocess_sub_bins;
+        guint    num_sink_sub_bins;
+        guint    num_message_consumers;
+        guint    perf_measurement_interval_sec;
+        guint    sgie_batch_size;
         gboolean extract_sei_type5_data;
-        gchar *sei_uuid;
+        gchar   *sei_uuid;
         gboolean low_latency_mode;
-        gchar *bbox_dir_path;
-        gchar *kitti_track_dir_path;
-        gchar *reid_track_dir_path;
-        gchar *terminated_track_output_path;
-        gchar *shadow_track_output_path;
+        gchar   *bbox_dir_path;
+        gchar   *kitti_track_dir_path;
+        gchar   *reid_track_dir_path;
+        gchar   *terminated_track_output_path;
+        gchar   *shadow_track_output_path;
+        gboolean enable_jpeg_save; /* runtime JPEG save switch */
 
-        gchar **uri_list;
-        gchar **sensor_id_list;
-        gchar **sensor_name_list;
-        NvDsSourceConfig multi_source_config[MAX_SOURCE_BINS];
-        NvDsStreammuxConfig streammux_config;
-        NvDsOSDConfig osd_config;
-        NvDsSegVisualConfig segvisual_config;
+        gchar              **uri_list;
+        gchar              **sensor_id_list;
+        gchar              **sensor_name_list;
+        NvDsSourceConfig     multi_source_config[MAX_SOURCE_BINS];
+        NvDsStreammuxConfig  streammux_config;
+        NvDsOSDConfig        osd_config;
+        NvDsSegVisualConfig  segvisual_config;
         NvDsPreProcessConfig preprocess_config;
-        NvDsPreProcessConfig secondary_preprocess_sub_bin_config[MAX_SECONDARY_PREPROCESS_BINS];
-        NvDsGieConfig primary_gie_config;
+        NvDsPreProcessConfig
+            secondary_preprocess_sub_bin_config[MAX_SECONDARY_PREPROCESS_BINS];
+        NvDsGieConfig     primary_gie_config;
         NvDsTrackerConfig tracker_config;
-        NvDsGieConfig secondary_gie_sub_bin_config[MAX_SECONDARY_GIE_BINS];
-        NvDsSinkSubBinConfig sink_bin_sub_bin_config[MAX_SINK_BINS];
-        NvDsMsgConsumerConfig message_consumer_config[MAX_MESSAGE_CONSUMERS];
+        NvDsGieConfig     secondary_gie_sub_bin_config[MAX_SECONDARY_GIE_BINS];
+        NvDsSinkSubBinConfig   sink_bin_sub_bin_config[MAX_SINK_BINS];
+        NvDsMsgConsumerConfig  message_consumer_config[MAX_MESSAGE_CONSUMERS];
         NvDsTiledDisplayConfig tiled_display_config;
-        NvDsDsAnalyticsConfig dsanalytics_config;
-        NvDsDsExampleConfig dsexample_config;
+        NvDsDsAnalyticsConfig  dsanalytics_config;
+        NvDsDsExampleConfig    dsexample_config;
         NvDsVideoRecognitionConfig videorecognition_config;
+        NvDsUdpMulticastConfig
+            udpmulticast_config; /* new udp multicast source config */
         NvDsSinkMsgConvBrokerConfig msg_conv_config;
-        NvDsMyNetworkConfig mynetwork_config;
-        NvDsImageSave image_save_config;
+        NvDsMyNetworkConfig         mynetwork_config;
+        NvDsImageSave               image_save_config;
 
         /** To support nvmultiurisrcbin */
-        gboolean use_nvmultiurisrcbin;
-        gboolean stream_name_display;
-        guint max_batch_size;
-        gchar *http_ip;
-        gchar *http_port;
-        gboolean source_attr_all_parsed;
+        gboolean         use_nvmultiurisrcbin;
+        gboolean         stream_name_display;
+        guint            max_batch_size;
+        gchar           *http_ip;
+        gchar           *http_port;
+        gboolean         source_attr_all_parsed;
         NvDsSourceConfig source_attr_all_config;
 
         /** To set Global GPU ID for all the componenents at once if needed
          * This will be used in case gpu_id prop is not set for a component
-         * if gpu_id prop is set for a component, global_gpu_id will be overridden by it */
+         * if gpu_id prop is set for a component, global_gpu_id will be
+         * overridden by it */
         gint global_gpu_id;
     } NvDsConfig;
 
@@ -171,39 +181,48 @@ extern "C"
         gboolean show_bbox_text;
         gboolean seeking;
         gboolean quit;
-        gint person_class_id;
-        gint car_class_id;
-        gint return_value;
-        guint index;
-        gint active_source_index;
+        gint     person_class_id;
+        gint     car_class_id;
+        gint     return_value;
+        guint    index;
+        gint     active_source_index;
 
         GMutex app_lock;
-        GCond app_cond;
+        GCond  app_cond;
 
-        NvDsPipeline pipeline;
-        NvDsConfig config;
-        NvDsConfig override_config;
-        NvDsInstanceData instance_data[MAX_SOURCE_BINS];
-        NvDsC2DContext *c2d_ctx[MAX_MESSAGE_CONSUMERS];
-        NvDsAppPerfStructInt perf_struct;
-        bbox_generated_callback bbox_generated_post_analytics_cb;
-        bbox_generated_callback all_bbox_generated_cb;
+        NvDsPipeline              pipeline;
+        NvDsConfig                config;
+        NvDsConfig                override_config;
+        NvDsInstanceData          instance_data[MAX_SOURCE_BINS];
+        NvDsC2DContext           *c2d_ctx[MAX_MESSAGE_CONSUMERS];
+        NvDsAppPerfStructInt      perf_struct;
+        bbox_generated_callback   bbox_generated_post_analytics_cb;
+        bbox_generated_callback   all_bbox_generated_cb;
         overlay_graphics_callback overlay_graphics_cb;
-        NvDsFrameLatencyInfo *latency_info;
-        GMutex latency_lock;
-        GThread *ota_handler_thread;
-        guint ota_inotify_fd;
-        guint ota_watch_desc;
+        NvDsFrameLatencyInfo     *latency_info;
+        GMutex                    latency_lock;
+        GThread                  *ota_handler_thread;
+        guint                     ota_inotify_fd;
+        guint                     ota_watch_desc;
 
         /** Hash table to save NvDsSensorInfo
          * obtained with REST API stream/add, remove operations
          * The key is souce_id */
         GHashTable *sensorInfoHash;
-        gboolean eos_received;
+        gboolean    eos_received;
 
         NvDsObjEncCtxHandle obj_ctx_handle;
 
         CustomMessageData *custom_msg_data;
+
+        /* Per-object classification aggregation (history smoothing) */
+        GHashTable *cls_agg_map; /* key: guint64* (object_id), value: ObjClsAgg*
+                                    (defined in .c) */
+
+    /* 异步控制消息解析线程资源 */
+    GAsyncQueue *control_msg_queue;   /* 队列中元素: ControlMsgItem* */
+    GThread     *control_msg_thread;  /* 后台解析线程 */
+    gboolean     control_msg_thread_running; /* 线程运行标志 */
     };
 
     /**
@@ -221,16 +240,18 @@ extern "C"
      * @param  perf_cb [IN]
      * @param  overlay_graphics_cb [IN]
      */
-    gboolean create_pipeline(AppCtx *appCtx,
-                             bbox_generated_callback bbox_generated_post_analytics_cb,
-                             bbox_generated_callback all_bbox_generated_cb,
-                             perf_callback perf_cb,
-                             overlay_graphics_callback overlay_graphics_cb,
-                             nv_msgbroker_subscribe_cb_t msg_broker_subscribe_cb);
+    gboolean
+    create_pipeline(AppCtx                   *appCtx,
+                    bbox_generated_callback   bbox_generated_post_analytics_cb,
+                    bbox_generated_callback   all_bbox_generated_cb,
+                    perf_callback             perf_cb,
+                    overlay_graphics_callback overlay_graphics_cb,
+                    nv_msgbroker_subscribe_cb_t msg_broker_subscribe_cb);
 
     gboolean pause_pipeline(AppCtx *appCtx);
     gboolean resume_pipeline(AppCtx *appCtx);
-    gboolean seek_pipeline(AppCtx *appCtx, glong milliseconds, gboolean seek_is_relative);
+    gboolean seek_pipeline(AppCtx *appCtx, glong milliseconds,
+                           gboolean seek_is_relative);
 
     void toggle_show_bbox_text(AppCtx *appCtx);
 
@@ -245,8 +266,7 @@ extern "C"
      *
      * @return true if parsed successfully.
      */
-    gboolean
-    parse_config_file(NvDsConfig *config, gchar *cfg_file_path);
+    gboolean parse_config_file(NvDsConfig *config, gchar *cfg_file_path);
 
     /**
      * Function to read properties from YML configuration file.
@@ -256,8 +276,7 @@ extern "C"
      *
      * @return true if parsed successfully.
      */
-    gboolean
-    parse_config_file_yaml(NvDsConfig *config, gchar *cfg_file_path);
+    gboolean parse_config_file_yaml(NvDsConfig *config, gchar *cfg_file_path);
 
     /**
      * Function to procure the NvDsSensorInfo for the source_id

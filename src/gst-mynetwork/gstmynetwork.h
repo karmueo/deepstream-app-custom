@@ -7,7 +7,9 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#ifdef __cplusplus
 #include <map>
+#endif
 
 #define PACKAGE "_mynetwork"
 #define VERSION "1.0"
@@ -36,7 +38,10 @@ struct _Gstmynetwork
     guint gpu_id;
 
     int sockfd;
-    sockaddr_in multicast_addr;
+    struct sockaddr_in multicast_addr;
+    // configurable multicast params
+    gchar *ip;   // multicast ip string
+    guint  port; // multicast port
 };
 
 struct _GstmynetworkClass
@@ -52,28 +57,37 @@ struct _BboxInfo
     float height;
 };
 
-#pragma pack(1)
-struct _SendData
-{
-    BboxInfo detect_info;
-    gint class_id;
-    guint64 object_id;
-    gfloat confidence;
-    guint64 ntp_timestamp;
-    guint source_id;
+/* Packed network message */
+#pragma pack(push,1)
+struct _SendData {
+    BboxInfo detect_info;      // bbox
+    gint class_id;             // detection class id (original)
+    guint64 object_id;         // reserved / tracking id (may be 0)
+    gfloat confidence;         // detection confidence
+    guint64 ntp_timestamp;     // frame timestamp
+    guint source_id;           // source index
+    gint detect_class_id;      // duplicate detection class id for explicit field
+    gint classify_class_id;    // secondary classification id (0 if none)
+    gfloat classify_confidence;// secondary classification confidence (0 if none)
 };
+#pragma pack(pop)
 
-// 统计信息结构体
-struct _DetectAnalysis
-{
+// 统计信息结构体 (only used in C++)
+#ifdef __cplusplus
+struct _DetectAnalysis {
     guint64 frameNum;
     std::map<guint16, guint> primaryClassCountMap;
     std::map<guint16, guint> secondaryClassCountMap;
-    // 目标最小像素值
-    guint16 minPixel;
-    // 平均像素值
-    guint16 meanPixel;
+    guint16 minPixel;  // 目标最小像素值
+    guint16 meanPixel; // 平均像素值
 };
+#else
+typedef struct _DetectAnalysis {
+    guint64 frameNum;
+    guint16 minPixel;
+    guint16 meanPixel;
+} _DetectAnalysis;
+#endif
 
 GType gst_mynetwork_get_type(void);
 

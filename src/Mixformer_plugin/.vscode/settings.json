@@ -69,5 +69,7 @@
         "typeindex": "cpp",
         "typeinfo": "cpp",
         "variant": "cpp"
-    }
+    },
+    "C_Cpp.clang_format_fallbackStyle": "Google",
+    "notebook.defaultFormatter": "esbenp.prettier-vscode",
 }

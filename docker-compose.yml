@@ -2,8 +2,8 @@ version: '3.8'
 
 services:
   deepstream:
-    image: tl/deepstream:7.1-gc-triton-devel-waichang
-    container_name: deepstream-container
+    image: tl/deepstream:7.1-gc-triton-devel
+    container_name: tl-deepstream-container
     network_mode: host  # 等效于 --net=host
     runtime: nvidia     # 启用 NVIDIA GPU 支持
     devices:
@@ -20,8 +20,8 @@ services:
     cap_add:
       - SYS_PTRACE     # 允许 ptrace 调试
     working_dir: /workspace  # 设置工作目录
-    # entrypoint: ["/bin/bash", "-c", "cd /workspace/deepstream-app-custom && ./start_app.sh"]
-    entrypoint: ["/opt/nvidia/deepstream/deepstream-7.1/entrypoint.sh"]
+    # entrypoint: ["/bin/bash", "-c", "cd /workspace/deepstream-app-custom && ./start_both_apps.sh start-block"]
+    entrypoint: ["/bin/bash", "-c", "cd /workspace/deepstream-app-custom && ./start_rgb_app.sh"]
     healthcheck:
       test: ["CMD-SHELL", "echo 'Alive' || exit 1"]  # 简单心跳检测
       interval: 30s
@@ -29,3 +29,4 @@ services:
       retries: 3
     stdin_open: true  # 保持标准输入打开
     tty: true         # 启用伪终端
+    restart: unless-stopped  # 自动重启策略：除非手动停止

@@ -41,6 +41,10 @@ struct TRACKER_CONFIG
     uint8_t           modelType     = 0;                             // 模型类型，0:FP32, 1:FP16
     TARGET_MANAGEMENT targetManagement;                              // 目标管理配置
     uint32_t          confirmAgeThreshold = 5;                       // 确认跟踪的年龄阈值，默认5
+    // 是否启用跟踪中心位置稳定判断（用于剔除长时间停留在图像非中心位置且晃动极小的虚假跟踪）
+    bool              enableTrackCenterStable;                       // 默认开启（在解析或使用前初始化）
+    // 跟踪中心位置稳定像素方差阈值（越小越严格），只有 enableTrackCenterStable 为 true 时才生效
+    uint32_t          trackCenterStablePixelThreshold;               // 默认3像素（在解析或使用前初始化）
 };
 
 class DeepTracker

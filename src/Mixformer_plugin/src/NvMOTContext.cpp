@@ -38,6 +38,9 @@ NvMOTContext::NvMOTContext(const NvMOTConfig &configIn, NvMOTConfigResponse &con
 {
     configResponse.summaryStatus = NvMOTConfigStatus_OK;
     // 解析配置文件
+    // 先为新增可配置参数设定默认值，防止解析失败时未初始化
+    trackerConfig_.enableTrackCenterStable = true;
+    trackerConfig_.trackCenterStablePixelThreshold = 3;
     if (parseConfigFile(configIn.customConfigFilePath, trackerConfig_) != 0)
     {
         std::cerr << "Failed to parse custom config file: " << configIn.customConfigFilePath << std::endl;

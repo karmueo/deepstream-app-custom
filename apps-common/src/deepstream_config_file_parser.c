@@ -221,6 +221,7 @@ GST_DEBUG_CATEGORY(APP_CFG_PARSER_CAT);
 // Add group name for set of configs of dsexample element
 #define CONFIG_GROUP_DSEXAMPLE "ds-example"
 #define CONFIG_GROUP_VIDEORECOGNITION "videorecognition"
+#define CONFIG_GROUP_UDPMULTICAST "udpmulticast"
 // Refer to gst-dsexample element source code for the meaning of these
 // configs
 #define CONFIG_GROUP_DSEXAMPLE_FULL_FRAME "full-frame"
@@ -676,18 +677,35 @@ parse_source(NvDsSourceConfig *config, GKeyFile *key_file, gchar *group,
                 g_key_file_get_string(key_file, group,
                                       CONFIG_GROUP_SOURCE_SMART_RECORD_DIRPATH, &error);
             CHECK_ERROR(error);
-
+            /* 若目录不存在则尝试自动创建 */
             if (access(config->dir_path, W_OK))
             {
                 if (errno == ENOENT || errno == ENOTDIR)
                 {
-                    g_print("ERROR: Directory (%s) doesn't exist.\n", config->dir_path);
+                    if (g_mkdir_with_parents(config->dir_path, 0775) != 0)
+                    {
+                        g_print("ERROR: Failed to create directory %s (errno=%d)\n", config->dir_path, errno);
+                        goto done;
+                    }
+                    else
+                    {
+                        g_print("Created smart record directory: %s\n", config->dir_path);
+                    }
                 }
-                else if (errno == EACCES)
+
+                /* 再次检测写权限 */
+                if (access(config->dir_path, W_OK))
                 {
-                    g_print("ERROR: No write permission in %s\n", config->dir_path);
+                    if (errno == EACCES)
+                    {
+                        g_print("ERROR: No write permission in %s\n", config->dir_path);
+                    }
+                    else
+                    {
+                        g_print("ERROR: Directory %s not writable (errno=%d)\n", config->dir_path, errno);
+                    }
+                    goto done;
                 }
-                goto done;
             }
         }
         else if (!g_strcmp0(*key, CONFIG_GROUP_SOURCE_SMART_RECORD_FILE_PREFIX))
@@ -1143,6 +1161,9 @@ parse_videorecognition(NvDsVideoRecognitionConfig *config, GKeyFile *key_file)
     gchar **key = NULL;
     GError *error = NULL;
 
+    // 默认值：0 = multi-frame image classification
+    config->model_type = 0;
+
     keys = g_key_file_get_keys(key_file, CONFIG_GROUP_VIDEORECOGNITION, NULL, &error);
     CHECK_ERROR(error);
     for (key = keys; *key; key++)
@@ -1210,6 +1231,13 @@ parse_videorecognition(NvDsVideoRecognitionConfig *config, GKeyFile *key_file)
                                        "num-clips", &error);
             CHECK_ERROR(error);
         }
+        else if (!g_strcmp0(*key, "model-type"))
+        {
+            config->model_type =
+                g_key_file_get_integer(key_file, CONFIG_GROUP_VIDEORECOGNITION,
+                                       "model-type", &error);
+            CHECK_ERROR(error);
+        }
         else if (!g_strcmp0(*key, "trt-engine-file"))
         {
             config->trt_engine_name = g_key_file_get_string(
@@ -1220,6 +1248,71 @@ parse_videorecognition(NvDsVideoRecognitionConfig *config, GKeyFile *key_file)
         {
             NVGSTDS_WARN_MSG_V("Unknown key '%s' for group [%s]", *key,
                                CONFIG_GROUP_VIDEORECOGNITION);
+        }
+    }
+
+    ret = TRUE;
+done:
+    if (error)
+    {
+        g_error_free(error);
+    }
+    if (keys)
+    {
+        g_strfreev(keys);
+    }
+    if (!ret)
+    {
+        NVGSTDS_ERR_MSG_V("%s failed", __func__);
+    }
+    return ret;
+}
+
+gboolean
+parse_udpmulticast(NvDsUdpMulticastConfig *config, GKeyFile *key_file)
+{
+    gboolean ret = FALSE;
+    gchar **keys = NULL;
+    gchar **key = NULL;
+    GError *error = NULL;
+
+    keys = g_key_file_get_keys(key_file, CONFIG_GROUP_UDPMULTICAST, NULL, &error);
+    CHECK_ERROR(error);
+    for (key = keys; *key; key++)
+    {
+        if (!g_strcmp0(*key, CONFIG_GROUP_ENABLE))
+        {
+            config->enable = g_key_file_get_integer(key_file, CONFIG_GROUP_UDPMULTICAST, CONFIG_GROUP_ENABLE, &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "gpu-id"))
+        {
+            config->gpu_id = g_key_file_get_integer(key_file, CONFIG_GROUP_UDPMULTICAST, "gpu-id", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "multicast-ip"))
+        {
+            config->multicast_ip = g_key_file_get_string(key_file, CONFIG_GROUP_UDPMULTICAST, "multicast-ip", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "port"))
+        {
+            config->port = g_key_file_get_integer(key_file, CONFIG_GROUP_UDPMULTICAST, "port", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "interface"))
+        {
+            config->iface = g_key_file_get_string(key_file, CONFIG_GROUP_UDPMULTICAST, "interface", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "recv-buf-size"))
+        {
+            config->recv_buf_size = g_key_file_get_integer(key_file, CONFIG_GROUP_UDPMULTICAST, "recv-buf-size", &error);
+            CHECK_ERROR(error);
+        }
+        else
+        {
+            NVGSTDS_WARN_MSG_V("Unknown key '%s' for group [%s]", *key, CONFIG_GROUP_UDPMULTICAST);
         }
     }
 
@@ -2447,6 +2540,20 @@ parse_sink(NvDsSinkSubBinConfig *config, GKeyFile *key_file, gchar *group,
             config->msg_conv_broker_config.broker_sleep_time =
                 g_key_file_get_integer(key_file, group,
                                        CONFIG_GROUP_SINK_MSG_BROKER_SLEEP_TIME, &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "ip"))
+        {
+            // 设置报文发送组播地址
+            config->mynetwork_config.ip =
+                g_key_file_get_string(key_file, group, "ip", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "multicast-port"))
+        {
+            // 设置报文发送组播端口
+            config->mynetwork_config.multicast_port =
+                g_key_file_get_integer(key_file, group, "multicast-port", &error);
             CHECK_ERROR(error);
         }
         else
