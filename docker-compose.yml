@@ -14,14 +14,15 @@ services:
     environment:
       - DISPLAY=${DISPLAY:-localhost:10.0}  # 从主机继承或默认 localhost:10.0
       - GST_PLUGIN_PATH=/usr/local/lib/x86_64-linux-gnu/gstreamer-1.0
-      # - HTTP_PROXY=http://192.168.1.110:7890
-      # - HTTPS_PROXY=http://192.168.1.110:7890
+      # - http_proxy=http://127.0.0.1:7890
+      # - https_proxy=http://127.0.0.1:7890
     privileged: true    # 特权模式
     cap_add:
       - SYS_PTRACE     # 允许 ptrace 调试
     working_dir: /workspace  # 设置工作目录
     # entrypoint: ["/bin/bash", "-c", "cd /workspace/deepstream-app-custom && ./start_both_apps.sh start-block"]
-    entrypoint: ["/bin/bash", "-c", "cd /workspace/deepstream-app-custom && ./start_rgb_app.sh"]
+    # entrypoint: ["/bin/bash", "-c", "cd /workspace/deepstream-app-custom && ./start_rgb_app.sh"]
+    entrypoint: ["/opt/nvidia/nvidia_entrypoint.sh"]
     healthcheck:
       test: ["CMD-SHELL", "echo 'Alive' || exit 1"]  # 简单心跳检测
       interval: 30s
