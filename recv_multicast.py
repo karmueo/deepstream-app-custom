@@ -89,7 +89,7 @@ def main():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     # Bind before membership (BSD allows either order; Linux usually OK either way)
     try:
-        sock.bind(('', args.port))  # listen on all for the given port
+        sock.bind((args.iface, args.port))  # listen on all for the given port
     except OSError as e:
         print(f'Bind failed on port {args.port}: {e}', file=sys.stderr)
         sys.exit(1)
