@@ -108,6 +108,6 @@
   "C_Cpp.formatting": "Disabled",
   "C_Cpp.enhancedColorization": "Disabled",
   // 可选：避免后台继续索引
-"C_Cpp.workspaceParsingPriority": "none",
-"commentTranslate.browse.mode": "inplace"
+  "C_Cpp.workspaceParsingPriority": "none",
+  "commentTranslate.browse.mode": "inplace"
 }
