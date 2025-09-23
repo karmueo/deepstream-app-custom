@@ -2,7 +2,7 @@
 #define __GST__MYNETWORK_H__
 
 #include <gst/gst.h>
-#include <gst/base/gstbasetransform.h>
+#include <gst/base/gstbasesink.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -56,21 +56,6 @@ struct _BboxInfo
     float width;
     float height;
 };
-
-/* Packed network message */
-#pragma pack(push,1)
-struct _SendData {
-    BboxInfo detect_info;      // bbox
-    gint class_id;             // detection class id (original)
-    guint64 object_id;         // reserved / tracking id (may be 0)
-    gfloat confidence;         // detection confidence
-    guint64 ntp_timestamp;     // frame timestamp
-    guint source_id;           // source index
-    gint detect_class_id;      // duplicate detection class id for explicit field
-    gint classify_class_id;    // secondary classification id (0 if none)
-    gfloat classify_confidence;// secondary classification confidence (0 if none)
-};
-#pragma pack(pop)
 
 // 统计信息结构体 (only used in C++)
 #ifdef __cplusplus

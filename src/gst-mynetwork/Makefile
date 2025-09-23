@@ -6,7 +6,7 @@ TARGET_DEVICE = $(shell gcc -dumpmachine | cut -f1 -d -)
 CXX:= g++
 
 
-SRCS:= gstmynetwork.cpp
+SRCS:= gstmynetwork.cpp eo_protocol_parser.cpp
 
 INCS:= $(wildcard *.h)
 LIB:=libgst_mynetwork.so
@@ -25,6 +25,7 @@ LIBS := -shared -Wl,-no-undefined \
 	-L/usr/local/cuda-$(CUDA_VER)/lib64/ -lcudart -ldl \
 	-lnppc -lnppig -lnpps -lnppicc -lnppidei \
 	-L$(LIB_INSTALL_DIR) -lnvdsgst_helper -lnvdsgst_meta -lnvds_meta -lnvbufsurface -lnvbufsurftransform\
+	-ljsoncpp \
 	-Wl,-rpath,$(LIB_INSTALL_DIR)
 
 OBJS:= $(SRCS:.cpp=.o)

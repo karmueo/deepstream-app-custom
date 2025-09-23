@@ -18,37 +18,41 @@
 #include <gst/gst.h>
 #include <gst/gstinfo.h>
 // #include "nvdsmeta.h"
+#include "eo_protocol_parser.h"
+#include "gstmynetwork.h"
 #include "gstnvdsmeta.h"
+#include "nvbufsurface.h"
 #include <gst/base/gstbasetransform.h>
 #include <gst/gstelement.h>
 #include <gst/gstinfo.h>
-#include "nvbufsurface.h"
-#include "gstmynetwork.h"
 
 #include "cuda_runtime_api.h"
-#include <math.h>
-#include <map>
+#include <cerrno>
 #include <cstdio>
+#include <cstring>
+#include <ctime>
+#include <map>
+#include <math.h>
 
 /* enable to write transformed cvmat to files */
 /* #define DSEXAMPLE_DEBUG */
 /* 启用将转换后的 cvmat 写入文件 */
 /* #define DSEXAMPLE_DEBUG */
-static GQuark _dsmeta_quark = 0;
+static GQuark         _dsmeta_quark = 0;
 static DetectAnalysis _detctAnalysis = {0};
 
 GST_DEBUG_CATEGORY_STATIC(gst_mynetwork_debug);
 #define GST_CAT_DEFAULT gst_mynetwork_debug
 
-#define CHECK_CUDA_STATUS(cuda_status, error_str)                                  \
-    do                                                                             \
-    {                                                                              \
-        if ((cuda_status) != cudaSuccess)                                          \
-        {                                                                          \
-            g_print("Error: %s in %s at line %d (%s)\n",                           \
-                    error_str, __FILE__, __LINE__, cudaGetErrorName(cuda_status)); \
-            goto error;                                                            \
-        }                                                                          \
+#define CHECK_CUDA_STATUS(cuda_status, error_str)                              \
+    do                                                                         \
+    {                                                                          \
+        if ((cuda_status) != cudaSuccess)                                      \
+        {                                                                      \
+            g_print("Error: %s in %s at line %d (%s)\n", error_str, __FILE__,  \
+                    __LINE__, cudaGetErrorName(cuda_status));                  \
+            goto error;                                                        \
+        }                                                                      \
     } while (0)
 
 /* Filter signals and args */
@@ -70,18 +74,16 @@ enum
  *
  * describe the real formats here.
  */
-static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE("sink",
-                                                                   GST_PAD_SINK,
-                                                                   GST_PAD_ALWAYS,
-                                                                   GST_STATIC_CAPS("ANY"));
+static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
+    "sink", GST_PAD_SINK, GST_PAD_ALWAYS, GST_STATIC_CAPS("ANY"));
 
-static void gst_mynetwork_set_property(GObject *object,
-                                       guint property_id,
+static void gst_mynetwork_set_property(GObject      *object,
+                                       guint         property_id,
                                        const GValue *value,
-                                       GParamSpec *pspec);
-static void gst_mynetwork_get_property(GObject *object,
-                                       guint property_id,
-                                       GValue *value,
+                                       GParamSpec   *pspec);
+static void gst_mynetwork_get_property(GObject    *object,
+                                       guint       property_id,
+                                       GValue     *value,
                                        GParamSpec *pspec);
 static void gst_mynetwork_finalize(GObject *object);
 
@@ -91,17 +93,16 @@ G_DEFINE_TYPE(Gstmynetwork, gst_mynetwork, GST_TYPE_BASE_SINK);
 static gboolean gst_mynetwork_set_caps(GstBaseSink *sink, GstCaps *caps);
 
 static GstFlowReturn gst_mynetwork_render(GstBaseSink *sink, GstBuffer *buf);
-static gboolean gst_mynetwork_start(GstBaseSink *sink);
-static gboolean gst_mynetwork_stop(GstBaseSink *sink);
+static gboolean      gst_mynetwork_start(GstBaseSink *sink);
+static gboolean      gst_mynetwork_stop(GstBaseSink *sink);
 
 /* GObject vmethod implementations */
 
 /* initialize the _mynetwork's class */
-static void
-gst_mynetwork_class_init(GstmynetworkClass *klass)
+static void gst_mynetwork_class_init(GstmynetworkClass *klass)
 {
-    GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
-    GstElementClass *gstelement_class;
+    GObjectClass     *gobject_class = G_OBJECT_CLASS(klass);
+    GstElementClass  *gstelement_class;
     GstBaseSinkClass *base_sink_class = GST_BASE_SINK_CLASS(klass);
 
     gstelement_class = (GstElementClass *)klass;
@@ -119,23 +120,27 @@ gst_mynetwork_class_init(GstmynetworkClass *klass)
                                               &sink_factory);
 
     /* Set metadata describing the element */
-    gst_element_class_set_details_simple(gstelement_class,
-                                         "DsMyNetwork plugin",
-                                         "DsMyNetwork Plugin",
-                                         "Process a infer mst network on objects / full frame",
-                                         "ShenChangli "
-                                         "@ karmueo@163.com");
+    gst_element_class_set_details_simple(
+        gstelement_class, "DsMyNetwork plugin", "DsMyNetwork Plugin",
+        "Process a infer mst network on objects / full frame",
+        "ShenChangli "
+        "@ karmueo@163.com");
 
     /* install properties */
-    g_object_class_install_property(gobject_class, PROP_SILENT,
-                                    g_param_spec_boolean("silent", "Silent", "Produce verbose output ?",
-                                                         TRUE, G_PARAM_READWRITE));
-    g_object_class_install_property(gobject_class, PROP_IP,
-                                    g_param_spec_string("ip", "Multicast IP", "Multicast destination IP",
-                                                       "239.255.255.250", (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-    g_object_class_install_property(gobject_class, PROP_PORT,
-                                    g_param_spec_uint("port", "Multicast Port", "Multicast destination port",
-                                                     1, 65535, 5000, (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_SILENT,
+        g_param_spec_boolean("silent", "Silent", "Produce verbose output ?",
+                             TRUE, G_PARAM_READWRITE));
+    g_object_class_install_property(
+        gobject_class, PROP_IP,
+        g_param_spec_string(
+            "ip", "Multicast IP", "Multicast destination IP", "239.255.255.250",
+            (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_PORT,
+        g_param_spec_uint(
+            "port", "Multicast Port", "Multicast destination port", 1, 65535,
+            5000, (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     _detctAnalysis.minPixel = 9999;
 }
@@ -149,8 +154,7 @@ gst_mynetwork_class_init(GstmynetworkClass *klass)
  * 设置 pad 回调函数
  * 初始化实例结构
  */
-static void
-gst_mynetwork_init(Gstmynetwork *self)
+static void gst_mynetwork_init(Gstmynetwork *self)
 {
     // 初始化一些参数
     self->gpu_id = 0;
@@ -174,8 +178,8 @@ gst_mynetwork_init(Gstmynetwork *self)
 
     // 设置TTL（可选）
     int ttl = 32;
-    if (setsockopt(self->sockfd, IPPROTO_IP, IP_MULTICAST_TTL,
-                   &ttl, sizeof(ttl)) < 0)
+    if (setsockopt(self->sockfd, IPPROTO_IP, IP_MULTICAST_TTL, &ttl,
+                   sizeof(ttl)) < 0)
     {
         GST_WARNING("Failed to set multicast TTL");
     }
@@ -189,21 +193,18 @@ gst_mynetwork_init(Gstmynetwork *self)
 /**
  * 当元素从上游元素接收到输入缓冲区时调用。
  */
-static GstFlowReturn
-gst_mynetwork_render(GstBaseSink *sink, GstBuffer *buf)
+static GstFlowReturn gst_mynetwork_render(GstBaseSink *sink, GstBuffer *buf)
 {
     Gstmynetwork *self = GST_MYNETWORK(sink);
 
-    NvDsBatchMeta *batch_meta = NULL;
-    NvDsMetaList *l_frame = NULL;
-    NvDsFrameMeta *frame_meta = NULL;
-    NvDsMetaList *l_obj = NULL;
+    NvDsBatchMeta  *batch_meta = NULL;
+    NvDsMetaList   *l_frame = NULL;
+    NvDsFrameMeta  *frame_meta = NULL;
+    NvDsMetaList   *l_obj = NULL;
     NvDsObjectMeta *obj_meta = NULL;
-    NvDsObjectMeta *center_obj_meta = NULL;
     NvBufSurface *surface = NULL;
-    GstMapInfo in_map_info;
-    SendData send_data;
-    float obj2center_distance = 9999;
+    GstMapInfo    in_map_info;
+    std::vector<EOTargetInfo> targetInfos;
 
     memset(&in_map_info, 0, sizeof(in_map_info));
     if (!gst_buffer_map(buf, &in_map_info, GST_MAP_READ))
@@ -230,10 +231,8 @@ gst_mynetwork_render(GstBaseSink *sink, GstBuffer *buf)
         guint source_width = frame_meta->source_frame_width;
         guint source_height = frame_meta->source_frame_height;
         // 计算视频中心点坐标
-    float center_x = (float)source_width / 2.0f;
-    float center_y = (float)source_height / 2.0f;
-
-        NvOSD_RectParams rect_params;
+        float center_x = (float)source_width / 2.0f;
+        float center_y = (float)source_height / 2.0f;
 
         for (l_obj = frame_meta->obj_meta_list; l_obj != NULL;
              l_obj = l_obj->next)
@@ -241,93 +240,165 @@ gst_mynetwork_render(GstBaseSink *sink, GstBuffer *buf)
             obj_meta = (NvDsObjectMeta *)(l_obj->data);
             if ((obj_meta->class_id >= 0))
             {
-                // 计算目标的中心坐标
-                float obj_center_x = obj_meta->rect_params.left + obj_meta->rect_params.width / 2;
-                float obj_center_y = obj_meta->rect_params.top + obj_meta->rect_params.height / 2;
-                // 计算目标与视频中心的距离
-                float distance = fabs(obj_center_x - center_x) + fabs(obj_center_y - center_y);
-                if (distance < obj2center_distance)
+                // 为每个检测目标构造并发送EOTargetInfo
+                // 统计检测识别
+                std::map<guint16, guint>::iterator it =
+                    _detctAnalysis.primaryClassCountMap.find(obj_meta->class_id);
+                if (it != _detctAnalysis.primaryClassCountMap.end())
                 {
-                    obj2center_distance = distance;
-                    memset(&send_data, 0, sizeof(send_data));
-                    // Detection info
-                    send_data.class_id = obj_meta->class_id;            // legacy field
-                    send_data.detect_class_id = obj_meta->class_id;     // explicit detection class id
-                    send_data.confidence = obj_meta->confidence;        // detection confidence
-                    send_data.ntp_timestamp = frame_meta->ntp_timestamp;
-                    send_data.source_id = frame_meta->source_id;
-                    send_data.detect_info.left = obj_meta->rect_params.left;
-                    send_data.detect_info.top = obj_meta->rect_params.top;
-                    send_data.detect_info.width = obj_meta->rect_params.width;
-                    send_data.detect_info.height = obj_meta->rect_params.height;
-                    // classification defaults
-                    send_data.classify_class_id = 0;
-                    send_data.classify_confidence = 0.0f;
-                    center_obj_meta = obj_meta;
+                    // 如果找到了，就+1
+                    it->second++;
                 }
-            }
-        }
-
-        if (center_obj_meta != nullptr)
-        {
-            // 统计检测识别
-            // 寻找map中是否有该类别
-            std::map<guint16, guint>::iterator it = _detctAnalysis.primaryClassCountMap.find(center_obj_meta->class_id);
-            if (it != _detctAnalysis.primaryClassCountMap.end())
-            {
-                // 如果找到了，就+1
-                it->second++;
-            }
-            else
-            {
-                // 如果没找到，就插入一个新的
-                _detctAnalysis.primaryClassCountMap.insert(std::pair<guint16, guint>(center_obj_meta->class_id, 1));
-            }
-
-            // 处理二次分类，取第一个 classifier 的第一个 label 作为输出（若存在）
-            for (NvDsMetaList *l_class = center_obj_meta->classifier_meta_list; l_class != NULL; l_class = l_class->next)
-            {
-                NvDsClassifierMeta *cmeta = (NvDsClassifierMeta *)l_class->data;
-                for (NvDsMetaList *l_label = cmeta->label_info_list; l_label != NULL; l_label = l_label->next)
+                else
                 {
-                    NvDsLabelInfo *label = (NvDsLabelInfo *)l_label->data;
-                    // 统计计数
-                    auto it2 = _detctAnalysis.secondaryClassCountMap.find(label->result_class_id);
-                    if (it2 != _detctAnalysis.secondaryClassCountMap.end())
-                        it2->second++;
-                    else
-                        _detctAnalysis.secondaryClassCountMap.insert(std::pair<guint16, guint>(label->result_class_id, 1));
-                    // 若还未填充分类结果，则记录
-                    if (send_data.classify_class_id == 0)
+                    // 如果没找到，就插入一个新的
+                    _detctAnalysis.primaryClassCountMap.insert(
+                        std::pair<guint16, guint>(obj_meta->class_id, 1));
+                }
+
+                // 处理二次分类，取第一个 classifier 的第一个 label
+                // 作为输出（若存在）
+                for (NvDsMetaList *l_class = obj_meta->classifier_meta_list;
+                     l_class != NULL; l_class = l_class->next)
+                {
+                    NvDsClassifierMeta *cmeta = (NvDsClassifierMeta *)l_class->data;
+                    for (NvDsMetaList *l_label = cmeta->label_info_list;
+                         l_label != NULL; l_label = l_label->next)
                     {
-                        send_data.classify_class_id = label->result_class_id;
-                        send_data.classify_confidence = label->result_prob;
+                        NvDsLabelInfo *label = (NvDsLabelInfo *)l_label->data;
+                        // 统计计数
+                        auto it2 = _detctAnalysis.secondaryClassCountMap.find(
+                            label->result_class_id);
+                        if (it2 != _detctAnalysis.secondaryClassCountMap.end())
+                            it2->second++;
+                        else
+                            _detctAnalysis.secondaryClassCountMap.insert(
+                                std::pair<guint16, guint>(label->result_class_id, 1));
                     }
                 }
-            }
 
-            // 记录最像素数和平均像素数
-            guint16 pixel = obj_meta->rect_params.width * obj_meta->rect_params.height;
-            if (pixel < _detctAnalysis.minPixel)
-            {
-                _detctAnalysis.minPixel = pixel;
+                // 记录最像素数和平均像素数
+                guint16 pixel = obj_meta->rect_params.width * obj_meta->rect_params.height;
+                if (pixel < _detctAnalysis.minPixel)
+                {
+                    _detctAnalysis.minPixel = pixel;
+                }
+                guint totalObjNum = _detctAnalysis.primaryClassCountMap.size();
+                _detctAnalysis.meanPixel =
+                    (_detctAnalysis.meanPixel * (totalObjNum - 1) + pixel) / totalObjNum;
+
+                // 为当前目标创建EOTargetInfo并添加到向量中
+                EOTargetInfo targetInfo;
+                memset(&targetInfo, 0, sizeof(targetInfo));
+
+                // 填充时间信息
+                time_t     now = time(nullptr);
+                struct tm *tm_info = localtime(&now);
+                targetInfo.year = tm_info->tm_year + 1900;
+                targetInfo.month = tm_info->tm_mon + 1;
+                targetInfo.day = tm_info->tm_mday;
+                targetInfo.hour = tm_info->tm_hour;
+                targetInfo.minute = tm_info->tm_min;
+                targetInfo.second = tm_info->tm_sec;
+                targetInfo.msec = 0.0f;
+
+                // 填充设备和目标信息
+                targetInfo.deviceType = DeviceType::VISIBLE_LIGHT;
+                targetInfo.targetID = obj_meta->object_id; // 使用目标ID
+                targetInfo.targetStatus = TargetStatus::NORMAL;
+                targetInfo.trackMode = TrackMode::DETECTION_TRACK;
+
+                // 填充位置信息（示例值）
+                // targetInfo.fovAngle = 45.0f;
+                // targetInfo.longitude = 116.404;
+                // targetInfo.latitude = 39.915;
+                // targetInfo.altitude = 50.0;
+                // targetInfo.fovHorizontal = 0.0f;
+                // targetInfo.fovVertical = 0.0f;
+                // targetInfo.enuAzimuth = 0.0f;
+                // targetInfo.enuElevation = 0.0f;
+
+                // 填充目标检测信息
+                targetInfo.offsetHorizontal =
+                    (int)(obj_meta->rect_params.left + obj_meta->rect_params.width / 2);
+                targetInfo.offsetVertical =
+                    (int)(obj_meta->rect_params.top + obj_meta->rect_params.height / 2);
+                targetInfo.targetRect = (int)(obj_meta->rect_params.width * obj_meta->rect_params.height);
+
+                // 映射目标类型
+                switch (obj_meta->class_id)
+                {
+                case 0:
+                    targetInfo.targetClass = TargetClass::SMALL_BIRD;
+                    break;
+                case 1:
+                    targetInfo.targetClass = TargetClass::UAV;
+                    break;
+                default:
+                    targetInfo.targetClass = TargetClass::UNKNOWN;
+                    break;
+                }
+
+                targetInfo.targetConfidence = obj_meta->confidence;
+                // targetInfo.targetDistance = 1000.0f;
+
+                // 添加到目标列表
+                targetInfos.push_back(targetInfo);
             }
-            guint totalObjNum = _detctAnalysis.primaryClassCountMap.size();
-            _detctAnalysis.meanPixel = (_detctAnalysis.meanPixel * (totalObjNum - 1) + pixel) / totalObjNum;
         }
 
-        sendto(self->sockfd, &send_data, sizeof(send_data), 0,
-               (struct sockaddr *)&self->multicast_addr, sizeof(self->multicast_addr));
+        // 如果有检测到的目标，打包并发送所有目标信息
+        if (!targetInfos.empty())
+        {
+            static uint16_t sendCount = 0;
+            sendCount++;
+            std::vector<uint8_t> message =
+                EOProtocolParser::PackEOTargetMessage(
+                    targetInfos, sendCount,
+                    0,                  // 发送方站号
+                    SystemType::EO,     // 光电系统
+                    0,                  // 接收方站号
+                    SystemType::FUSION, // 融合系统
+                    0,                  // 发送子系统
+                    0                   // 接收子系统
+                );
+
+            // 发送打包后的报文
+            if (!message.empty())
+            {
+                ssize_t sent =
+                    sendto(self->sockfd, message.data(), message.size(), 0,
+                           (struct sockaddr *)&self->multicast_addr,
+                           sizeof(self->multicast_addr));
+                if (sent < 0)
+                {
+                    GST_WARNING("Failed to send EO target message with %zu targets: %s",
+                                targetInfos.size(), strerror(errno));
+                }
+                else
+                {
+                    GST_DEBUG("Successfully sent EO target message with %zu targets, size: %zu bytes",
+                              targetInfos.size(), message.size());
+                }
+            }
+            
+            // 清空目标列表，为下一帧准备
+            targetInfos.clear();
+        }
 
         // 把_detctAnalysis写入日志
         // 为了更方便定位，添加标志
         GST_INFO("<===================================");
         GST_INFO("frameNum: %lu", _detctAnalysis.frameNum);
-        for (std::map<guint16, guint>::iterator it = _detctAnalysis.primaryClassCountMap.begin(); it != _detctAnalysis.primaryClassCountMap.end(); it++)
+        for (std::map<guint16, guint>::iterator it =
+                 _detctAnalysis.primaryClassCountMap.begin();
+             it != _detctAnalysis.primaryClassCountMap.end(); it++)
         {
             GST_INFO("primaryClassCountMap: %d, %d", it->first, it->second);
         }
-        for (std::map<guint16, guint>::iterator it = _detctAnalysis.secondaryClassCountMap.begin(); it != _detctAnalysis.secondaryClassCountMap.end(); it++)
+        for (std::map<guint16, guint>::iterator it =
+                 _detctAnalysis.secondaryClassCountMap.begin();
+             it != _detctAnalysis.secondaryClassCountMap.end(); it++)
         {
             GST_INFO("secondaryClassCountMap: %d, %d", it->first, it->second);
         }
@@ -345,28 +416,26 @@ error:
 /**
  * 在元素从 ​READY​ 状态切换到 PLAYING/​PAUSED​ 状态时调用
  */
-static gboolean
-gst_mynetwork_start(GstBaseSink *sink)
+static gboolean gst_mynetwork_start(GstBaseSink *sink)
 {
     g_print("gst_mynetwork_start\n");
-    Gstmynetwork *self = GST_MYNETWORK(sink);
+    Gstmynetwork            *self = GST_MYNETWORK(sink);
     NvBufSurfaceCreateParams create_params = {0};
 
-    CHECK_CUDA_STATUS(cudaSetDevice(self->gpu_id),
-                      "Unable to set cuda device");
+    CHECK_CUDA_STATUS(cudaSetDevice(self->gpu_id), "Unable to set cuda device");
     return TRUE;
 error:
     return FALSE;
 }
 
 /**
- * @brief 在元素从 PLAYING/​PAUSED 状态切换到 ​READY​​ 状态时调用
+ * @brief 在元素从 PLAYING/​PAUSED 状态切换到 ​READY​​
+ * 状态时调用
  *
  * @param trans 指向 GstBaseTransform 结构的指针。
  * @return 始终返回 TRUE。
  */
-static gboolean
-gst_mynetwork_stop(GstBaseSink *sink)
+static gboolean gst_mynetwork_stop(GstBaseSink *sink)
 {
     g_print("gst_mynetwork_stop\n");
     return TRUE;
@@ -375,8 +444,7 @@ gst_mynetwork_stop(GstBaseSink *sink)
 /**
  * Called when source / sink pad capabilities have been negotiated.
  */
-static gboolean
-gst_mynetwork_set_caps(GstBaseSink *sink, GstCaps *caps)
+static gboolean gst_mynetwork_set_caps(GstBaseSink *sink, GstCaps *caps)
 {
     Gstmynetwork *dsmynetwork = GST_MYNETWORK(sink);
 
@@ -386,10 +454,10 @@ error:
     return FALSE;
 }
 
-static void gst_mynetwork_set_property(GObject *object,
-                                       guint property_id,
+static void gst_mynetwork_set_property(GObject      *object,
+                                       guint         property_id,
                                        const GValue *value,
-                                       GParamSpec *pspec)
+                                       GParamSpec   *pspec)
 {
     Gstmynetwork *self = GST_MYNETWORK(object);
     switch (property_id)
@@ -412,9 +480,9 @@ static void gst_mynetwork_set_property(GObject *object,
     }
 }
 
-static void gst_mynetwork_get_property(GObject *object,
-                                       guint property_id,
-                                       GValue *value,
+static void gst_mynetwork_get_property(GObject    *object,
+                                       guint       property_id,
+                                       GValue     *value,
                                        GParamSpec *pspec)
 {
     Gstmynetwork *self = GST_MYNETWORK(object);
@@ -451,21 +519,16 @@ static void gst_mynetwork_finalize(GObject *object)
  * initialize the plug-in itself
  * register the element factories and other features
  */
-static gboolean
-_mynetwork_init(GstPlugin *plugin)
+static gboolean _mynetwork_init(GstPlugin *plugin)
 {
     /* debug category for filtering log messages
      *
      * exchange the string 'Template _mynetwork' with your description
      */
-    GST_DEBUG_CATEGORY_INIT(gst_mynetwork_debug,
-                            "_mynetwork",
-                            0,
+    GST_DEBUG_CATEGORY_INIT(gst_mynetwork_debug, "_mynetwork", 0,
                             "_mynetwork plugin");
 
-    return gst_element_register(plugin,
-                                "_mynetwork",
-                                GST_RANK_PRIMARY,
+    return gst_element_register(plugin, "_mynetwork", GST_RANK_PRIMARY,
                                 GST_TYPE_MYNETWORK);
 }
 

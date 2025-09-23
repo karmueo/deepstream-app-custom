@@ -1,0 +1,7 @@
+[
+    {
+        "command": "g++ -c -o gstmynetwork.o -fPIC -DDS_VERSION=\\\"7.1.0\\\" -I /usr/local/cuda-12.6/include -I /opt/nvidia/deepstream/deepstream/sources/includes -I /usr/include/gstreamer-1.0 -pthread -I/usr/include/gstreamer-1.0 -I/usr/include/orc-0.4 -I/usr/include/gstreamer-1.0 -I/usr/include/x86_64-linux-gnu -I/usr/include/glib-2.0 -I/usr/lib/x86_64-linux-gnu/glib-2.0/include -g gstmynetwork.cpp",
+        "directory": "/workspace/deepstream-app-custom/src/gst-mynetwork",
+        "file": "/workspace/deepstream-app-custom/src/gst-mynetwork/gstmynetwork.cpp"
+    }
+]

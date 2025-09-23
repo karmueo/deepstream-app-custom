@@ -1,0 +1,10 @@
+{
+    // "makefile.compileCommandsPath": "/workspace/deepstream-app-custom/src/gst-mynetwork/.vscode/compile_commands.json",
+    "clangd.arguments": [
+        "--compile-commands-dir=/workspace/deepstream-app-custom/src/gst-mynetwork/build",
+        "--background-index",
+        "--clang-tidy",
+        "--completion-style=detailed",
+        "--header-insertion=iwyu"
+    ],
+}
