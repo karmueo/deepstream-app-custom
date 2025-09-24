@@ -206,7 +206,7 @@ display-tracking-id=0
 # config-file=config_preprocess_rgb_sgie.txt
 
 [secondary-gie0]
-enable=1
+enable=0
 #(0): nvinfer; (1): nvinferserver
 plugin-type=0
 # Use preprocessed input tensors attached as metadata by nvdspreprocess plugin instead of preprocessing inside the nvinfer.
