@@ -1349,6 +1349,7 @@ static gpointer nvds_x_event_thread(gpointer data)
     return NULL;
 }
 
+// TODO:暂时没用
 static void msg_broker_subscribe_cb(NvMsgBrokerErrorType status, void *msg,
                                     int msglen, char *topic, void *user_ptr)
 {
@@ -1364,7 +1365,6 @@ static void msg_broker_subscribe_cb(NvMsgBrokerErrorType status, void *msg,
         NvDsEventMsgMeta *event_msg_meta = (NvDsEventMsgMeta *)msg;
         AppCtx           *appCtx = (AppCtx *)user_ptr;
 
-        // TODO:待实现
         parse_cloud_message(msg, msglen);
         status = NV_MSGBROKER_API_OK;
     }
@@ -1388,27 +1388,58 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
     // if (srcIndex == -1)
     //     return TRUE;
 
-    /* 为每个对象生成完整的分类标签(概率)文本，覆盖原来的 bbox_generated_probe_after_analytics 中逻辑 */
-    for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame != NULL; l_frame = l_frame->next)
+    /* 为每个对象生成完整的检测+分类标签(概率)文本，覆盖原来的
+     * bbox_generated_probe_after_analytics 中逻辑 */
+    for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame != NULL;
+         l_frame = l_frame->next)
     {
         NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)l_frame->data;
-        for (NvDsMetaList *l_obj = frame_meta->obj_meta_list; l_obj != NULL; l_obj = l_obj->next)
+        for (NvDsMetaList *l_obj = frame_meta->obj_meta_list; l_obj != NULL;
+             l_obj = l_obj->next)
         {
             NvDsObjectMeta *obj_meta = (NvDsObjectMeta *)l_obj->data;
-            if (!obj_meta->classifier_meta_list)
-                continue;
 
+            /* 构建完整标签：检测类别(置信度) + 分类结果(概率) */
             GString *gstr = g_string_new(NULL);
-            for (NvDsClassifierMetaList *cl = obj_meta->classifier_meta_list; cl; cl = cl->next)
+
+            /* 首先添加检测结果 */
+            if (obj_meta->obj_label[0] != '\0')
             {
-                NvDsClassifierMeta *cl_meta = (NvDsClassifierMeta *)cl->data;
-                for (NvDsLabelInfoList *ll = cl_meta->label_info_list; ll; ll = ll->next)
+                g_string_append_printf(gstr, "%s(%.2f)", obj_meta->obj_label,
+                                       obj_meta->confidence);
+            }
+            else
+            {
+                /* 如果没有标签，使用类别ID */
+                g_string_append_printf(gstr, "Class_%d(%.2f)",
+                                       obj_meta->class_id,
+                                       obj_meta->confidence);
+            }
+
+            /* 如果有分类结果，追加分类信息 */
+            if (obj_meta->classifier_meta_list)
+            {
+                g_string_append_printf(gstr, " ");
+                for (NvDsClassifierMetaList *cl =
+                         obj_meta->classifier_meta_list;
+                     cl; cl = cl->next)
                 {
-                    NvDsLabelInfo *li = (NvDsLabelInfo *)ll->data;
-                    if (li->result_label[0] == '\0') continue;
-                    g_string_append_printf(gstr, "%s(%.2f) ", li->result_label, li->result_prob);
+                    NvDsClassifierMeta *cl_meta =
+                        (NvDsClassifierMeta *)cl->data;
+                    for (NvDsLabelInfoList *ll = cl_meta->label_info_list; ll;
+                         ll = ll->next)
+                    {
+                        NvDsLabelInfo *li = (NvDsLabelInfo *)ll->data;
+                        if (li->result_label[0] == '\0')
+                            continue;
+                        g_string_append_printf(gstr, "%s(%.2f) ",
+                                               li->result_label,
+                                               li->result_prob);
+                    }
                 }
             }
+
+            /* 设置显示文本 - 所有对象都会有标签 */
             if (gstr->len > 0)
             {
                 /* 改进：
@@ -1419,51 +1450,79 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
                     g_free(obj_meta->text_params.display_text);
                 obj_meta->text_params.display_text = g_strdup(gstr->str);
 
-                int frame_w = frame_meta->source_frame_width > 0 ? frame_meta->source_frame_width : 1920;
-                int frame_h = frame_meta->source_frame_height > 0 ? frame_meta->source_frame_height : 1080;
+                int frame_w = frame_meta->source_frame_width > 0
+                                  ? frame_meta->source_frame_width
+                                  : 1920;
+                int frame_h = frame_meta->source_frame_height > 0
+                                  ? frame_meta->source_frame_height
+                                  : 1080;
 
                 float bw = obj_meta->rect_params.width;
                 float bh = obj_meta->rect_params.height;
                 float min_side = bw < bh ? bw : bh;
-                int base_font = appCtx->config.osd_config.text_size > 0 ? appCtx->config.osd_config.text_size : 12;
+                int   base_font = appCtx->config.osd_config.text_size > 0
+                                      ? appCtx->config.osd_config.text_size
+                                      : 12;
                 float scale = 1.0f;
-                if (min_side < 40) scale = 0.6f; else if (min_side < 80) scale = 0.8f; /* 可根据需要再细化 */
+                if (min_side < 40)
+                    scale = 0.6f;
+                else if (min_side < 80)
+                    scale = 0.8f; /* 可根据需要再细化 */
                 int font_size = (int)(base_font * scale);
-                if (font_size < 8) font_size = 8; /* 最小字号 */
+                if (font_size < 8)
+                    font_size = 8; /* 最小字号 */
 
-                obj_meta->text_params.font_params.font_color = (NvOSD_ColorParams){1.0f,1.0f,1.0f,1.0f};
+                obj_meta->text_params.font_params.font_color =
+                    (NvOSD_ColorParams){1.0f, 1.0f, 1.0f, 1.0f};
                 obj_meta->text_params.font_params.font_size = font_size;
                 obj_meta->text_params.font_params.font_name = "Serif";
                 obj_meta->text_params.set_bg_clr = 1;
                 /* 透明度稍低，减轻遮挡 (A=0.4) */
-                obj_meta->text_params.text_bg_clr = (NvOSD_ColorParams){0.f,0.f,0.f,0.4f};
+                obj_meta->text_params.text_bg_clr =
+                    (NvOSD_ColorParams){0.f, 0.f, 0.f, 0.4f};
 
                 /* 估算文本高度：字号 + 顶/底边距(简单) */
                 int text_h = font_size + 4;
                 int x = (int)obj_meta->rect_params.left;
-                if (x < 0) x = 0;
-                if (x > frame_w - 4) x = frame_w - 4;
+                if (x < 0)
+                    x = 0;
+                if (x > frame_w - 4)
+                    x = frame_w - 4;
 
                 /* 判断小目标比例阈值（例如 <1% 认为小） */
-                float area_ratio = (bw * bh) / ((float)frame_w * (float)frame_h + 1e-3f);
+                float area_ratio =
+                    (bw * bh) / ((float)frame_w * (float)frame_h + 1e-3f);
                 int y;
-                if (area_ratio < 0.01f) {
+                if (area_ratio < 0.01f)
+                {
                     /* 优先放在框外上方 */
                     int y_above = (int)obj_meta->rect_params.top - text_h - 2;
-                    if (y_above >= 0) {
+                    if (y_above >= 0)
+                    {
                         y = y_above;
-                    } else {
-                        /* 上面放不下，放框下方 */
-                        y = (int)(obj_meta->rect_params.top + obj_meta->rect_params.height + 2);
-                        if (y > frame_h - text_h) y = frame_h - text_h;
                     }
-                } else {
+                    else
+                    {
+                        /* 上面放不下，放框下方 */
+                        y = (int)(obj_meta->rect_params.top +
+                                  obj_meta->rect_params.height + 2);
+                        if (y > frame_h - text_h)
+                            y = frame_h - text_h;
+                    }
+                }
+                else
+                {
                     /* 大一点的框，仍尝试放到上方内部或外侧 */
                     int y_try = (int)obj_meta->rect_params.top - text_h - 2;
-                    if (y_try < 0) {
-                        y = (int)obj_meta->rect_params.top + 2; /* 放到框内靠上 */
-                        if (y + text_h > frame_h) y = frame_h - text_h;
-                    } else {
+                    if (y_try < 0)
+                    {
+                        y = (int)obj_meta->rect_params.top +
+                            2; /* 放到框内靠上 */
+                        if (y + text_h > frame_h)
+                            y = frame_h - text_h;
+                    }
+                    else
+                    {
                         y = y_try;
                     }
                 }
@@ -1471,10 +1530,14 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
                 obj_meta->text_params.y_offset = y;
 
                 /* 如果目标极窄而文本会超出右边界，可左移 */
-                int estimated_text_w = (int)(strlen(obj_meta->text_params.display_text) * font_size * 0.55f);
-                if (estimated_text_w > 0 && x + estimated_text_w > frame_w) {
+                int estimated_text_w =
+                    (int)(strlen(obj_meta->text_params.display_text) *
+                          font_size * 0.55f);
+                if (estimated_text_w > 0 && x + estimated_text_w > frame_w)
+                {
                     int new_x = frame_w - estimated_text_w - 2;
-                    if (new_x < 0) new_x = 0;
+                    if (new_x < 0)
+                        new_x = 0;
                     obj_meta->text_params.x_offset = new_x;
                 }
             }
@@ -1544,7 +1607,7 @@ static gboolean recreate_pipeline_thread_func(gpointer arg)
     g_print("Recreate pipeline\n");
     if (!create_pipeline(appCtx, bbox_generated_probe_after_analytics,
                          all_bbox_generated, perf_cb, overlay_graphics,
-                         msg_broker_subscribe_cb))
+                         NULL))
     {
         NVGSTDS_ERR_MSG_V("Failed to create pipeline");
         return_value = -1;
@@ -1696,7 +1759,7 @@ int main(int argc, char *argv[])
     {
         if (!create_pipeline(appCtx[i], bbox_generated_probe_after_analytics,
                              all_bbox_generated, perf_cb, overlay_graphics,
-                             msg_broker_subscribe_cb))
+                             NULL))
         {
             NVGSTDS_ERR_MSG_V("Failed to create pipeline");
             return_value = -1;

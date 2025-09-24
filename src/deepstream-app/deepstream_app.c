@@ -687,6 +687,7 @@ write_kitti_output(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
     }
 }
 
+// TODO:主要检测后可以修改检测结果，暂时没用
 static void
 change_gieoutput(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
 {
@@ -1338,7 +1339,7 @@ gie_primary_processing_done_buf_prob(GstPad *pad, GstPadProbeInfo *info,
     }
 
     // ==== 可选：在修改框尺寸/写出之前执行 NMS 去重 ====
-    // 简单 NMS: 同类别框按置信度排序，IoU>阈值则删除低置信度框
+    // 简单 NMS: 按置信度排序，IoU>阈值则删除低置信度框（不再按类别区分，跨类别也抑制）
     const gfloat IOU_THRESH = 0.6f;  // 可调，>0 且 <1
     // 统计 & 处理每个帧
     for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame; l_frame = l_frame->next) {
@@ -1364,8 +1365,10 @@ gie_primary_processing_done_buf_prob(GstPad *pad, GstPadProbeInfo *info,
                 }
                 g_array_index(objs, NvDsObjectMeta*, j+1) = key;
             }
-            // 标记保留
-            GByteArray *keep = g_byte_array_sized_new(n); keep->len = n; memset(keep->data, 1, n);
+            // 标记保留（安全初始化）
+            GByteArray *keep = g_byte_array_sized_new(n);
+            g_byte_array_set_size(keep, n);
+            memset(keep->data, 1, n);
             for (guint i=0;i<n;i++) {
                 if (!keep->data[i]) continue;
                 NvDsObjectMeta *a = g_array_index(objs, NvDsObjectMeta*, i);
@@ -1379,7 +1382,7 @@ gie_primary_processing_done_buf_prob(GstPad *pad, GstPadProbeInfo *info,
                 for (guint j=i+1;j<n;j++) {
                     if (!keep->data[j]) continue;
                     NvDsObjectMeta *b = g_array_index(objs, NvDsObjectMeta*, j);
-                    if (b->class_id != a->class_id) continue; // 只同类别抑制
+                    // 跨类别也进行抑制（去掉按类别过滤）
                     float bx1 = b->rect_params.left;
                     float by1 = b->rect_params.top;
                     float bw  = b->rect_params.width;
