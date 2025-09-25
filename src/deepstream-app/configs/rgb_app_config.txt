@@ -1,7 +1,7 @@
 [application]
 enable-perf-measurement=1
 perf-measurement-interval-sec=5
-enable-jpeg-save=1
+#enable-jpeg-save=1
 
 [source0]
 enable=1
@@ -19,12 +19,13 @@ gpu-id=0
 cudadec-memtype=0
 rtsp-reconnect-interval-sec=3
 rtsp-reconnect-attempts=-1
-latency=500
-select-rtp-protocol=0
-smart-record=0
+latency=300
+select-rtp-protocol=4
+smart-record=1
 smart-rec-dir-path=/workspace/deepstream-app-custom/smart_rec_rgb
-smart-rec-duration=20
-smart-rec-start-time=5
+smart-rec-default-duration=180
+#smart-rec-duration=20
+#smart-rec-start-time=5
 
 [sink0]
 enable=1
@@ -161,7 +162,7 @@ display-tracking-id=0
 # config-file=config_preprocess_rgb_sgie.txt
 
 [secondary-gie0]
-enable=1
+enable=0
 #(0): nvinfer; (1): nvinferserver
 plugin-type=0
 # Use preprocessed input tensors attached as metadata by nvdspreprocess plugin instead of preprocessing inside the nvinfer.
@@ -189,6 +190,15 @@ model-type=1
 #trt-engine-file=/workspace/deepstream-app-custom/src/deepstream-app/models/yolov11m_classify_rgb_b4_v2_fp16.engine
 trt-engine-file=/workspace/deepstream-app-custom/src/gst-videorecognition/models/uniformerv2_softmax_rgb_fp16.engine
 
+# Configure this group to enable cloud message consumer.
+[message-consumer]
+enable=1
+proto-lib=/opt/nvidia/deepstream/deepstream/lib/libnvds_mqtt_proto.so
+conn-str=127.0.0.1;1883
+# config-file=cfg_mqtt.txt
+subscribe-topic-list=command;test2;test3
+# Use this option if message has sensor name as id instead of index (0,1,2 etc.).
+#sensor-list-file=dstest5_msgconv_sample_config.txt
 
 [tests]
 file-loop=0

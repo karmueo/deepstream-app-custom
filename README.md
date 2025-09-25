@@ -83,7 +83,7 @@ listener 1883 0.0.0.0
 
 启动
 ```sh
-mosquitto -v -c ./my_config.conf
+mosquitto -v -c ./my_config.conf &
 ```
 然后就可以使用mqtt发送和接收消息了
 
@@ -135,8 +135,8 @@ make
 把目标检测模型onnx文件放入src/deepstream-app/models目录下，根据实际的模型名称修改下面的参数：
 动态 batch: ./convert2trt.sh <ONNX_PATH> <ENGINE_PATH> dynamic [min_batch] [opt_batch] [max_batch] [fp16]
 ```sh
-./convert2trt.sh yolov11m_detect_ir_640_v1.onnx yolov11m_detect_ir_640_b4_v1_fp16.engine 
-dynamic 1 4 4 fp16
+./convert2trt.sh yolov11m_detect_ir_640_v2.onnx yolov11m_detect_ir_640_b4_v2_fp16.engine dynamic 1 4 4 fp16
+./convert2trt.sh yolov11m_detect_rgb_640_v5.onnx yolov11m_detect_rgb_640_v5_b4_fp16.engine dynamic 1 4 4 fp16
 ```
 然后根据实际的engine文件名修改src/deepstream-app/configs/config_infer_primary_yoloV11.txt中model-engine-file的值
 
@@ -152,20 +152,29 @@ trtyolo export -w yolov11.pt -v ultralytics -o output --max_boxes 100 --iou_thre
 ```bash
 ./convert2trt.sh
 ```
-### 分类模型
-把分类模型efficientnet_110_with_softmax.onnx放到triton_model/Secondary_Classify/1目录下 -->
+ -->
 
-### 单目标跟踪模型
-把模型sutrack.onnx文件放入src/Mixformer_plugin/models目录下，根据实际的onnx文件名修改convert2trt.sh
-```sh
-./convert2trt.sh
+### 二次分类模型
+把分类模型比如yolov11m_classify_rgb_b4_v2.onnx放到src/deepstream-app/models目录下，根据实际的模型名称修改下面的参数：
+```bash
+./convert2trt.sh yolov11m_classify_rgb_b4_v2.onnx yolov11m_classify_rgb_b4_v2_fp16.engine fp16
 ```
 
-### 视频识别模型
+### 单目标跟踪模型
+把模型sutrack.onnx文件放入src/Mixformer_plugin/models目录下，
+
+```sh
+# 用法: ./convert2trt.sh <ONNX_PATH> <ENGINE_PATH> [fp16]
+# 例如: 
+./convert2trt.sh ostrack-384-ep300-ce.onnx ostrack-384-ep300-ce_fp16.engine fp16
+./convert2trt.sh sutrack.onnx sutrack_fp32.engine
+```
+
+<!-- ### 视频识别模型
 把模型uniformerv2_softmax.onnx文件放入src/gst-videorecognition/models目录下，根据实际的onnx文件名修改convert2trt.sh
 ```sh
 ./convert2trt.sh
-```
+``` -->
 
 ## 开机自启动
 创建和编辑文件/etc/systemd/system/deepstream-compose.service
