@@ -1,6 +1,6 @@
 #pragma once
 
-// #include "mixformer_trt.h"
+#include "mixformerv2_trt.h"
 #include "nvdstracker.h"
 #include "suTrack_trt.h"
 #include "ostrack_trt.h"

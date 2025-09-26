@@ -8,10 +8,10 @@
             "name": "(gdb) 启动",
             "type": "cppdbg",
             "request": "launch",
-            "program": "/workspace/deepstream-app-custom/src/deepstream-app/deepstream-app",
+            "program": "/workspace/deepstream-app-custom/build/deepstream-app",
             "args": [
                 "-c",
-                "/workspace/deepstream-app-custom/src/deepstream-app/configs/ir_app_config.txt"
+                "/workspace/deepstream-app-custom/src/deepstream-app/configs/rgb_app_config.txt"
             ],
             "stopAtEntry": false,
             "cwd": "/workspace/deepstream-app-custom",

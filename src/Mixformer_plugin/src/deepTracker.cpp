@@ -34,8 +34,7 @@ DeepTracker::DeepTracker(const std::string    &engine_name,
     }
     else if (trackerConfig_.modelName == MODEL_MIXFORMERV2)
     {
-        // TODO:
-        // mixformer_ = std::make_shared<MixformerV2TRT>(engine_name);
+        trackerPtr_ = std::make_unique<MixformerV2TRT>(engine_name);
     }
     else
     {
@@ -296,7 +295,7 @@ TrackInfo DeepTracker::update(const cv::Mat             &img,
         else
         {
             // 过期的跟踪数据移除，更新为新的
-            for (int i = 0; i < list_capacity_ - 1; i++)
+            for (uint32_t i = 0; i < list_capacity_ - 1; i++)
             {
                 list_[i].age = list_[i + 1].age;
                 list_[i].tBbox.left = list_[i + 1].tBbox.left;
@@ -426,6 +425,4 @@ void DeepTracker::updatePastFrameObjBatch(
         }
         pastFrameObjBatch->numFilled = 1;
     }
-
-    pastFrameObjBatch = pastFrameObjBatch;
 }

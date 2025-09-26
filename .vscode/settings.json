@@ -102,5 +102,6 @@
     "C_Cpp.errorSquiggles": "disabled",
     "C_Cpp.formatting": "disabled",
     "C_Cpp.enhancedColorization": "disabled",
-    "commentTranslate.browse.mode": "inplace"
+    "commentTranslate.browse.mode": "inplace",
+    "remote.autoForwardPortsFallback": 0
 }

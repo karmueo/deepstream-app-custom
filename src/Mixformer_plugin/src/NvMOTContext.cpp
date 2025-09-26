@@ -74,6 +74,10 @@ NvMOTContext::NvMOTContext(const NvMOTConfig &configIn, NvMOTConfigResponse &con
             modelPath = trackerConfig_.modelRootPath + "/ostrack-384-ep300-ce_fp16.engine";
         }
     }
+    else if (trackerConfig_.modelName == MODEL_MIXFORMERV2)
+    {
+        modelPath = trackerConfig_.modelRootPath + "/mixformerv2_online_small_fp32.engine";
+    }
     tracker_ = std::make_shared<DeepTracker>(modelPath, trackerConfig_);
     // TODO: 添加 MixformerV2 模型支持
     // tracker_ = std::make_shared<DeepTracker>("/workspace/deepstream-app-custom/src/Mixformer_plugin/models/ostrack-384-ep300-ce_fp16.engine");
@@ -190,6 +194,8 @@ NvMOTStatus NvMOTContext::processFrame(const NvMOTProcessParams *params, NvMOTTr
 NvMOTStatus NvMOTContext::retrieveMiscData(const NvMOTProcessParams *params,
                                            NvMOTTrackerMiscData *pTrackerMiscData)
 {
+    (void)params;
+    (void)pTrackerMiscData;
     /* std::set<NvMOTStreamId> videoStreamIdList;
     for (NvMOTStreamId streamInd = 0; streamInd < params->numFrames; streamInd++)
     {
@@ -209,5 +215,6 @@ NvMOTStatus NvMOTContext::retrieveMiscData(const NvMOTProcessParams *params,
 
 NvMOTStatus NvMOTContext::removeStream(const NvMOTStreamId streamIdMask)
 {
+    (void)streamIdMask;
     return NvMOTStatus_OK;
 }

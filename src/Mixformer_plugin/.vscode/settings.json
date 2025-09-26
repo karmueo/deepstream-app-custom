@@ -1,4 +1,13 @@
 {
+    "cmake.ignoreCMakeListsMissing": true,
+    "cmake.debugConfig": {
+        "args": [
+            "-c",
+            // "/workspace/deepstream-app-custom/src/deepstream-app/configs/ir_app_config.txt"
+            "/workspace/deepstream-app-custom/src/deepstream-app/configs/rgb_app_config.txt"
+            // "/workspace/deepstream-app-custom/src/deepstream-app/configs/save_images_app.txt"
+        ]
+    },
     "files.associations": {
         "*.pbtxt": "plaintext",
         "ostream": "cpp",

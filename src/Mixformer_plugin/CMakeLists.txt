@@ -19,7 +19,7 @@ include_directories(${DS_INCLUDES_DIR})
 include_directories(${CMAKE_SOURCE_DIR}/includes)
 include_directories(/usr/local/cuda-12.6/targets/x86_64-linux/include/)
 
-file(GLOB TRACK ${CMAKE_SOURCE_DIR}/src/*.cpp)
+file(GLOB TRACK CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/*.cpp)
 
 set(CMAKE_CXX_FLAGS "-Wall -Wextra -fPIC -g")
 set(CMAKE_CUDA_FLAGS "--compiler-options -fPIC -g")
