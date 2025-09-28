@@ -223,6 +223,11 @@ extern "C"
     GAsyncQueue *control_msg_queue;   /* 队列中元素: ControlMsgItem* */
     GThread     *control_msg_thread;  /* 后台解析线程 */
     gboolean     control_msg_thread_running; /* 线程运行标志 */
+
+    /* 单目标跟踪统计 */
+    gboolean    tracker_stats_valid;
+    guint64     tracker_stats_current_id;
+    GHashTable *tracker_stats_counts; /* key: gchar*, value: guint* */
     };
 
     /**

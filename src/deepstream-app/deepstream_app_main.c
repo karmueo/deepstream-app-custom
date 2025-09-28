@@ -1472,8 +1472,62 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
 
             if (single_object_tracker)
             {
-                g_string_append_printf(gstr, " 跟踪(%.2f)",
-                                       obj_meta->tracker_confidence);
+                if (!appCtx->tracker_stats_counts)
+                {
+                    appCtx->tracker_stats_counts = g_hash_table_new_full(
+                        g_str_hash, g_str_equal, g_free, g_free);
+                }
+
+                if (obj_meta->object_id == UNTRACKED_OBJECT_ID)
+                {
+                    appCtx->tracker_stats_valid = FALSE;
+                    if (appCtx->tracker_stats_counts)
+                        g_hash_table_remove_all(appCtx->tracker_stats_counts);
+                }
+                else
+                {
+                    guint64 current_tracker_id = (guint64)obj_meta->object_id;
+                    if (!appCtx->tracker_stats_valid ||
+                        appCtx->tracker_stats_current_id != current_tracker_id)
+                    {
+                        if (appCtx->tracker_stats_counts)
+                            g_hash_table_remove_all(
+                                appCtx->tracker_stats_counts);
+                        appCtx->tracker_stats_current_id = current_tracker_id;
+                        appCtx->tracker_stats_valid = TRUE;
+                    }
+
+                    const gchar *label = NULL;
+                    gchar        label_buf[64];
+                    if (obj_meta->obj_label[0] != '\0')
+                    {
+                        label = obj_meta->obj_label;
+                    }
+                    else
+                    {
+                        g_snprintf(label_buf, sizeof(label_buf), "Class_%d",
+                                   obj_meta->class_id);
+                        label = label_buf;
+                    }
+
+                    if (appCtx->tracker_stats_counts)
+                    {
+                        guint *count = (guint *)g_hash_table_lookup(
+                            appCtx->tracker_stats_counts, label);
+                        if (!count)
+                        {
+                            gchar *stored_key = g_strdup(label);
+                            count = g_new0(guint, 1);
+                            g_hash_table_insert(appCtx->tracker_stats_counts,
+                                                stored_key, count);
+                        }
+                        (*count)++;
+                    }
+                }
+
+                g_string_append_printf(gstr, " 跟踪(%.2f) ID:%" G_GUINT64_FORMAT,
+                                       obj_meta->tracker_confidence,
+                                       (guint64)obj_meta->object_id);
             }
 
             /* 设置显示文本 - 所有对象都会有标签 */
@@ -1579,6 +1633,60 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
                 }
             }
             g_string_free(gstr, TRUE);
+        }
+    }
+
+    if (single_object_tracker && appCtx->tracker_stats_valid &&
+        appCtx->tracker_stats_counts &&
+        g_hash_table_size(appCtx->tracker_stats_counts) > 0)
+    {
+        NvDsFrameMeta *stats_frame =
+            nvds_get_nth_frame_meta(batch_meta->frame_meta_list, 0);
+        if (stats_frame)
+        {
+            NvDsDisplayMeta *stats_meta =
+                nvds_acquire_display_meta_from_pool(batch_meta);
+            stats_meta->num_labels = 1;
+
+            GString *stats_str = g_string_new(NULL);
+            g_string_append_printf(stats_str, "Tracker ID: %" G_GUINT64_FORMAT,
+                                   appCtx->tracker_stats_current_id);
+
+            GHashTableIter iter;
+            gpointer       key, value;
+            g_hash_table_iter_init(&iter, appCtx->tracker_stats_counts);
+            while (g_hash_table_iter_next(&iter, &key, &value))
+            {
+                guint count = *((guint *)value);
+                g_string_append_printf(stats_str, "\n%s: %u",
+                                       (gchar *)key, count);
+            }
+
+            stats_meta->text_params[0].display_text =
+                g_string_free(stats_str, FALSE);
+            stats_meta->text_params[0].set_bg_clr = 1;
+            stats_meta->text_params[0].text_bg_clr =
+                (NvOSD_ColorParams){0.f, 0.f, 0.f, 0.6f};
+            stats_meta->text_params[0].font_params.font_color =
+                (NvOSD_ColorParams){1.f, 1.f, 1.f, 1.f};
+            stats_meta->text_params[0].font_params.font_size =
+                appCtx->config.osd_config.text_size > 0
+                    ? appCtx->config.osd_config.text_size
+                    : 14;
+            stats_meta->text_params[0].font_params.font_name = "Serif";
+
+            int frame_w = stats_frame->source_frame_width > 0
+                              ? stats_frame->source_frame_width
+                              : appCtx->config.streammux_config.pipeline_width;
+            if (frame_w <= 0)
+                frame_w = 1920;
+            int x_offset = frame_w - 280;
+            if (x_offset < 20)
+                x_offset = 20;
+            stats_meta->text_params[0].x_offset = x_offset;
+            stats_meta->text_params[0].y_offset = 20;
+
+            nvds_add_display_meta_to_frame(stats_frame, stats_meta);
         }
     }
 
@@ -2010,6 +2118,12 @@ done:
             }
             g_hash_table_destroy(appCtx[i]->cls_agg_map);
             appCtx[i]->cls_agg_map = NULL;
+        }
+
+        if (appCtx[i]->tracker_stats_counts)
+        {
+            g_hash_table_destroy(appCtx[i]->tracker_stats_counts);
+            appCtx[i]->tracker_stats_counts = NULL;
         }
 
         g_mutex_lock(&disp_lock);
