@@ -36,9 +36,6 @@ NvMOTContext::NvMOTContext(const NvMOTConfig   &configIn,
                   << configIn.customConfigFilePath << std::endl;
     }
 
-    // mixformer_ = std::make_shared<MixformerTRT>(engine_name);
-    const std::string defaultModelDir = "../Mixformer_plugin/models";
-
     if (!trackerConfig_.modelFilePath.empty())
     {
         std::ifstream ifs(trackerConfig_.modelFilePath);

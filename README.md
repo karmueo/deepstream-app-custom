@@ -89,7 +89,7 @@ mosquitto -v -c ./my_config.conf &
 
 ### 编译单目标跟踪插件
 ```sh
-cd /workspace/deepstream-app-custom/src/Mixformer_plugin
+cd /workspace/deepstream-app-custom/src/sot_plugin
 mkdir build && cd build
 cmake ..
 cmake --build .
@@ -161,7 +161,7 @@ trtyolo export -w yolov11.pt -v ultralytics -o output --max_boxes 100 --iou_thre
 ```
 
 ### 单目标跟踪模型
-把模型sutrack.onnx文件放入src/Mixformer_plugin/models目录下，
+把模型sutrack.onnx文件放入src/sot_plugin/models目录下，
 
 ```sh
 # 用法: ./convert2trt.sh <ONNX_PATH> <ENGINE_PATH> [fp16]
