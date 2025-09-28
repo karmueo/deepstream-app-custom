@@ -1,5 +1,5 @@
-#ifndef __GST__MYNETWORK_H__
-#define __GST__MYNETWORK_H__
+#ifndef __GST__UDPMULTICAST_SINK_H__
+#define __GST__UDPMULTICAST_SINK_H__
 
 #include <gst/gst.h>
 #include <gst/base/gstbasesink.h>
@@ -11,7 +11,7 @@
 #include <map>
 #endif
 
-#define PACKAGE "_mynetwork"
+#define PACKAGE "_udpmulticast_sink"
 #define VERSION "1.0"
 #define LICENSE "Proprietary"
 #define DESCRIPTION "My plugin for Deepstream Network"
@@ -20,16 +20,16 @@
 
 G_BEGIN_DECLS
 
-typedef struct _GstmynetworkClass GstmynetworkClass;
-typedef struct _Gstmynetwork Gstmynetwork;
+typedef struct _Gstudpmulticast_sinkClass Gstudpmulticast_sinkClass;
+typedef struct _Gstudpmulticast_sink Gstudpmulticast_sink;
 typedef struct _SendData SendData;
 typedef struct _BboxInfo BboxInfo;
 typedef struct _DetectAnalysis DetectAnalysis;
 
-#define GST_TYPE_MYNETWORK (gst_mynetwork_get_type())
-#define GST_MYNETWORK(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_MYNETWORK, Gstmynetwork))
+#define GST_TYPE_UDPMULTICAST_SINK (gst_udpmulticast_sink_get_type())
+#define GST_UDPMULTICAST_SINK(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_UDPMULTICAST_SINK, Gstudpmulticast_sink))
 
-struct _Gstmynetwork
+struct _Gstudpmulticast_sink
 {
     GstBaseSink parent;
 
@@ -44,7 +44,7 @@ struct _Gstmynetwork
     guint  port; // multicast port
 };
 
-struct _GstmynetworkClass
+struct _Gstudpmulticast_sinkClass
 {
     GstBaseSinkClass parent_class;
 };
@@ -74,8 +74,8 @@ typedef struct _DetectAnalysis {
 } _DetectAnalysis;
 #endif
 
-GType gst_mynetwork_get_type(void);
+GType gst_udpmulticast_sink_get_type(void);
 
 G_END_DECLS
 
-#endif /* __GST__MYNETWORK_H__ */
+#endif /* __GST__UDPMULTICAST_SINK_H__ */

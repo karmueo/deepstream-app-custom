@@ -49,7 +49,7 @@ make -C nvdsinfer_custom_impl_Yolo clean && make -C nvdsinfer_custom_impl_Yolo
 
 ### 编译报文发送插件
 ```sh
-cd /workspace/deepstream-app-custom/src/gst-mynetwork
+cd /workspace/deepstream-app-custom/src/gst-udpmulticast_sink
 make
 make install
 ```

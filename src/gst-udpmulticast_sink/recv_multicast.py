@@ -6,7 +6,7 @@ import sys
 import time
 from datetime import datetime
 
-# C struct (packed) layout from gstmynetwork.h  (#pragma pack(1))
+# C struct (packed) layout from gstudpmulticast_sink.h  (#pragma pack(1))
 # struct _SendData {
 #   float left, top, width, height;   // BboxInfo
 #   int   class_id;                   // gint
@@ -24,7 +24,7 @@ STRUCT_SIZE = struct.calcsize(STRUCT_FMT)
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description='Receive and decode DeepStream _mynetwork multicast packets.')
+    p = argparse.ArgumentParser(description='Receive and decode DeepStream _udpmulticast_sink multicast packets.')
     p.add_argument('--group', default='239.255.10.10', help='Multicast group IP')
     p.add_argument('--port', type=int, default=6000, help='Multicast UDP port')
     p.add_argument('--iface', default='0.0.0.0', help='Local interface IP to bind / join (0.0.0.0 for default)')

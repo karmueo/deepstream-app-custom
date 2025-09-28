@@ -1,12 +1,12 @@
 /**
- * SECTION:element-_mynetwork
+ * SECTION:element-_udpmulticast_sink
  *
- * FIXME:Describe _mynetwork here.
+ * FIXME:Describe _udpmulticast_sink here.
  *
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch -v -m fakesrc ! _mynetwork ! fakesink silent=TRUE
+ * gst-launch -v -m fakesrc ! _udpmulticast_sink ! fakesink silent=TRUE
  * ]|
  * </refsect2>
  */
@@ -19,7 +19,7 @@
 #include <gst/gstinfo.h>
 // #include "nvdsmeta.h"
 #include "eo_protocol_parser.h"
-#include "gstmynetwork.h"
+#include "gstudpmulticast_sink.h"
 #include "gstnvdsmeta.h"
 #include "nvbufsurface.h"
 #include <gst/base/gstbasetransform.h>
@@ -41,8 +41,8 @@
 static GQuark         _dsmeta_quark = 0;
 static DetectAnalysis _detctAnalysis = {0};
 
-GST_DEBUG_CATEGORY_STATIC(gst_mynetwork_debug);
-#define GST_CAT_DEFAULT gst_mynetwork_debug
+GST_DEBUG_CATEGORY_STATIC(gst_udpmulticast_sink_debug);
+#define GST_CAT_DEFAULT gst_udpmulticast_sink_debug
 
 #define CHECK_CUDA_STATUS(cuda_status, error_str)                              \
     do                                                                         \
@@ -77,29 +77,29 @@ enum
 static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
     "sink", GST_PAD_SINK, GST_PAD_ALWAYS, GST_STATIC_CAPS("ANY"));
 
-static void gst_mynetwork_set_property(GObject      *object,
+static void gst_udpmulticast_sink_set_property(GObject      *object,
                                        guint         property_id,
                                        const GValue *value,
                                        GParamSpec   *pspec);
-static void gst_mynetwork_get_property(GObject    *object,
+static void gst_udpmulticast_sink_get_property(GObject    *object,
                                        guint       property_id,
                                        GValue     *value,
                                        GParamSpec *pspec);
-static void gst_mynetwork_finalize(GObject *object);
+static void gst_udpmulticast_sink_finalize(GObject *object);
 
-#define gst_mynetwork_parent_class parent_class
-G_DEFINE_TYPE(Gstmynetwork, gst_mynetwork, GST_TYPE_BASE_SINK);
+#define gst_udpmulticast_sink_parent_class parent_class
+G_DEFINE_TYPE(Gstudpmulticast_sink, gst_udpmulticast_sink, GST_TYPE_BASE_SINK);
 
-static gboolean gst_mynetwork_set_caps(GstBaseSink *sink, GstCaps *caps);
+static gboolean gst_udpmulticast_sink_set_caps(GstBaseSink *sink, GstCaps *caps);
 
-static GstFlowReturn gst_mynetwork_render(GstBaseSink *sink, GstBuffer *buf);
-static gboolean      gst_mynetwork_start(GstBaseSink *sink);
-static gboolean      gst_mynetwork_stop(GstBaseSink *sink);
+static GstFlowReturn gst_udpmulticast_sink_render(GstBaseSink *sink, GstBuffer *buf);
+static gboolean      gst_udpmulticast_sink_start(GstBaseSink *sink);
+static gboolean      gst_udpmulticast_sink_stop(GstBaseSink *sink);
 
 /* GObject vmethod implementations */
 
-/* initialize the _mynetwork's class */
-static void gst_mynetwork_class_init(GstmynetworkClass *klass)
+/* initialize the _udpmulticast_sink's class */
+static void gst_udpmulticast_sink_class_init(Gstudpmulticast_sinkClass *klass)
 {
     GObjectClass     *gobject_class = G_OBJECT_CLASS(klass);
     GstElementClass  *gstelement_class;
@@ -107,21 +107,21 @@ static void gst_mynetwork_class_init(GstmynetworkClass *klass)
 
     gstelement_class = (GstElementClass *)klass;
 
-    gobject_class->set_property = gst_mynetwork_set_property;
-    gobject_class->get_property = gst_mynetwork_get_property;
-    gobject_class->finalize = gst_mynetwork_finalize;
+    gobject_class->set_property = gst_udpmulticast_sink_set_property;
+    gobject_class->get_property = gst_udpmulticast_sink_get_property;
+    gobject_class->finalize = gst_udpmulticast_sink_finalize;
 
-    base_sink_class->render = GST_DEBUG_FUNCPTR(gst_mynetwork_render);
-    base_sink_class->start = GST_DEBUG_FUNCPTR(gst_mynetwork_start);
-    base_sink_class->stop = GST_DEBUG_FUNCPTR(gst_mynetwork_stop);
-    base_sink_class->set_caps = GST_DEBUG_FUNCPTR(gst_mynetwork_set_caps);
+    base_sink_class->render = GST_DEBUG_FUNCPTR(gst_udpmulticast_sink_render);
+    base_sink_class->start = GST_DEBUG_FUNCPTR(gst_udpmulticast_sink_start);
+    base_sink_class->stop = GST_DEBUG_FUNCPTR(gst_udpmulticast_sink_stop);
+    base_sink_class->set_caps = GST_DEBUG_FUNCPTR(gst_udpmulticast_sink_set_caps);
 
     gst_element_class_add_static_pad_template(GST_ELEMENT_CLASS(klass),
                                               &sink_factory);
 
     /* Set metadata describing the element */
     gst_element_class_set_details_simple(
-        gstelement_class, "DsMyNetwork plugin", "DsMyNetwork Plugin",
+        gstelement_class, "DsUdpMulticastSink plugin", "DsUdpMulticastSink Plugin",
         "Process a infer mst network on objects / full frame",
         "ShenChangli "
         "@ karmueo@163.com");
@@ -154,7 +154,7 @@ static void gst_mynetwork_class_init(GstmynetworkClass *klass)
  * 设置 pad 回调函数
  * 初始化实例结构
  */
-static void gst_mynetwork_init(Gstmynetwork *self)
+static void gst_udpmulticast_sink_init(Gstudpmulticast_sink *self)
 {
     // 初始化一些参数
     self->gpu_id = 0;
@@ -193,9 +193,9 @@ static void gst_mynetwork_init(Gstmynetwork *self)
 /**
  * 当元素从上游元素接收到输入缓冲区时调用。
  */
-static GstFlowReturn gst_mynetwork_render(GstBaseSink *sink, GstBuffer *buf)
+static GstFlowReturn gst_udpmulticast_sink_render(GstBaseSink *sink, GstBuffer *buf)
 {
-    Gstmynetwork *self = GST_MYNETWORK(sink);
+    Gstudpmulticast_sink *self = GST_UDPMULTICAST_SINK(sink);
 
     NvDsBatchMeta  *batch_meta = NULL;
     NvDsMetaList   *l_frame = NULL;
@@ -416,10 +416,10 @@ error:
 /**
  * 在元素从 ​READY​ 状态切换到 PLAYING/​PAUSED​ 状态时调用
  */
-static gboolean gst_mynetwork_start(GstBaseSink *sink)
+static gboolean gst_udpmulticast_sink_start(GstBaseSink *sink)
 {
-    g_print("gst_mynetwork_start\n");
-    Gstmynetwork            *self = GST_MYNETWORK(sink);
+    g_print("gst_udpmulticast_sink_start\n");
+    Gstudpmulticast_sink            *self = GST_UDPMULTICAST_SINK(sink);
     NvBufSurfaceCreateParams create_params = {0};
 
     CHECK_CUDA_STATUS(cudaSetDevice(self->gpu_id), "Unable to set cuda device");
@@ -435,18 +435,18 @@ error:
  * @param trans 指向 GstBaseTransform 结构的指针。
  * @return 始终返回 TRUE。
  */
-static gboolean gst_mynetwork_stop(GstBaseSink *sink)
+static gboolean gst_udpmulticast_sink_stop(GstBaseSink *sink)
 {
-    g_print("gst_mynetwork_stop\n");
+    g_print("gst_udpmulticast_sink_stop\n");
     return TRUE;
 }
 
 /**
  * Called when source / sink pad capabilities have been negotiated.
  */
-static gboolean gst_mynetwork_set_caps(GstBaseSink *sink, GstCaps *caps)
+static gboolean gst_udpmulticast_sink_set_caps(GstBaseSink *sink, GstCaps *caps)
 {
-    Gstmynetwork *dsmynetwork = GST_MYNETWORK(sink);
+    Gstudpmulticast_sink *dsudpmulticast_sink = GST_UDPMULTICAST_SINK(sink);
 
     return TRUE;
 
@@ -454,12 +454,12 @@ error:
     return FALSE;
 }
 
-static void gst_mynetwork_set_property(GObject      *object,
+static void gst_udpmulticast_sink_set_property(GObject      *object,
                                        guint         property_id,
                                        const GValue *value,
                                        GParamSpec   *pspec)
 {
-    Gstmynetwork *self = GST_MYNETWORK(object);
+    Gstudpmulticast_sink *self = GST_UDPMULTICAST_SINK(object);
     switch (property_id)
     {
     case PROP_SILENT:
@@ -480,12 +480,12 @@ static void gst_mynetwork_set_property(GObject      *object,
     }
 }
 
-static void gst_mynetwork_get_property(GObject    *object,
+static void gst_udpmulticast_sink_get_property(GObject    *object,
                                        guint       property_id,
                                        GValue     *value,
                                        GParamSpec *pspec)
 {
-    Gstmynetwork *self = GST_MYNETWORK(object);
+    Gstudpmulticast_sink *self = GST_UDPMULTICAST_SINK(object);
     switch (property_id)
     {
     case PROP_SILENT:
@@ -502,9 +502,9 @@ static void gst_mynetwork_get_property(GObject    *object,
     }
 }
 
-static void gst_mynetwork_finalize(GObject *object)
+static void gst_udpmulticast_sink_finalize(GObject *object)
 {
-    Gstmynetwork *self = GST_MYNETWORK(object);
+    Gstudpmulticast_sink *self = GST_UDPMULTICAST_SINK(object);
     if (self->sockfd >= 0)
     {
         close(self->sockfd);
@@ -519,17 +519,17 @@ static void gst_mynetwork_finalize(GObject *object)
  * initialize the plug-in itself
  * register the element factories and other features
  */
-static gboolean _mynetwork_init(GstPlugin *plugin)
+static gboolean _udpmulticast_sink_init(GstPlugin *plugin)
 {
     /* debug category for filtering log messages
      *
-     * exchange the string 'Template _mynetwork' with your description
+     * exchange the string 'Template _udpmulticast_sink' with your description
      */
-    GST_DEBUG_CATEGORY_INIT(gst_mynetwork_debug, "udpmulticast_sink", 0,
+    GST_DEBUG_CATEGORY_INIT(gst_udpmulticast_sink_debug, "udpmulticast_sink", 0,
                             "udpmulticast_sink plugin");
 
     return gst_element_register(plugin, "udpmulticast_sink", GST_RANK_PRIMARY,
-                                GST_TYPE_MYNETWORK);
+                                GST_TYPE_UDPMULTICAST_SINK);
 }
 
 /* PACKAGE: this is usually set by meson depending on some _INIT macro
@@ -538,18 +538,18 @@ static gboolean _mynetwork_init(GstPlugin *plugin)
  * compile this code. GST_PLUGIN_DEFINE needs PACKAGE to be defined.
  */
 #ifndef PACKAGE
-#define PACKAGE "myfirst_mynetwork"
+#define PACKAGE "myfirst_udpmulticast_sink"
 #endif
 
-/* gstreamer looks for this structure to register _mynetworks
+/* gstreamer looks for this structure to register _udpmulticast_sinks
  *
- * exchange the string 'Template udpmulticast_sink' with your _mynetwork description
+ * exchange the string 'Template udpmulticast_sink' with your _udpmulticast_sink description
  */
 GST_PLUGIN_DEFINE(GST_VERSION_MAJOR,
                   GST_VERSION_MINOR,
                   udpmulticast_sink,
                   DESCRIPTION,
-                  _mynetwork_init,
+                  _udpmulticast_sink_init,
                   "7.1",
                   LICENSE,
                   BINARY_PACKAGE,

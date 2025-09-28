@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(gst_mynetwork LANGUAGES CXX)
+project(gst_udpmulticast_sink LANGUAGES CXX)
 
 # 可通过 -DCUDA_VER=... -DNVDS_VERSION=... 覆盖
 if(NOT DEFINED CUDA_VER)
@@ -32,10 +32,10 @@ if(NOT JsonCpp_FOUND)
   endif()
 endif()
 
-add_library(gst_mynetwork SHARED gstmynetwork.cpp eo_protocol_parser.cpp)
+add_library(gst_udpmulticast_sink SHARED gstudpmulticast_sink.cpp eo_protocol_parser.cpp)
 
-target_compile_definitions(gst_mynetwork PRIVATE DS_VERSION=\"${DS_VERSION}\")
-target_include_directories(gst_mynetwork PRIVATE
+target_compile_definitions(gst_udpmulticast_sink PRIVATE DS_VERSION=\"${DS_VERSION}\")
+target_include_directories(gst_udpmulticast_sink PRIVATE
   /usr/local/cuda-${CUDA_VER}/include
   /opt/nvidia/deepstream/deepstream/sources/includes
   /usr/include/gstreamer-1.0
@@ -43,7 +43,7 @@ target_include_directories(gst_mynetwork PRIVATE
   ${JSONCPP_INCLUDE_DIRS}
   ${CMAKE_CURRENT_LIST_DIR}
 )
-target_link_libraries(gst_mynetwork PRIVATE
+target_link_libraries(gst_udpmulticast_sink PRIVATE
   ${GST_LIBRARIES}
   -L/usr/local/cuda-${CUDA_VER}/lib64 -lcudart -ldl
   -lnppc -lnppig -lnpps -lnppicc -lnppidei
@@ -53,10 +53,10 @@ target_link_libraries(gst_mynetwork PRIVATE
   $<$<NOT:$<BOOL:${JsonCpp_FOUND}>>:jsoncpp>
 )
 # 与原 Makefile 保持 rpath 到 LIB_INSTALL_DIR
-target_link_options(gst_mynetwork PRIVATE "-Wl,-rpath,${LIB_INSTALL_DIR}")
-target_link_options(gst_mynetwork PRIVATE "-Wl,-no-undefined")
-# set_target_properties(gst_mynetwork PROPERTIES OUTPUT_NAME "gst_mynetwork" PREFIX "lib")
-set_target_properties(gst_mynetwork
+target_link_options(gst_udpmulticast_sink PRIVATE "-Wl,-rpath,${LIB_INSTALL_DIR}")
+target_link_options(gst_udpmulticast_sink PRIVATE "-Wl,-no-undefined")
+# set_target_properties(gst_udpmulticast_sink PROPERTIES OUTPUT_NAME "gst_udpmulticast_sink" PREFIX "lib")
+set_target_properties(gst_udpmulticast_sink
   PROPERTIES
     OUTPUT_NAME "udpmulticast_sink"
     POSITION_INDEPENDENT_CODE ON
@@ -67,8 +67,8 @@ set_target_properties(gst_mynetwork
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # 安装目标（需要 sudo）
-install(TARGETS gst_mynetwork LIBRARY DESTINATION ${LIB_INSTALL_DIR})
-install(TARGETS gst_mynetwork LIBRARY DESTINATION ${GST_INSTALL_DIR})
+install(TARGETS gst_udpmulticast_sink LIBRARY DESTINATION ${LIB_INSTALL_DIR})
+install(TARGETS gst_udpmulticast_sink LIBRARY DESTINATION ${GST_INSTALL_DIR})
 
 # 可选构建 receiver 子目录
 option(BUILD_EO_RECEIVER "Build EO multicast receiver tool" ON)

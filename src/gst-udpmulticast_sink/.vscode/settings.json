@@ -1,7 +1,7 @@
 {
-    // "makefile.compileCommandsPath": "/workspace/deepstream-app-custom/src/gst-mynetwork/.vscode/compile_commands.json",
+    // "makefile.compileCommandsPath": "/workspace/deepstream-app-custom/src/gst-udpmulticast_sink/.vscode/compile_commands.json",
     "clangd.arguments": [
-        "--compile-commands-dir=/workspace/deepstream-app-custom/src/gst-mynetwork/build",
+        "--compile-commands-dir=/workspace/deepstream-app-custom/src/gst-udpmulticast_sink/build",
         "--background-index",
         "--clang-tidy",
         "--completion-style=detailed",
