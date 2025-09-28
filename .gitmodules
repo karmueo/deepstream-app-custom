@@ -9,4 +9,4 @@
 	url = git@github.com:karmueo/deepstream_sot_plugin.git
 [submodule "src/gst-udpmulticast_sink"]
 	path = src/gst-udpmulticast_sink
-	url = /workspace/gst-udpmulticast-sink
+	url = git@github.com:karmueo/deepstream_udpmulticast_sink.git
