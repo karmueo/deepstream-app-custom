@@ -1388,6 +1388,37 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
     // if (srcIndex == -1)
     //     return TRUE;
 
+    gboolean tracker_enabled = appCtx->config.tracker_config.enable;
+    gboolean single_object_tracker = FALSE;
+    if (tracker_enabled)
+    {
+        if (appCtx->config.tracker_config.ll_lib_file)
+        {
+            gchar *ll_lib_lower = g_ascii_strdown(
+                appCtx->config.tracker_config.ll_lib_file, -1);
+            if (g_strstr_len(ll_lib_lower, -1, "libsot") ||
+                g_strstr_len(ll_lib_lower, -1, "single_object") ||
+                g_strstr_len(ll_lib_lower, -1, "single-target"))
+            {
+                single_object_tracker = TRUE;
+            }
+            g_free(ll_lib_lower);
+        }
+        if (!single_object_tracker &&
+            appCtx->config.tracker_config.ll_config_file)
+        {
+            gchar *ll_cfg_lower = g_ascii_strdown(
+                appCtx->config.tracker_config.ll_config_file, -1);
+            if (g_strstr_len(ll_cfg_lower, -1, "sot") ||
+                g_strstr_len(ll_cfg_lower, -1, "single_object") ||
+                g_strstr_len(ll_cfg_lower, -1, "single-target"))
+            {
+                single_object_tracker = TRUE;
+            }
+            g_free(ll_cfg_lower);
+        }
+    }
+
     /* 为每个对象生成完整的检测+分类标签(概率)文本，覆盖原来的
      * bbox_generated_probe_after_analytics 中逻辑 */
     for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame != NULL;
@@ -1437,6 +1468,12 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
                                                li->result_prob);
                     }
                 }
+            }
+
+            if (single_object_tracker)
+            {
+                g_string_append_printf(gstr, " 跟踪(%.2f)",
+                                       obj_meta->tracker_confidence);
             }
 
             /* 设置显示文本 - 所有对象都会有标签 */

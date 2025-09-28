@@ -5,7 +5,6 @@
 #include "suTrack_trt.h"
 #include "ostrack_trt.h"
 
-static float IOU(const cv::Rect &srcRect, const cv::Rect &dstRect);
 
 struct TrackInfo
 {
@@ -34,6 +33,13 @@ struct TARGET_MANAGEMENT
     uint32_t maxTrackAge             = 30;    // 最大跟踪年龄，超过后认为跟踪失败，默认30
 };
 
+struct MIXFORMERV2_CONFIG
+{
+    int   updateInterval = 200;                // 模板更新间隔（帧）
+    float maxScoreDecay = 0.95f;               // 最大分数衰减系数
+    float templateUpdateScoreThreshold = 0.5f; // 模板更新分数阈值
+};
+
 struct TRACKER_CONFIG
 {
     std::string       modelRootPath = "../Mixformer_plugin/models";  // 模型根路径
@@ -45,6 +51,7 @@ struct TRACKER_CONFIG
     bool              enableTrackCenterStable;                       // 默认开启（在解析或使用前初始化）
     // 跟踪中心位置稳定像素方差阈值（越小越严格），只有 enableTrackCenterStable 为 true 时才生效
     uint32_t          trackCenterStablePixelThreshold;               // 默认3像素（在解析或使用前初始化）
+    MIXFORMERV2_CONFIG mixformerV2;                                  // MixFormerV2 特定配置
 };
 
 class DeepTracker
@@ -54,7 +61,10 @@ public:
     DeepTracker(const std::string &engine_name, const TRACKER_CONFIG &trackerConfig);
     ~DeepTracker();
 
-    TrackInfo update(const cv::Mat &img, const NvMOTObjToTrackList *detectObjList, const uint32_t frameNum);
+    TrackInfo update(const cv::Mat &img,
+                     const NvMOTObjToTrackList *detectObjList,
+                     const uint32_t frameNum,
+                     uint32_t *matchedDetectId = nullptr);
 
     bool isTracked() const
     {

@@ -26,6 +26,11 @@ class MixformerV2TRT : public BaseTrackTRT
 
     void setMaxScoreDecay(float decay) { this->max_score_decay = decay; }
 
+  void setTemplateUpdateScoreThreshold(float threshold)
+  {
+    this->template_update_score_threshold = threshold;
+  }
+
     void resetMaxPredScore(float value = 0.f) { this->max_pred_score = value; }
 
     float getMaxPredScore() const { return this->max_pred_score; }
@@ -38,7 +43,7 @@ class MixformerV2TRT : public BaseTrackTRT
     int input_search_size = 1;
 
     int frame_id = 0;
-    int update_interval = 30;
+    int update_interval = 200;
 
     float *output_pred_boxes = nullptr;
     float *output_pred_scores = nullptr;

@@ -1,4 +1,5 @@
 #include "deepTracker.h"
+#include <limits>
 
 // 计算两个矩形框的IOU
 static float IOU(const cv::Rect &srcRect, const cv::Rect &dstRect)
@@ -34,7 +35,14 @@ DeepTracker::DeepTracker(const std::string    &engine_name,
     }
     else if (trackerConfig_.modelName == MODEL_MIXFORMERV2)
     {
-        trackerPtr_ = std::make_unique<MixformerV2TRT>(engine_name);
+        auto mixformerPtr = std::make_unique<MixformerV2TRT>(engine_name);
+        mixformerPtr->setUpdateInterval(
+            trackerConfig_.mixformerV2.updateInterval);
+        mixformerPtr->setMaxScoreDecay(
+            trackerConfig_.mixformerV2.maxScoreDecay);
+        mixformerPtr->setTemplateUpdateScoreThreshold(
+            trackerConfig_.mixformerV2.templateUpdateScoreThreshold);
+        trackerPtr_ = std::move(mixformerPtr);
     }
     else
     {
@@ -61,10 +69,16 @@ DeepTracker::~DeepTracker()
 
 TrackInfo DeepTracker::update(const cv::Mat             &img,
                               const NvMOTObjToTrackList *detectObjList,
-                              const uint32_t             frameNum)
+                              const uint32_t             frameNum,
+                              uint32_t                  *matchedDetectId)
 {
     frameNum_ = frameNum;
     bool is_good_track = false;
+
+    if (matchedDetectId != nullptr)
+    {
+        *matchedDetectId = std::numeric_limits<uint32_t>::max();
+    }
 
     // 输出的结果存放在bbox中
     if (is_tracked_ == false)
@@ -182,6 +196,11 @@ TrackInfo DeepTracker::update(const cv::Mat             &img,
                         if (iou > trackerConfig_.targetManagement.iouThreshold)
                         {
                             // 如果IOU大于0.5，认为跟踪成功
+                            trackInfo_.bbox.class_id = obj.classId;
+                            if (matchedDetectId != nullptr)
+                            {
+                                *matchedDetectId = static_cast<uint32_t>(i);
+                            }
                             is_track_match_detect = true;
                             break;
                         }
@@ -234,6 +253,12 @@ TrackInfo DeepTracker::update(const cv::Mat             &img,
                         if (iou > trackerConfig_.targetManagement.iouThreshold)
                         {
                             // 如果IOU大于0.5，认为跟踪成功
+                            trackInfo_.bbox.score = obj.confidence;
+                            trackInfo_.bbox.class_id = obj.classId;
+                            if (matchedDetectId != nullptr)
+                            {
+                                *matchedDetectId = static_cast<uint32_t>(i);
+                            }
                             is_track_match_detect = true;
                             break;
                         }

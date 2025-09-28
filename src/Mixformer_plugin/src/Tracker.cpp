@@ -166,6 +166,63 @@ int parseConfigFile(const char *pCustomConfigFilePath, TRACKER_CONFIG &trackerCo
         }
     }
 
+    if (trackerConfig.modelName == MODEL_MIXFORMERV2)
+    {
+        YAML::Node mixformerNode;
+        if (configyml["MixformerV2Config"])
+        {
+            mixformerNode = configyml["MixformerV2Config"];
+        }
+        else if (configyml["MixformerV2"])
+        {
+            mixformerNode = configyml["MixformerV2"];
+        }
+
+        if (mixformerNode)
+        {
+            if (mixformerNode["update_interval"])
+            {
+                int interval = mixformerNode["update_interval"].as<int>();
+                if (interval <= 0)
+                {
+                    std::cerr << "Invalid update_interval in config file, set to default 200" << std::endl;
+                }
+                else
+                {
+                    trackerConfig.mixformerV2.updateInterval = interval;
+                }
+            }
+
+            if (mixformerNode["max_score_decay"])
+            {
+                float decay = mixformerNode["max_score_decay"].as<float>();
+                if (decay <= 0.0f || decay > 1.0f)
+                {
+                    std::cerr << "Invalid max_score_decay in config file, set to default 0.95" << std::endl;
+                }
+                else
+                {
+                    trackerConfig.mixformerV2.maxScoreDecay = decay;
+                }
+            }
+
+            if (mixformerNode["template_update_score_threshold"])
+            {
+                float threshold =
+                    mixformerNode["template_update_score_threshold"].as<float>();
+                if (threshold < 0.0f || threshold > 1.0f)
+                {
+                    std::cerr << "Invalid template_update_score_threshold in config file, set to default 0.5" << std::endl;
+                }
+                else
+                {
+                    trackerConfig.mixformerV2.templateUpdateScoreThreshold =
+                        threshold;
+                }
+            }
+        }
+    }
+
     return 0;
 }
 

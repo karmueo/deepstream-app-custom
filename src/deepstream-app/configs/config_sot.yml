@@ -16,3 +16,8 @@ TargetManagement:
   trackBoxWidthThreshold: 0.3 # 跟踪框最大宽度因子
   trackBoxHeightThreshold: 0.3 # 跟踪框最大高度因子
   maxTrackAge: 30 # 跟踪历史长度
+
+MixformerV2Config:
+  update_interval: 100
+  max_score_decay: 0.95
+  template_update_score_threshold: 0.5
