@@ -48,7 +48,6 @@ struct TRACKER_CONFIG
 {
     std::string       modelFilePath;                                   // 模型文件路径（可选，自定义）
     MODEL_NAME        modelName     = MODEL_SUTRACK;                 // 模型类型
-    uint8_t           modelType     = 0;                             // 模型类型，0:FP32, 1:FP16
     TARGET_MANAGEMENT targetManagement;                              // 目标管理配置
     uint32_t          confirmAgeThreshold = 5;                       // 确认跟踪的年龄阈值，默认5
     // 是否启用跟踪中心位置稳定判断（用于剔除长时间停留在图像非中心位置且晃动极小的虚假跟踪）

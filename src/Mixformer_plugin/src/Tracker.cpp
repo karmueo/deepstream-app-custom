@@ -42,16 +42,6 @@ int parseConfigFile(const char *pCustomConfigFilePath, TRACKER_CONFIG &trackerCo
                 trackerConfig.modelName = MODEL_MIXFORMERV2; // 默认设置为 MixFormerV2
             }
         }
-        else if (key == "modelType")
-        {
-            trackerConfig.modelType = itr->second.as<uint8_t>();
-            if (trackerConfig.modelType != 0 && trackerConfig.modelType != 1)
-            {
-                // 强制要求模型类型为0或1
-                trackerConfig.modelType = 0; // 默认设置为 FP32
-                std::cerr << "Invalid modelType in config file, set to default FP32" << std::endl;
-            }
-        }
         else if (key == "modelFilePath")
         {
             trackerConfig.modelFilePath = itr->second.as<std::string>();
