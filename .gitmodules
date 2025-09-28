@@ -4,3 +4,6 @@
 [submodule "DeepStream-Yolo"]
 	path = DeepStream-Yolo
 	url = https://github.com/marcoslucianops/DeepStream-Yolo.git
+[submodule "sot_plugin"]
+	path = sot_plugin
+	url = git@github.com:karmueo/deepstream_sot_plugin.git
