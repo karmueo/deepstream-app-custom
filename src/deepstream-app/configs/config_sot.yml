@@ -3,7 +3,7 @@
 BaseConfig:
   modelName: 2    # { 0=sutrack, 1=ostrack, 2=mixformer_v2 }
   modelType: 0  # { 0=FP32, 1=FP16}
-  modelRootPath: /workspace/deepstream-app-custom/src/Mixformer_plugin/models
+  modelFilePath: /workspace/deepstream-app-custom/src/Mixformer_plugin/models/mixformerv2_online_base_fp32.engine
   enableTrackCenterStable: 1 # 是否启用跟踪中心稳定判断(0=关闭,非0=开启)
   trackCenterStablePixelThreshold: 3 # 稳定判断像素标准差阈值(越小越严格)
 
@@ -18,6 +18,6 @@ TargetManagement:
   maxTrackAge: 30 # 跟踪历史长度
 
 MixformerV2Config:
-  update_interval: 100
-  max_score_decay: 0.95
-  template_update_score_threshold: 0.5
+  update_interval: 100 # online template 更新帧间隔
+  max_score_decay: 0.95 # 最大分数衰减因子
+  template_update_score_threshold: 0.5 # 在线模板更新置信度阈值

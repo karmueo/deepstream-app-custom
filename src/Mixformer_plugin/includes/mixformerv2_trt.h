@@ -31,6 +31,14 @@ class MixformerV2TRT : public BaseTrackTRT
     this->template_update_score_threshold = threshold;
   }
 
+    void setTemplateSize(int size);
+
+    void setSearchSize(int size);
+
+    void setTemplateFactor(float factor);
+
+    void setSearchFactor(float factor);
+
     void resetMaxPredScore(float value = 0.f) { this->max_pred_score = value; }
 
     float getMaxPredScore() const { return this->max_pred_score; }

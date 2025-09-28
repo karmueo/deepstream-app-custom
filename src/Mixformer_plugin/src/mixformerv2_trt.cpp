@@ -29,6 +29,38 @@ MixformerV2TRT::~MixformerV2TRT()
     delete[] this->input_search;
 }
 
+void MixformerV2TRT::setTemplateSize(int size)
+{
+    if (size > 0)
+    {
+        this->template_size = size;
+    }
+}
+
+void MixformerV2TRT::setSearchSize(int size)
+{
+    if (size > 0)
+    {
+        this->search_size = size;
+    }
+}
+
+void MixformerV2TRT::setTemplateFactor(float factor)
+{
+    if (factor > 0.0f)
+    {
+        this->template_factor = factor;
+    }
+}
+
+void MixformerV2TRT::setSearchFactor(float factor)
+{
+    if (factor > 0.0f)
+    {
+        this->search_factor = factor;
+    }
+}
+
 void MixformerV2TRT::initIOBuffer()
 {
     this->output_pred_boxes_size = 1;
@@ -46,6 +78,15 @@ void MixformerV2TRT::initIOBuffer()
         this->input_template_size *=
             std::max(1, static_cast<int>(template_dims.d[j]));
     }
+    if (template_dims.nbDims > 2)
+    {
+        const int inferred_template_size =
+            static_cast<int>(template_dims.d[2]);
+        if (inferred_template_size > 0)
+        {
+            this->setTemplateSize(inferred_template_size);
+        }
+    }
 
     auto online_template_dims =
         this->engine->getTensorShape(this->input_online_template_name);
@@ -60,6 +101,15 @@ void MixformerV2TRT::initIOBuffer()
     {
         this->input_search_size *=
             std::max(1, static_cast<int>(search_dims.d[j]));
+    }
+    if (search_dims.nbDims > 2)
+    {
+        const int inferred_search_size =
+            static_cast<int>(search_dims.d[2]);
+        if (inferred_search_size > 0)
+        {
+            this->setSearchSize(inferred_search_size);
+        }
     }
 
     auto boxes_dims = this->engine->getTensorShape(this->output_boxes_name);

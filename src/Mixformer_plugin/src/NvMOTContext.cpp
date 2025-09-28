@@ -37,41 +37,19 @@ NvMOTContext::NvMOTContext(const NvMOTConfig   &configIn,
     }
 
     // mixformer_ = std::make_shared<MixformerTRT>(engine_name);
-    std::string modelPath;
-    if (trackerConfig_.modelName == MODEL_SUTRACK)
+    const std::string defaultModelDir = "../Mixformer_plugin/models";
+
+    if (!trackerConfig_.modelFilePath.empty())
     {
-        if (trackerConfig_.modelType == 0)
+        std::ifstream ifs(trackerConfig_.modelFilePath);
+        if (!ifs.good())
         {
-            // FP32 模型
-            modelPath = trackerConfig_.modelRootPath + "/sutrack_fp32.engine";
-        }
-        else if (trackerConfig_.modelType == 1)
-        {
-            // FP16 模型
-            modelPath = trackerConfig_.modelRootPath + "/sutrack_fp16.engine";
+            std::cerr << "Warning: model file not found at "
+                      << trackerConfig_.modelFilePath << "." << std::endl;
         }
     }
-    else if (trackerConfig_.modelName == MODEL_OSTRACK)
-    {
-        if (trackerConfig_.modelType == 0)
-        {
-            // FP32 模型
-            modelPath = trackerConfig_.modelRootPath +
-                        "/ostrack-384-ep300-ce_fp32.engine";
-        }
-        else if (trackerConfig_.modelType == 1)
-        {
-            // FP16 模型
-            modelPath = trackerConfig_.modelRootPath +
-                        "/ostrack-384-ep300-ce_fp16.engine";
-        }
-    }
-    else if (trackerConfig_.modelName == MODEL_MIXFORMERV2)
-    {
-        modelPath = trackerConfig_.modelRootPath +
-                    "/mixformerv2_online_small_fp32.engine";
-    }
-    tracker_ = std::make_shared<DeepTracker>(modelPath, trackerConfig_);
+    tracker_ = std::make_shared<DeepTracker>(trackerConfig_.modelFilePath,
+                                             trackerConfig_);
 }
 
 NvMOTContext::~NvMOTContext() {}

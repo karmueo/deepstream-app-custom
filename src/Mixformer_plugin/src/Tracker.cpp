@@ -38,8 +38,8 @@ int parseConfigFile(const char *pCustomConfigFilePath, TRACKER_CONFIG &trackerCo
             trackerConfig.modelName = static_cast<MODEL_NAME>(itr->second.as<int>());
             if (trackerConfig.modelName < MODEL_SUTRACK || trackerConfig.modelName > MODEL_MIXFORMERV2)
             {
-                std::cerr << "Invalid modelName in config file, set to default SUTRACK" << std::endl;
-                trackerConfig.modelName = MODEL_SUTRACK; // 默认设置为 SUTRACK
+                std::cerr << "Invalid modelName in config file, set to default MixFormerV2" << std::endl;
+                trackerConfig.modelName = MODEL_MIXFORMERV2; // 默认设置为 MixFormerV2
             }
         }
         else if (key == "modelType")
@@ -52,10 +52,9 @@ int parseConfigFile(const char *pCustomConfigFilePath, TRACKER_CONFIG &trackerCo
                 std::cerr << "Invalid modelType in config file, set to default FP32" << std::endl;
             }
         }
-        else if (key == "modelRootPath")
+        else if (key == "modelFilePath")
         {
-            // 这里可以添加对模型路径的处理
-            trackerConfig.modelRootPath = itr->second.as<std::string>();
+            trackerConfig.modelFilePath = itr->second.as<std::string>();
         }
         else if (key == "enableTrackCenterStable")
         {
@@ -109,11 +108,8 @@ int parseConfigFile(const char *pCustomConfigFilePath, TRACKER_CONFIG &trackerCo
         else if (key == "maxMiss")
         {
             trackerConfig.targetManagement.maxMiss = itr->second.as<uint16_t>();
-            if (trackerConfig.targetManagement.maxMiss < 0)
-            {
-                trackerConfig.targetManagement.maxMiss = 0;
-                std::cerr << "Invalid maxMiss in config file, set to default 0" << std::endl;
-            }
+            // maxMiss is an unsigned value (uint16_t) and cannot be negative,
+            // so no negative check is necessary; keep the parsed value as-is.
         }
         else if (key == "scoreThreshold")
         {
@@ -220,6 +216,33 @@ int parseConfigFile(const char *pCustomConfigFilePath, TRACKER_CONFIG &trackerCo
                         threshold;
                 }
             }
+            if (mixformerNode["template_factor"])
+            {
+                float templateFactor =
+                    mixformerNode["template_factor"].as<float>();
+                if (templateFactor <= 0.0f)
+                {
+                    std::cerr << "Invalid template_factor in config file, set to default 2.0" << std::endl;
+                }
+                else
+                {
+                    trackerConfig.mixformerV2.templateFactor = templateFactor;
+                }
+            }
+
+            if (mixformerNode["search_factor"])
+            {
+                float searchFactor =
+                    mixformerNode["search_factor"].as<float>();
+                if (searchFactor <= 0.0f)
+                {
+                    std::cerr << "Invalid search_factor in config file, set to default 4.0" << std::endl;
+                }
+                else
+                {
+                    trackerConfig.mixformerV2.searchFactor = searchFactor;
+                }
+            }
         }
     }
 
@@ -230,6 +253,7 @@ NvMOTStatus NvMOT_Query(uint16_t customConfigFilePathSize,
                         char *pCustomConfigFilePath,
                         NvMOTQuery *pQuery)
 {
+    (void)customConfigFilePathSize;
     TRACKER_CONFIG trackerConfig;
     // 解析自定义配置文件
     if (parseConfigFile(pCustomConfigFilePath, trackerConfig) != 0)

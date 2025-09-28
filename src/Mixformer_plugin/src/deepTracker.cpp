@@ -42,6 +42,10 @@ DeepTracker::DeepTracker(const std::string    &engine_name,
             trackerConfig_.mixformerV2.maxScoreDecay);
         mixformerPtr->setTemplateUpdateScoreThreshold(
             trackerConfig_.mixformerV2.templateUpdateScoreThreshold);
+        mixformerPtr->setTemplateFactor(
+            trackerConfig_.mixformerV2.templateFactor);
+        mixformerPtr->setSearchFactor(
+            trackerConfig_.mixformerV2.searchFactor);
         trackerPtr_ = std::move(mixformerPtr);
     }
     else
