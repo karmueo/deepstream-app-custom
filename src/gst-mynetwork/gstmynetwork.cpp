@@ -525,10 +525,10 @@ static gboolean _mynetwork_init(GstPlugin *plugin)
      *
      * exchange the string 'Template _mynetwork' with your description
      */
-    GST_DEBUG_CATEGORY_INIT(gst_mynetwork_debug, "_mynetwork", 0,
-                            "_mynetwork plugin");
+    GST_DEBUG_CATEGORY_INIT(gst_mynetwork_debug, "udpmulticast_sink", 0,
+                            "udpmulticast_sink plugin");
 
-    return gst_element_register(plugin, "_mynetwork", GST_RANK_PRIMARY,
+    return gst_element_register(plugin, "udpmulticast_sink", GST_RANK_PRIMARY,
                                 GST_TYPE_MYNETWORK);
 }
 
@@ -543,11 +543,11 @@ static gboolean _mynetwork_init(GstPlugin *plugin)
 
 /* gstreamer looks for this structure to register _mynetworks
  *
- * exchange the string 'Template _mynetwork' with your _mynetwork description
+ * exchange the string 'Template udpmulticast_sink' with your _mynetwork description
  */
 GST_PLUGIN_DEFINE(GST_VERSION_MAJOR,
                   GST_VERSION_MINOR,
-                  _mynetwork,
+                  udpmulticast_sink,
                   DESCRIPTION,
                   _mynetwork_init,
                   "7.1",

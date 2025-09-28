@@ -158,6 +158,7 @@ trtyolo export -w yolov11.pt -v ultralytics -o output --max_boxes 100 --iou_thre
 把分类模型比如yolov11m_classify_rgb_b4_v2.onnx放到src/deepstream-app/models目录下，根据实际的模型名称修改下面的参数：
 ```bash
 ./convert2trt.sh yolov11m_classify_rgb_b4_v2.onnx yolov11m_classify_rgb_b4_v2_fp16.engine fp16
+./convert2trt.sh yolov11m_classify_ir_b4_v2.onnx yolov11m_classify_ir_b4_v2_fp16.engine fp16
 ```
 
 ### 单目标跟踪模型
@@ -168,6 +169,9 @@ trtyolo export -w yolov11.pt -v ultralytics -o output --max_boxes 100 --iou_thre
 # 例如: 
 ./convert2trt.sh ostrack-384-ep300-ce.onnx ostrack-384-ep300-ce_fp16.engine fp16
 ./convert2trt.sh sutrack.onnx sutrack_fp32.engine
+./convert2trt.sh mixformerv2_online_base.onnx mixformerv2_online_base_fp32.engine
+./convert2trt.sh mixformerv2_online_small.onnx mixformerv2_online_base_fp16.engine fp16
+./convert2trt.sh mixformerv2_online_small.onnx mixformerv2_online_small_fp32.engine
 ```
 
 <!-- ### 视频识别模型

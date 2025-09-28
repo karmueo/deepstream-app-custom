@@ -55,7 +55,13 @@ target_link_libraries(gst_mynetwork PRIVATE
 # 与原 Makefile 保持 rpath 到 LIB_INSTALL_DIR
 target_link_options(gst_mynetwork PRIVATE "-Wl,-rpath,${LIB_INSTALL_DIR}")
 target_link_options(gst_mynetwork PRIVATE "-Wl,-no-undefined")
-set_target_properties(gst_mynetwork PROPERTIES OUTPUT_NAME "gst_mynetwork" PREFIX "lib")
+# set_target_properties(gst_mynetwork PROPERTIES OUTPUT_NAME "gst_mynetwork" PREFIX "lib")
+set_target_properties(gst_mynetwork
+  PROPERTIES
+    OUTPUT_NAME "udpmulticast_sink"
+    POSITION_INDEPENDENT_CODE ON
+    INSTALL_RPATH ${LIB_INSTALL_DIR}
+)
 
 # 导出 compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
