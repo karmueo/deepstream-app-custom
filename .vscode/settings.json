@@ -1,16 +1,16 @@
 {
     "cmake.ignoreCMakeListsMissing": true,
-    "cmake.sourceDirectory": "/workspace/deepstream-app-custom/src/deepstream-app/CMakeLists.txt",
+    "cmake.sourceDirectory": "${workspaceFolder}/src/deepstream-app/CMakeLists.txt",
     "cmake.debugConfig": {
         "args": [
             "-c",
-            // "/workspace/deepstream-app-custom/src/deepstream-app/configs/ir_app_config.txt"
-            "/workspace/deepstream-app-custom/src/deepstream-app/configs/rgb_app_config.txt"
-            // "/workspace/deepstream-app-custom/src/deepstream-app/configs/save_images_app.txt"
+            // "${workspaceFolder}/src/deepstream-app/configs/ir_app_config.txt"
+            "${workspaceFolder}/src/deepstream-app/configs/rgb_app_config.txt"
+            // "${workspaceFolder}/src/deepstream-app/configs/save_images_app.txt"
         ]
     },
     "clangd.arguments": [
-        "--compile-commands-dir=/workspace/deepstream-app-custom/build",
+        "--compile-commands-dir=${workspaceFolder}/build",
         "--background-index",
         "--clang-tidy",
         "--completion-style=detailed",

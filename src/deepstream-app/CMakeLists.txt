@@ -27,15 +27,15 @@ if("${CUDA_VER}" STREQUAL "")
 endif()
 
 # DeepStream version
-set(NVDS_VERSION "7.1")
+set(NVDS_VERSION "8.0")
 
 # Installation directories
 if(NOT DEFINED LIB_INSTALL_DIR)
-    set(LIB_INSTALL_DIR "/opt/nvidia/deepstream/deepstream-${NVDS_VERSION}/lib/")
+    set(LIB_INSTALL_DIR "/opt/nvidia/deepstream/deepstream/lib/")
 endif()
 
 if(NOT DEFINED APP_INSTALL_DIR)
-    set(APP_INSTALL_DIR "/opt/nvidia/deepstream/deepstream-${NVDS_VERSION}/bin/")
+    set(APP_INSTALL_DIR "/opt/nvidia/deepstream/deepstream/bin/")
 endif()
 
 # Detect target device
