@@ -33,12 +33,14 @@ make install
 ## 编译
 ### 安装必要的依赖
 ```sh
-bash /opt/nvidia/deepstream/deepstream/user_additional_install.sh
-apt install libgstreamer-plugins-base1.0-dev libgstreamer1.0-dev libopencv-dev libgstrtspserver-1.0-dev pkg-config libjson-glib-dev
-apt reinstall libxvidcore4
-apt reinstall libmp3lame0
+sudo apt-get install libgstreamer-plugins-base1.0-dev libgstreamer1.0-dev \
+    libgstrtspserver-1.0-dev libx11-dev libjson-glib-dev libyaml-cpp-dev \
+    libgbm1 libglapi-mesa libgles2-mesa-dev libopencv-dev pkg-config
+
+sudo apt reinstall libxvidcore4
+sudo apt reinstall libmp3lame0
 # 中文显示
-apt-get install ttf-wqy-microhei
+sudo apt-get install ttf-wqy-microhei
 ```
 
 ### 编译DeepStream-Yolo
