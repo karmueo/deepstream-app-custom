@@ -3,7 +3,7 @@
 
 ## 环境变量配置
 ```
-export CUDA_VER=12.6
+export CUDA_VER=12.9
 export LD_LIBRARY_PATH=/opt/nvidia/deepstream/deepstream/lib:$LD_LIBRARY_PATH
 ```
 
@@ -51,7 +51,7 @@ make -C nvdsinfer_custom_impl_Yolo clean && make -C nvdsinfer_custom_impl_Yolo
 
 ### 编译报文发送插件
 ```sh
-cd /workspace/deepstream-app-custom/src/gst-udpmulticast_sink
+cd src/gst-udpmulticast_sink
 make
 make install
 ```

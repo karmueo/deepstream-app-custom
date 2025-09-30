@@ -1532,7 +1532,7 @@ gie_processing_done_buf_prob(GstPad *pad, GstPadProbeInfo *info,
 }
 
 /**
- * Buffer probe function after tracker.
+ * 跟踪之后的buffer
  */
 static GstPadProbeReturn
 analytics_done_buf_prob(GstPad *pad, GstPadProbeInfo *info, gpointer u_data)
@@ -1549,25 +1549,25 @@ analytics_done_buf_prob(GstPad *pad, GstPadProbeInfo *info, gpointer u_data)
     }
 
     // 仅在启用了 tracker 时，过滤掉未被跟踪的检测目标
-    if (appCtx->config.tracker_config.enable)
-    {
-        // 注意：UNTRACKED_OBJECT_ID 表示尚未关联到跟踪轨迹的检测框
-        for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame != NULL; l_frame = l_frame->next)
-        {
-            NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)l_frame->data;
-            for (NvDsMetaList *l_obj = frame_meta->obj_meta_list; l_obj != NULL;)
-            {
-                NvDsMetaList *l_next = l_obj->next; // 删除节点前先保存 next
-                NvDsObjectMeta *obj = (NvDsObjectMeta *)l_obj->data;
-                if (obj->object_id == UNTRACKED_OBJECT_ID)
-                {
-                    // 从当前帧移除未跟踪目标
-                    nvds_remove_obj_meta_from_frame(frame_meta, obj);
-                }
-                l_obj = l_next;
-            }
-        }
-    }
+    // if (appCtx->config.tracker_config.enable)
+    // {
+    //     // 注意：UNTRACKED_OBJECT_ID 表示尚未关联到跟踪轨迹的检测框
+    //     for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame != NULL; l_frame = l_frame->next)
+    //     {
+    //         NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)l_frame->data;
+    //         for (NvDsMetaList *l_obj = frame_meta->obj_meta_list; l_obj != NULL;)
+    //         {
+    //             NvDsMetaList *l_next = l_obj->next; // 删除节点前先保存 next
+    //             NvDsObjectMeta *obj = (NvDsObjectMeta *)l_obj->data;
+    //             if (obj->object_id == UNTRACKED_OBJECT_ID)
+    //             {
+    //                 // 从当前帧移除未跟踪目标
+    //                 nvds_remove_obj_meta_from_frame(frame_meta, obj);
+    //             }
+    //             l_obj = l_next;
+    //         }
+    //     }
+    // }
 
     /*
      * Output KITTI labels with tracking ID if configured to do so.
