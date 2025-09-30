@@ -4,9 +4,12 @@
 [submodule "DeepStream-Yolo"]
 	path = DeepStream-Yolo
 	url = https://github.com/marcoslucianops/DeepStream-Yolo.git
+	ignore = dirty
 [submodule "sot_plugin"]
 	path = sot_plugin
 	url = git@github.com:karmueo/deepstream_sot_plugin.git
+	ignore = dirty
 [submodule "src/gst-udpmulticast_sink"]
 	path = src/gst-udpmulticast_sink
 	url = git@github.com:karmueo/deepstream_udpmulticast_sink.git
+	ignore = dirty
