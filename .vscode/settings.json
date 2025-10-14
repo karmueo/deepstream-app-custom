@@ -7,7 +7,7 @@
             // "${workspaceFolder}/src/deepstream-app/configs/ir_app_config.txt"
             "${workspaceFolder}/src/deepstream-app/configs/rgb_app_config.txt"
             // "${workspaceFolder}/src/deepstream-app/configs/save_images_app.txt"
-        ]
+        ],
     },
     "clangd.arguments": [
         "--compile-commands-dir=${workspaceFolder}/build",

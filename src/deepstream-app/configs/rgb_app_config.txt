@@ -21,7 +21,7 @@ rtsp-reconnect-interval-sec=3
 rtsp-reconnect-attempts=-1
 latency=300
 select-rtp-protocol=4
-smart-record=1
+smart-record=3
 smart-rec-dir-path=../smart_rec_rgb
 smart-rec-default-duration=180
 #smart-rec-duration=20
@@ -65,7 +65,7 @@ udp-buffer-size=524288
 
 # 自定义的udp组播
 [sink2]
-enable=0
+enable=1
 #Type - 1=FakeSink 2=EglSink 3=File 4=UDPSink 5=nvdrmvideosink 6=MsgConvBroker 7=MyNetwork
 type=7
 ip=239.255.10.10
@@ -192,9 +192,9 @@ trt-engine-file=/workspace/deepstream-app-custom/src/gst-videorecognition/models
 
 # Configure this group to enable cloud message consumer.
 [message-consumer]
-enable=0
+enable=1
 proto-lib=/opt/nvidia/deepstream/deepstream/lib/libnvds_mqtt_proto.so
-conn-str=127.0.0.1;1883
+conn-str=192.168.1.80;1883
 # config-file=cfg_mqtt.txt
 subscribe-topic-list=command;test2;test3
 # Use this option if message has sensor name as id instead of index (0,1,2 etc.).
