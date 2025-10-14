@@ -3,7 +3,7 @@
 	url = https://github.com/karmueo/nvdsinfer_yolo_efficient_nms.git
 [submodule "DeepStream-Yolo"]
 	path = DeepStream-Yolo
-	url = https://github.com/marcoslucianops/DeepStream-Yolo.git
+	url = https://github.com/karmueo/DeepStream-Yolo.git
 	ignore = dirty
 [submodule "sot_plugin"]
 	path = sot_plugin
