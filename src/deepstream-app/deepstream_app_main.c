@@ -84,6 +84,33 @@ GOptionEntry entries[] = {
 };
 
 static gboolean g_pending_request = FALSE; // 是否有待处理的请求
+static volatile gint g_detect_record_enabled = 0;
+
+static inline void
+set_detect_record_enabled(gboolean enabled)
+{
+    g_atomic_int_set(&g_detect_record_enabled, enabled ? 1 : 0);
+}
+
+static inline gboolean
+is_detect_record_enabled(void)
+{
+    return g_atomic_int_get(&g_detect_record_enabled) != 0;
+}
+
+static inline gboolean
+has_detection_target(const NvDsObjectMeta *obj_meta)
+{
+    if (!obj_meta)
+        return FALSE;
+    if (obj_meta->obj_label[0] != '\0' && obj_meta->confidence >= 0.5f &&
+        obj_meta->rect_params.width > 0.f &&
+        obj_meta->rect_params.height > 0.f)
+    {
+        return TRUE;
+    }
+    return FALSE;
+}
 
 // NTP时间戳转Unix时间戳（秒.小数）
 static double ntp_to_unix(uint64_t ntp_timestamp)
@@ -295,8 +322,8 @@ static void parse_cloud_message(gpointer data, guint size)
     JsonNode *rootNode = NULL;
     GError   *error = NULL;
     gchar    *sensorStr = NULL;
-    gint      start, duration;
-    gboolean  startRec, ret;
+    gboolean  ret;
+    gboolean  handled_command = FALSE;
 
     /**
      * Following minimum json message is expected to trigger the start / stop
@@ -315,78 +342,90 @@ static void parse_cloud_message(gpointer data, guint size)
     if (!ret)
     {
         NVGSTDS_ERR_MSG_V("Error in parsing json message %s", error->message);
-        g_error_free(error);
-        g_object_unref(parser);
-        return;
+        g_clear_error(&error);
+        goto done;
     }
 
     rootNode = json_parser_get_root(parser);
-    if (JSON_NODE_HOLDS_OBJECT(rootNode))
+    if (!JSON_NODE_HOLDS_OBJECT(rootNode))
     {
-        JsonObject *object;
+        NVGSTDS_WARN_MSG_V("JSON message root is not an object");
+        goto done;
+    }
 
-        object = json_node_get_object(rootNode);
-        if (json_object_has_member(object, "command"))
+    JsonObject *object = json_node_get_object(rootNode);
+    if (json_object_has_member(object, "command"))
+    {
+        const gchar *type = json_object_get_string_member(object, "command");
+        if (!g_strcmp0(type, "start-detect-recording"))
         {
-            const gchar *type =
-                json_object_get_string_member(object, "command");
-            if (!g_strcmp0(type, "start-recording"))
-                startRec = TRUE;
-            else if (!g_strcmp0(type, "stop-recording"))
-                startRec = FALSE;
-            else
-            {
-                NVGSTDS_WARN_MSG_V("wrong command %s", type);
-                goto error;
-            }
+            set_detect_record_enabled(TRUE);
+            NVGSTDS_INFO_MSG_V(
+                "Received command to enable detect recording trigger");
+            handled_command = TRUE;
+        }
+        else if (!g_strcmp0(type, "stop-detect-recording"))
+        {
+            set_detect_record_enabled(FALSE);
+            NVGSTDS_INFO_MSG_V(
+                "Received command to disable detect recording trigger");
+            handled_command = TRUE;
+        }
+        else if (!g_strcmp0(type, "start-recording"))
+        {
+            NVGSTDS_INFO_MSG_V(
+                "Received legacy start-recording command (no-op)\n");
+            handled_command = TRUE;
+        }
+        else if (!g_strcmp0(type, "stop-recording"))
+        {
+            NVGSTDS_INFO_MSG_V(
+                "Received legacy stop-recording command (no-op)\n");
+            handled_command = TRUE;
         }
         else
         {
-            // 'command' field not provided, assume it to be start-recording.
-            startRec = TRUE;
+            NVGSTDS_WARN_MSG_V("Unsupported command %s", type);
+            goto done;
         }
+    }
+    else
+    {
+        NVGSTDS_WARN_MSG_V("wrong message format, missing 'command' field.");
+        goto done;
+    }
 
-        if (json_object_has_member(object, "sensor"))
+    if (!handled_command && json_object_has_member(object, "sensor"))
+    {
+        JsonObject *tempObj = json_object_get_object_member(object, "sensor");
+        if (json_object_has_member(tempObj, "id"))
         {
-            JsonObject *tempObj =
-                json_object_get_object_member(object, "sensor");
-            if (json_object_has_member(tempObj, "id"))
+            sensorStr = g_strdup(json_object_get_string_member(tempObj, "id"));
+            if (!sensorStr)
             {
-                sensorStr =
-                    g_strdup(json_object_get_string_member(tempObj, "id"));
-                if (!sensorStr)
-                {
-                    NVGSTDS_WARN_MSG_V("wrong sensor.id value");
-                    goto error;
-                }
-
-                g_strstrip(sensorStr);
-                if (!g_strcmp0(sensorStr, ""))
-                {
-                    NVGSTDS_WARN_MSG_V("empty sensor.id value");
-                    goto error;
-                }
+                NVGSTDS_WARN_MSG_V("wrong sensor.id value");
+                goto done;
             }
-            else
+
+            g_strstrip(sensorStr);
+            if (!g_strcmp0(sensorStr, ""))
             {
-                NVGSTDS_WARN_MSG_V(
-                    "wrong message format, missing 'sensor.id' field.");
-                goto error;
+                NVGSTDS_WARN_MSG_V("empty sensor.id value");
+                goto done;
             }
         }
         else
         {
             NVGSTDS_WARN_MSG_V(
                 "wrong message format, missing 'sensor.id' field.");
-            goto error;
+            goto done;
         }
     }
 
-    g_object_unref(parser);
-
-error:
-    g_object_unref(parser);
+done:
     g_free(sensorStr);
+    if (parser)
+        g_object_unref(parser);
 }
 
 /**
@@ -574,8 +613,69 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
         {
             obj_meta = (NvDsObjectMeta *)(l->data);
 
+            if (src_bin->config->smart_record == 3 &&
+                is_detect_record_enabled() &&
+                has_detection_target(obj_meta))
+            {
+                /* 检测到符合条件的目标才触发智能录像，g_pending_request 防抖 */
+                smart_record_event_generator(src_bin);
+
+                if (appCtx->config.enable_jpeg_save && ip_surf)
+                {
+                    /* 5 秒节流：同一 source 在 5 秒内只执行一次保存 */
+                    static GstClockTime last_save_pts_per_src[MAX_SOURCE_BINS] = {0};
+                    guint               sid = frame_meta->source_id;
+                    if (sid < MAX_SOURCE_BINS)
+                    {
+                        GstClockTime now_pts = frame_meta->buf_pts; /* 纳秒 */
+                        if (last_save_pts_per_src[sid] == 0 ||
+                            now_pts - last_save_pts_per_src[sid] >= 5 * GST_SECOND)
+                        {
+                            last_save_pts_per_src[sid] = now_pts;
+                            NvDsObjEncUsrArgs frameData = {0};
+                            frameData.isFrame = 1;
+                            frameData.saveImg = 1;
+                            frameData.attachUsrMeta = FALSE;
+                            frameData.scaleImg = FALSE;
+                            frameData.scaledWidth = 0;
+                            frameData.scaledHeight = 0;
+                            frameData.quality = 100;
+                            frameData.objNum = (int)obj_meta->object_id; /* 用跟踪ID/对象ID 作为 objNum */
+                            frameData.calcEncodeTime = 0;
+                            /* 自定义文件名: <sanitized-uri>_<pts_ms>_f<frame>_o<obj>.jpg */
+                            const char *raw_uri =
+                                appCtx->config.multi_source_config[frame_meta->source_id].uri
+                                    ? appCtx->config
+                                          .multi_source_config[frame_meta->source_id]
+                                          .uri
+                                    : "unknown";
+                            char   uri_sanitized[256];
+                            size_t rlen = strlen(raw_uri);
+                            if (rlen >= sizeof(uri_sanitized))
+                                rlen = sizeof(uri_sanitized) - 1;
+                            for (size_t si = 0; si < rlen; ++si)
+                            {
+                                char c = raw_uri[si];
+                                if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                                    (c >= '0' && c <= '9'))
+                                    uri_sanitized[si] = c;
+                                else
+                                    uri_sanitized[si] = '_';
+                            }
+                            uri_sanitized[rlen] = '\0';
+                            unsigned long long pts_ms =
+                                (unsigned long long)(frame_meta->buf_pts / 1000000ULL);
+                            snprintf(frameData.fileNameImg, sizeof(frameData.fileNameImg),
+                                     "%s_%llu_f%u_o%d.jpg", uri_sanitized, pts_ms,
+                                     frame_meta->frame_num, frameData.objNum);
+                            nvds_obj_enc_process((gpointer)appCtx->obj_ctx_handle, &frameData,
+                                                ip_surf, obj_meta, frame_meta);
+                        }
+                    }
+                }
+            }
+
             // HACK: 测试接收自定义的分类结果数据
-            bool isTrueTarget = false;
             if (g_list_length(obj_meta->classifier_meta_list) > 0)
             {
                 for (NvDsClassifierMetaList *cl =
@@ -593,52 +693,7 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                             // FIXME: 不要写死
                             if (ll_meta->result_prob > 0.5)
                             {
-                                isTrueTarget = true;
-                                if (src_bin->config->smart_record == 3)
-                                {
-                                    // 启用智能视频记录
-                                    // g_timeout_add(30000,
-                                    // smart_record_event_generator, src_bin);
-                                    smart_record_event_generator(src_bin);
-
-                                    if (appCtx->config.enable_jpeg_save && ip_surf) {
-                                        /* 5 秒节流：同一 source 在 5 秒内只执行一次保存 */
-                                        static GstClockTime last_save_pts_per_src[MAX_SOURCE_BINS] = {0};
-                                        guint sid = frame_meta->source_id;
-                                        if (sid < MAX_SOURCE_BINS) {
-                                            GstClockTime now_pts = frame_meta->buf_pts; /* 纳秒 */
-                                            if (last_save_pts_per_src[sid] == 0 ||
-                                                now_pts - last_save_pts_per_src[sid] >= 5 * GST_SECOND) {
-                                                last_save_pts_per_src[sid] = now_pts;
-                                                NvDsObjEncUsrArgs frameData = {0};
-                                                frameData.isFrame = 1;
-                                                frameData.saveImg = 1;
-                                                frameData.attachUsrMeta = FALSE;
-                                                frameData.scaleImg = FALSE;
-                                                frameData.scaledWidth = 0;
-                                                frameData.scaledHeight = 0;
-                                                frameData.quality = 100;
-                                                frameData.objNum = (int)obj_meta->object_id; /* 用跟踪ID/对象ID 作为 objNum */
-                                                frameData.calcEncodeTime = 0;
-                                                /* 自定义文件名: <sanitized-uri>_<pts_ms>_f<frame>_o<obj>.jpg */
-                                                const char *raw_uri = appCtx->config.multi_source_config[frame_meta->source_id].uri ? appCtx->config.multi_source_config[frame_meta->source_id].uri : "unknown";
-                                                char uri_sanitized[256];
-                                                size_t rlen = strlen(raw_uri);
-                                                if (rlen >= sizeof(uri_sanitized)) rlen = sizeof(uri_sanitized)-1;
-                                                for (size_t si=0; si<rlen; ++si) {
-                                                    char c = raw_uri[si];
-                                                    if ((c>='a'&&c<='z')||(c>='A'&&c<='Z')||(c>='0'&&c<='9')) uri_sanitized[si]=c; else uri_sanitized[si]='_';
-                                                }
-                                                uri_sanitized[rlen]='\0';
-                                                unsigned long long pts_ms = (unsigned long long)(frame_meta->buf_pts/1000000ULL);
-                                                snprintf(frameData.fileNameImg, sizeof(frameData.fileNameImg),
-                                                         "%s_%llu_f%u_o%d.jpg", uri_sanitized, pts_ms, frame_meta->frame_num, frameData.objNum);
-                                                nvds_obj_enc_process((gpointer)appCtx->obj_ctx_handle,
-                                                                    &frameData, ip_surf, obj_meta, frame_meta);
-                                            }
-                                        }
-                                    }
-                                }
+                                /* 留作后续使用，当前仅用于日志或扩展 */
                             }
                         }
                     }
@@ -1349,8 +1404,8 @@ static gpointer nvds_x_event_thread(gpointer data)
     return NULL;
 }
 
-// TODO:暂时没用
-static void msg_broker_subscribe_cb(NvMsgBrokerErrorType status, void *msg,
+
+static void my_msg_broker_subscribe_cb(NvMsgBrokerErrorType status, void *msg,
                                     int msglen, char *topic, void *user_ptr)
 {
     // 判断topic是否为事件消息主题
@@ -1904,7 +1959,7 @@ int main(int argc, char *argv[])
     {
         if (!create_pipeline(appCtx[i], bbox_generated_probe_after_analytics,
                              all_bbox_generated, perf_cb, overlay_graphics,
-                             NULL))
+                             my_msg_broker_subscribe_cb))
         {
             NVGSTDS_ERR_MSG_V("Failed to create pipeline");
             return_value = -1;

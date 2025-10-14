@@ -1,5 +1,5 @@
 # %%
-url: http://127.0.0.1:1883
+url: http://192.168.1.80:1883
 
 # $$
 
@@ -29,4 +29,23 @@ retain: false
   "sensor": {
     "id": "0"
   }
+}
+
+# ##
+topic: command
+qos: 1
+retain: false
+
+{
+  "command": "start-detect-recording"
+}
+
+
+# ##
+topic: command
+qos: 1
+retain: false
+
+{
+  "command": "stop-detect-recording"
 }

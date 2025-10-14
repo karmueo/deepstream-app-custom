@@ -11,7 +11,7 @@
 ################################################################################
 
 cmake_minimum_required(VERSION 3.16)
-project(deepstream-app LANGUAGES C CXX)
+project(deepstream-app LANGUAGES C CXX CUDA)
 
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
@@ -27,15 +27,15 @@ if("${CUDA_VER}" STREQUAL "")
 endif()
 
 # DeepStream version
-set(NVDS_VERSION "7.1")
+set(NVDS_VERSION "8.0")
 
 # Installation directories
 if(NOT DEFINED LIB_INSTALL_DIR)
-    set(LIB_INSTALL_DIR "/opt/nvidia/deepstream/deepstream-${NVDS_VERSION}/lib/")
+    set(LIB_INSTALL_DIR "/opt/nvidia/deepstream/deepstream/lib/")
 endif()
 
 if(NOT DEFINED APP_INSTALL_DIR)
-    set(APP_INSTALL_DIR "/opt/nvidia/deepstream/deepstream-${NVDS_VERSION}/bin/")
+    set(APP_INSTALL_DIR "/opt/nvidia/deepstream/deepstream/bin/")
 endif()
 
 # Detect target device
@@ -59,8 +59,9 @@ pkg_check_modules(X11 REQUIRED x11)
 pkg_check_modules(JSON_GLIB REQUIRED json-glib-1.0)
 pkg_check_modules(GSTAPP REQUIRED gstreamer-app-1.0)
 
-# Find CUDA
-find_package(CUDA ${CUDA_VER} REQUIRED)
+# Find CUDA using modern CMake approach
+enable_language(CUDA)
+find_package(CUDAToolkit ${CUDA_VER} REQUIRED)
 
 # Source files
 file(GLOB DEEPSTREAM_APP_SOURCES
@@ -87,7 +88,7 @@ set(INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../../apps-common/includes
     /opt/nvidia/deepstream/deepstream/sources/includes
-    ${CUDA_INCLUDE_DIRS}
+    ${CUDAToolkit_INCLUDE_DIRS}
 )
 
 # Create executable
@@ -124,7 +125,7 @@ target_compile_options(deepstream-app PRIVATE
 
 # Link directories
 target_link_directories(deepstream-app PRIVATE
-    ${CUDA_TOOLKIT_ROOT_DIR}/lib64
+    ${CUDAToolkit_LIBRARY_DIR}
     ${LIB_INSTALL_DIR}
     ${GSTREAMER_LIBRARY_DIRS}
     ${GSTREAMER_VIDEO_LIBRARY_DIRS}
@@ -135,9 +136,9 @@ target_link_directories(deepstream-app PRIVATE
 
 # Link libraries
 target_link_libraries(deepstream-app PRIVATE
-    # CUDA libraries
-    cudart
-    cuda
+    # CUDA libraries (using modern CMake targets)
+    CUDA::cudart
+    CUDA::cuda_driver
     
     # DeepStream libraries
     nvdsgst_meta

@@ -1,9 +1,88 @@
-## 原始依赖容器
-`nvcr.io/nvidia/deepstream:7.1-gc-triton-devel`
+- [1. 安装依赖](#1-安装依赖)
+  - [安装依赖包](#安装依赖包)
+  - [安装显卡驱动](#安装显卡驱动)
+  - [安装CUDA Toolkit](#安装cuda-toolkit)
+  - [安装TensorRT](#安装tensorrt)
+- [2. 安装Deepstream SDK](#2-安装deepstream-sdk)
+  - [环境变量配置](#环境变量配置)
+  - [时区设置](#时区设置)
+- [3. 安装](#3-安装)
+  - [获取项目](#获取项目)
+  - [安装必要的依赖](#安装必要的依赖)
+  - [编译DeepStream-Yolo](#编译deepstream-yolo)
+  - [编译报文发送插件](#编译报文发送插件)
+  - [编译单目标跟踪插件](#编译单目标跟踪插件)
+  - [(可选)MQTT报文服务](#可选mqtt报文服务)
+  - [编译多帧识别插件](#编译多帧识别插件)
+  - [编译主工程](#编译主工程)
+- [4. 准备模型](#4-准备模型)
+  - [目标检测模型](#目标检测模型)
+    - [二次分类模型](#二次分类模型)
+    - [单目标跟踪模型](#单目标跟踪模型)
+  - [开机自启动](#开机自启动)
+
+# 1. 安装依赖
+
+## 安装依赖包
+
+```bash
+sudo apt install \
+libssl3 \
+libssl-dev \
+libgles2-mesa-dev \
+libgstreamer1.0-0 \
+gstreamer1.0-tools \
+gstreamer1.0-plugins-good \
+gstreamer1.0-plugins-bad \
+gstreamer1.0-plugins-ugly \
+gstreamer1.0-libav \
+libgstreamer-plugins-base1.0-dev \
+libgstrtspserver-1.0-0 \
+libjansson4 \
+libyaml-cpp-dev \
+libjsoncpp-dev \
+protobuf-compiler \
+gcc \
+make \
+git \
+python3
+```
+## 安装显卡驱动
+pass
+
+## 安装CUDA Toolkit
+历史版本下载地址: https://developer.nvidia.com/cuda-toolkit-archive
+这里使用的版本是: cuda-repo-ubuntu2404-12-9-local_12.9.0-575.51.03-1_amd64.deb
+如果是还离线安装可以使用runfile方式安装，这里没有测试。
+```bash
+sudo dpkg -i cuda-repo-ubuntu2404-12-9-local_12.9.0-575.51.03-1_amd64.deb
+sudo cp /var/cuda-repo-ubuntu2404-12-9-local/cuda-*-keyring.gpg /usr/share/keyrings/
+sudo apt-get update
+sudo apt-get -y install cuda-toolkit-12-9
+```
+
+## 安装TensorRT
+下载地址: https://developer.nvidia.com/tensorrt/download/10x
+这里使用的版本是: nv-tensorrt-local-repo-ubuntu2404-10.10.0-cuda-12.9_1.0-1_amd64.deb
+```bash
+sudo dpkg -i nv-tensorrt-local-repo-ubuntu2404-10.10.0-cuda-12.9_1.0-1_amd64.deb
+sudo cp /var/nv-tensorrt-local-repo-ubuntu2404-10.10.0-cuda-12.9/nv-tensorrt-local-CD20EDBE-keyring.gpg /usr/share/keyrings/
+sudo apt-get update
+sudo apt-get install tensorrt
+```
+
+# 2. 安装Deepstream SDK
+下载地址: https://catalog.ngc.nvidia.com/orgs/nvidia/resources/deepstream?version=8.0
+```bash
+sudo tar -xvf deepstream_sdk_v8.0.0_x86_64.tbz2 -C /
+cd /opt/nvidia/deepstream/deepstream-8.0/
+sudo ./install.sh
+sudo ldconfig
+```
 
 ## 环境变量配置
 ```
-export CUDA_VER=12.6
+export CUDA_VER=12.9
 export LD_LIBRARY_PATH=/opt/nvidia/deepstream/deepstream/lib:$LD_LIBRARY_PATH
 ```
 
@@ -13,6 +92,7 @@ ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
 echo "Asia/Shanghai" > /etc/timezone
 ```
 
+# 3. 安装
 ## 获取项目
 ```sh
 git clone --recurse-submodules git@github.com:karmueo/deepstream-app-custom.git
@@ -30,36 +110,48 @@ make
 make install
 ``` -->
 
-## 编译
-### 安装必要的依赖
+## 安装必要的依赖
 ```sh
-bash /opt/nvidia/deepstream/deepstream/user_additional_install.sh
-apt install libgstreamer-plugins-base1.0-dev libgstreamer1.0-dev libopencv-dev
-apt reinstall libxvidcore4
-apt reinstall libmp3lame0
+sudo apt-get install libgstreamer-plugins-base1.0-dev libgstreamer1.0-dev \
+    libgstrtspserver-1.0-dev libx11-dev libjson-glib-dev libyaml-cpp-dev \
+    libgbm1 libglapi-mesa libgles2-mesa-dev libopencv-dev pkg-config
+
+sudo apt reinstall libxvidcore4
+sudo apt reinstall libmp3lame0
 # 中文显示
-apt-get install ttf-wqy-microhei
+sudo apt-get install ttf-wqy-microhei
 ```
 
-### 编译DeepStream-Yolo
+## 编译DeepStream-Yolo
 ```sh
 cd DeepStream-Yolo
 make -C nvdsinfer_custom_impl_Yolo clean && make -C nvdsinfer_custom_impl_Yolo
 ```
 
-### 编译报文发送插件
+## 编译报文发送插件
 ```sh
-cd /workspace/deepstream-app-custom/src/gst-udpmulticast_sink
-make
-make install
+cd src/gst-udpmulticast_sink
+mkdir build && cd build
+cmake ..
+cmake --build .
+sudo cmake --install .
 ```
 
-### (可选)MQTT报文服务
+## 编译单目标跟踪插件
+```sh
+cd sot_plugin
+mkdir build && cd build
+cmake ..
+cmake --build .
+sudo cmake --install .
+```
+
+## (可选)MQTT报文服务
 安装
 ```sh
 # 可选
 # 如果要使用MQTT发送结果，安装mosquitto，可以安装在docker中，也可以安装在宿主机或者局域网其他服务器中
-apt-get install libglib2.0 libglib2.0-dev
+sudo apt-get install libglib2.0 libglib2.0-dev
 wget https://mosquitto.org/files/source/mosquitto-2.0.15.tar.gz
 tar -xvf mosquitto-2.0.15.tar.gz
 cd mosquitto-2.0.15
@@ -87,16 +179,7 @@ mosquitto -v -c ./my_config.conf &
 ```
 然后就可以使用mqtt发送和接收消息了
 
-### 编译单目标跟踪插件
-```sh
-cd /workspace/deepstream-app-custom/src/sot_plugin
-mkdir build && cd build
-cmake ..
-cmake --build .
-cmake --install .
-```
-
-### 编译多帧识别插件
+## 编译多帧识别插件
 ```sh
 cd /workspace/deepstream-app-custom/src/gst-videorecognition
 mkdir build && cd build
@@ -105,7 +188,7 @@ cmake --build .
 cmake --install .
 ```
 
-### 编译主工程
+## 编译主工程
 ```sh
 cd /workspace/deepstream-app-custom/src/deepstream-app
 make
@@ -128,15 +211,13 @@ make
     ...
 }
 ```
-
-
-## 准备模型
-### 目标检测模型
+# 4. 准备模型
+## 目标检测模型
 把目标检测模型onnx文件放入src/deepstream-app/models目录下，根据实际的模型名称修改下面的参数：
 动态 batch: ./convert2trt.sh <ONNX_PATH> <ENGINE_PATH> dynamic [min_batch] [opt_batch] [max_batch] [fp16]
 ```sh
 ./convert2trt.sh yolov11m_detect_ir_640_v2.onnx yolov11m_detect_ir_640_b4_v2_fp16.engine dynamic 1 4 4 fp16
-./convert2trt.sh yolov11m_detect_rgb_640_v5.onnx yolov11m_detect_rgb_640_v5_b4_fp16.engine dynamic 1 4 4 fp16
+./convert2trt.sh yolov11m_detect_rgb_640_v6.onnx yolov11m_detect_rgb_640_v6_b4_fp16.engine dynamic 1 4 4 fp16
 ```
 然后根据实际的engine文件名修改src/deepstream-app/configs/config_infer_primary_yoloV11.txt中model-engine-file的值
 

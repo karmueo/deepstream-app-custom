@@ -21,8 +21,8 @@ rtsp-reconnect-interval-sec=3
 rtsp-reconnect-attempts=-1
 latency=300
 select-rtp-protocol=4
-smart-record=1
-smart-rec-dir-path=/workspace/deepstream-app-custom/smart_rec_rgb
+smart-record=3
+smart-rec-dir-path=../smart_rec_rgb
 smart-rec-default-duration=180
 #smart-rec-duration=20
 #smart-rec-start-time=5
@@ -152,7 +152,7 @@ enable=1
 tracker-width=1920
 tracker-height=1080
 ll-lib-file=/opt/nvidia/deepstream/deepstream/lib/libsot.so
-ll-config-file=config_sot.yml
+ll-config-file=/opt/nvidia/deepstream/deepstream/sot_plugin/config/config_sot.yml
 gpu-id=0
 display-tracking-id=1
 
@@ -194,7 +194,7 @@ trt-engine-file=/workspace/deepstream-app-custom/src/gst-videorecognition/models
 [message-consumer]
 enable=1
 proto-lib=/opt/nvidia/deepstream/deepstream/lib/libnvds_mqtt_proto.so
-conn-str=127.0.0.1;1883
+conn-str=192.168.1.80;1883
 # config-file=cfg_mqtt.txt
 subscribe-topic-list=command;test2;test3
 # Use this option if message has sensor name as id instead of index (0,1,2 etc.).
