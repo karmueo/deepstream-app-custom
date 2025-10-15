@@ -151,7 +151,7 @@ sudo cmake --install .
 ```sh
 # 可选
 # 如果要使用MQTT发送结果，安装mosquitto，可以安装在docker中，也可以安装在宿主机或者局域网其他服务器中
-sudo apt-get install libglib2.0 libglib2.0-dev
+sudo apt-get install libglib2.0 libglib2.0-dev libcjson-dev
 wget https://mosquitto.org/files/source/mosquitto-2.0.15.tar.gz
 tar -xvf mosquitto-2.0.15.tar.gz
 cd mosquitto-2.0.15
