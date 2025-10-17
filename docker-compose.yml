@@ -11,9 +11,11 @@ services:
     volumes:
       - "/tmp/.X11-unix:/tmp/.X11-unix"  # X11 显示套接字
       - "./:/workspace/deepstream-app-custom" # 挂载工作目录
+      - "./smart_rec_rgb:/workspace/smart_rec_rgb"  # 挂载智能识别目录
     environment:
       - DISPLAY=${DISPLAY:-localhost:10.0}  # 从主机继承或默认 localhost:10.0
       - GST_PLUGIN_PATH=/usr/local/lib/x86_64-linux-gnu/gstreamer-1.0
+      - START_DELAY=30
       # - http_proxy=http://127.0.0.1:7890
       # - https_proxy=http://127.0.0.1:7890
     privileged: true    # 特权模式
@@ -21,8 +23,10 @@ services:
       - SYS_PTRACE     # 允许 ptrace 调试
     working_dir: /workspace  # 设置工作目录
     # entrypoint: ["/bin/bash", "-c", "cd /workspace/deepstream-app-custom && ./start_both_apps.sh start-block"]
-    # entrypoint: ["/bin/bash", "-c", "cd /workspace/deepstream-app-custom && ./start_rgb_app.sh"]
-    entrypoint: ["/opt/nvidia/nvidia_entrypoint.sh"]
+    entrypoint: ["/bin/bash", "-c", "sleep $${START_DELAY:-30} && cd /workspace/deepstream-app-custom && ./start_rgb_app.sh"]
+    # 等待一段时间再执行原 entrypoint（可通过宿主环境变量或 .env 覆盖 START_DELAY）
+    # 使用 $${...} 避免 docker-compose 在渲染时替换变量，让容器内部的 shell 使用环境变量
+    #entrypoint: ["/bin/sh", "-c", "sleep $${START_DELAY:-30} && exec /opt/nvidia/nvidia_entrypoint.sh"]
     healthcheck:
       test: ["CMD-SHELL", "echo 'Alive' || exit 1"]  # 简单心跳检测
       interval: 30s
