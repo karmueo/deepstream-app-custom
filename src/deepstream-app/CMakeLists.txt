@@ -177,6 +177,69 @@ install(TARGETS deepstream-app
     RUNTIME DESTINATION ${APP_INSTALL_DIR}
 )
 
+# Install-time: create deepstream-app-custom directory and add symlinks to configs and models
+set(DS_APP_CUSTOM_DIR "/opt/nvidia/deepstream/deepstream/deepstream-app-custom")
+get_filename_component(DS_APP_CONFIGS_SRC "${CMAKE_CURRENT_SOURCE_DIR}/configs" ABSOLUTE)
+get_filename_component(DS_APP_MODELS_SRC "${CMAKE_CURRENT_SOURCE_DIR}/models" ABSOLUTE)
+
+set(_ds_install_code [[
+    set(ds_app_custom_dir "@DS_APP_CUSTOM_DIR@")
+    set(configs_src "@DS_APP_CONFIGS_SRC@")
+    set(models_src "@DS_APP_MODELS_SRC@")
+    message(STATUS "Creating directory and symlinks in ${ds_app_custom_dir}")
+
+    if(NOT EXISTS "${ds_app_custom_dir}")
+        file(MAKE_DIRECTORY "${ds_app_custom_dir}")
+    endif()
+
+    # Create symlink for configs if source exists and link not already present
+    if(EXISTS "${configs_src}")
+        if(NOT EXISTS "${ds_app_custom_dir}/configs")
+            execute_process(
+                COMMAND ${CMAKE_COMMAND} -E create_symlink
+                                "${configs_src}"
+                                "${ds_app_custom_dir}/configs"
+                RESULT_VARIABLE _create_configs_result
+                ERROR_VARIABLE _create_configs_error
+            )
+            if(_create_configs_result EQUAL 0)
+                message(STATUS "Created symlink: ${ds_app_custom_dir}/configs -> ${configs_src}")
+            else()
+                message(WARNING "Failed to create configs symlink: ${_create_configs_error}")
+            endif()
+        else()
+            message(STATUS "Skipping configs symlink: ${ds_app_custom_dir}/configs already exists")
+        endif()
+    else()
+        message(STATUS "Skipping configs symlink: source ${configs_src} not found")
+    endif()
+
+    # Create symlink for models if source exists and link not already present
+    if(EXISTS "${models_src}")
+        if(NOT EXISTS "${ds_app_custom_dir}/models")
+            execute_process(
+                COMMAND ${CMAKE_COMMAND} -E create_symlink
+                                "${models_src}"
+                                "${ds_app_custom_dir}/models"
+                RESULT_VARIABLE _create_models_result
+                ERROR_VARIABLE _create_models_error
+            )
+            if(_create_models_result EQUAL 0)
+                message(STATUS "Created symlink: ${ds_app_custom_dir}/models -> ${models_src}")
+            else()
+                message(WARNING "Failed to create models symlink: ${_create_models_error}")
+            endif()
+        else()
+            message(STATUS "Skipping models symlink: ${ds_app_custom_dir}/models already exists")
+        endif()
+    else()
+        message(STATUS "Skipping models symlink: source ${models_src} not found")
+    endif()
+]])
+
+string(CONFIGURE "${_ds_install_code}" _ds_install_code_configured @ONLY)
+install(CODE "${_ds_install_code_configured}")
+
 # Custom target for clean (equivalent to 'make clean')
 add_custom_target(clean-all
     COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target clean

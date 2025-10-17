@@ -50,49 +50,53 @@ python3
 ## 安装显卡驱动
 pass
 
-## 安装CUDA Toolkit
-历史版本下载地址: https://developer.nvidia.com/cuda-toolkit-archive
-这里使用的版本是: cuda-repo-ubuntu2404-12-9-local_12.9.0-575.51.03-1_amd64.deb
-如果是还离线安装可以使用runfile方式安装，这里没有测试。
+## 开机自启动
+创建并编辑文件 `/etc/systemd/system/deepstream-app.service`，该服务直接启动本地的 `deepstream-app` 可执行文件：
+
+```ini
+[Unit]
+Description=DeepStream App Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/nvidia/deepstream/deepstream
+ExecStart=/opt/nvidia/deepstream/deepstream/bin/deepstream-app -c /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/rgb_app_config.txt
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+启用并启动服务：
+
 ```bash
-sudo dpkg -i cuda-repo-ubuntu2404-12-9-local_12.9.0-575.51.03-1_amd64.deb
-sudo cp /var/cuda-repo-ubuntu2404-12-9-local/cuda-*-keyring.gpg /usr/share/keyrings/
-sudo apt-get update
-sudo apt-get -y install cuda-toolkit-12-9
+sudo systemctl daemon-reload
+sudo systemctl enable deepstream-app.service
+sudo systemctl start deepstream-app.service
 ```
 
-## 安装TensorRT
-下载地址: https://developer.nvidia.com/tensorrt/download/10x
-这里使用的版本是: nv-tensorrt-local-repo-ubuntu2404-10.10.0-cuda-12.9_1.0-1_amd64.deb
+检查服务状态：
+
 ```bash
-sudo dpkg -i nv-tensorrt-local-repo-ubuntu2404-10.10.0-cuda-12.9_1.0-1_amd64.deb
-sudo cp /var/nv-tensorrt-local-repo-ubuntu2404-10.10.0-cuda-12.9/nv-tensorrt-local-CD20EDBE-keyring.gpg /usr/share/keyrings/
-sudo apt-get update
-sudo apt-get install tensorrt
+systemctl status deepstream-app.service
 ```
 
-# 2. 安装Deepstream SDK
-下载地址: https://catalog.ngc.nvidia.com/orgs/nvidia/resources/deepstream?version=8.0
+停止服务（或手动停止正在运行的 deepstream-app）：
+
 ```bash
-sudo tar -xvf deepstream_sdk_v8.0.0_x86_64.tbz2 -C /
-cd /opt/nvidia/deepstream/deepstream-8.0/
-sudo ./install.sh
-sudo ldconfig
+sudo systemctl stop deepstream-app.service
+# 或者如果需要直接停止运行的进程，可以使用：
+sudo pkill -f deepstream-app || true
 ```
 
-## 环境变量配置
-```
-export CUDA_VER=12.9
-export LD_LIBRARY_PATH=/opt/nvidia/deepstream/deepstream/lib:$LD_LIBRARY_PATH
-```
+彻底取消开机自动启动：
 
-## 时区设置
+```bash
+sudo systemctl disable deepstream-app.service
 ```
-ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
-echo "Asia/Shanghai" > /etc/timezone
-```
-
-# 3. 安装
 ## 获取项目
 ```sh
 git clone --recurse-submodules git@github.com:karmueo/deepstream-app-custom.git
@@ -272,9 +276,9 @@ Wants=network-online.target docker.service
 
 [Service]
 Type=oneshot
-WorkingDirectory=/home/tl/work/workspace/deepstream-app-custom
+WorkingDirectory=/opt/nvidia/deepstream/deepstream
 RemainAfterExit=yes
-ExecStart=/usr/bin/docker compose up -d
+ExecStart=bin/docker compose up -d
 ExecStop=/usr/bin/docker compose down
 TimeoutStartSec=0
 
