@@ -219,6 +219,9 @@ extern "C"
         GHashTable *cls_agg_map; /* key: guint64* (object_id), value: ObjClsAgg*
                                     (defined in .c) */
 
+    /* Per-object label anchor smoothing */
+    GHashTable *label_anchor_map; /* key/value defined in .c */
+
     /* 异步控制消息解析线程资源 */
     GAsyncQueue *control_msg_queue;   /* 队列中元素: ControlMsgItem* */
     GThread     *control_msg_thread;  /* 后台解析线程 */

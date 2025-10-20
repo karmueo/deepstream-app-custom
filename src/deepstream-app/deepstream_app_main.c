@@ -1436,6 +1436,61 @@ static void my_msg_broker_subscribe_cb(NvMsgBrokerErrorType status, void *msg,
  * 该回调函数用于添加应用程序特定的元数据。
  * 这里演示了如何显示源的URI以及推理后生成的文本。
  */
+typedef struct
+{
+    guint   stream_id;
+    guint64 object_id;
+} LabelAnchorKey;
+
+typedef struct
+{
+    gfloat x;
+    gfloat y;
+    guint  last_frame;
+} LabelAnchor;
+
+static guint
+label_anchor_key_hash(gconstpointer key)
+{
+    const LabelAnchorKey *k = (const LabelAnchorKey *)key;
+    guint64               mix = (((guint64)k->stream_id) << 48) ^ k->object_id;
+    return (guint)(mix ^ (mix >> 32));
+}
+
+static gboolean
+label_anchor_key_equal(gconstpointer a, gconstpointer b)
+{
+    const LabelAnchorKey *ka = (const LabelAnchorKey *)a;
+    const LabelAnchorKey *kb = (const LabelAnchorKey *)b;
+    return ka->stream_id == kb->stream_id && ka->object_id == kb->object_id;
+}
+
+static void
+prune_label_anchor_entries(AppCtx *appCtx, guint stream_id, guint frame_num)
+{
+    if (!appCtx->label_anchor_map)
+        return;
+
+    const guint max_age = 120;
+    GHashTableIter iter;
+    gpointer       key;
+    gpointer       value;
+
+    g_hash_table_iter_init(&iter, appCtx->label_anchor_map);
+    while (g_hash_table_iter_next(&iter, &key, &value))
+    {
+        LabelAnchorKey *stored_key = (LabelAnchorKey *)key;
+        LabelAnchor    *anchor = (LabelAnchor *)value;
+        if (stored_key->stream_id != stream_id)
+            continue;
+        if (frame_num > anchor->last_frame &&
+            frame_num - anchor->last_frame > max_age)
+        {
+            g_hash_table_iter_remove(&iter);
+        }
+    }
+}
+
 static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
                                  NvDsBatchMeta *batch_meta, guint index)
 {
@@ -1480,6 +1535,8 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
          l_frame = l_frame->next)
     {
         NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)l_frame->data;
+       prune_label_anchor_entries(appCtx, frame_meta->source_id,
+                            frame_meta->frame_num);
         for (NvDsMetaList *l_obj = frame_meta->obj_meta_list; l_obj != NULL;
              l_obj = l_obj->next)
         {
@@ -1672,19 +1729,104 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
                         y = y_try;
                     }
                 }
-                obj_meta->text_params.x_offset = x;
-                obj_meta->text_params.y_offset = y;
+                gfloat        target_x = (gfloat)x;
+                gfloat        target_y = (gfloat)y;
+                LabelAnchor  *anchor = NULL;
+                const gboolean has_track_id =
+                    (obj_meta->object_id != UNTRACKED_OBJECT_ID);
+
+                if (has_track_id)
+                {
+                    if (!appCtx->label_anchor_map)
+                    {
+                        appCtx->label_anchor_map = g_hash_table_new_full(
+                            label_anchor_key_hash, label_anchor_key_equal,
+                            g_free, g_free);
+                    }
+
+                    LabelAnchorKey lookup_key = {
+                        frame_meta->source_id,
+                        (guint64)obj_meta->object_id,
+                    };
+
+                    anchor = (LabelAnchor *)g_hash_table_lookup(
+                        appCtx->label_anchor_map, &lookup_key);
+                    if (!anchor)
+                    {
+                        LabelAnchorKey *stored_key = g_new(LabelAnchorKey, 1);
+                        *stored_key = lookup_key;
+                        anchor = g_new0(LabelAnchor, 1);
+                        anchor->x = target_x;
+                        anchor->y = target_y;
+                        anchor->last_frame = frame_meta->frame_num;
+                        g_hash_table_insert(appCtx->label_anchor_map,
+                                            stored_key, anchor);
+                    }
+                    else
+                    {
+                        guint  frame_gap = frame_meta->frame_num -
+                                          anchor->last_frame;
+                        gfloat dx = target_x - anchor->x;
+                        gfloat dy = target_y - anchor->y;
+
+                        if (frame_gap > 10 || fabsf(dx) > 120.f ||
+                            fabsf(dy) > 120.f)
+                        {
+                            anchor->x = target_x;
+                            anchor->y = target_y;
+                        }
+                        else
+                        {
+                            gfloat blend = 0.35f + 0.05f * frame_gap;
+                            if (blend > 0.6f)
+                                blend = 0.6f;
+                            anchor->x += dx * blend;
+                            anchor->y += dy * blend;
+                        }
+                        anchor->last_frame = frame_meta->frame_num;
+                        target_x = anchor->x;
+                        target_y = anchor->y;
+                    }
+                }
+
+                int final_x = (target_x >= 0.f)
+                                  ? (int)(target_x + 0.5f)
+                                  : (int)(target_x - 0.5f);
+                int final_y = (target_y >= 0.f)
+                                  ? (int)(target_y + 0.5f)
+                                  : (int)(target_y - 0.5f);
+
+                if (final_x < 0)
+                    final_x = 0;
+                if (final_x > frame_w - 4)
+                    final_x = frame_w - 4;
+                if (final_y < 0)
+                    final_y = 0;
+                if (final_y > frame_h - text_h)
+                    final_y = frame_h - text_h;
+
+                obj_meta->text_params.x_offset = final_x;
+                obj_meta->text_params.y_offset = final_y;
 
                 /* 如果目标极窄而文本会超出右边界，可左移 */
                 int estimated_text_w =
                     (int)(strlen(obj_meta->text_params.display_text) *
                           font_size * 0.55f);
-                if (estimated_text_w > 0 && x + estimated_text_w > frame_w)
+                if (estimated_text_w > 0 &&
+                    obj_meta->text_params.x_offset + estimated_text_w >
+                        frame_w)
                 {
                     int new_x = frame_w - estimated_text_w - 2;
                     if (new_x < 0)
                         new_x = 0;
                     obj_meta->text_params.x_offset = new_x;
+                }
+
+                if (anchor)
+                {
+                    anchor->x = (gfloat)obj_meta->text_params.x_offset;
+                    anchor->y = (gfloat)obj_meta->text_params.y_offset;
+                    anchor->last_frame = frame_meta->frame_num;
                 }
             }
             g_string_free(gstr, TRUE);
@@ -2179,6 +2321,12 @@ done:
         {
             g_hash_table_destroy(appCtx[i]->tracker_stats_counts);
             appCtx[i]->tracker_stats_counts = NULL;
+        }
+
+        if (appCtx[i]->label_anchor_map)
+        {
+            g_hash_table_destroy(appCtx[i]->label_anchor_map);
+            appCtx[i]->label_anchor_map = NULL;
         }
 
         g_mutex_lock(&disp_lock);
