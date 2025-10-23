@@ -12,7 +12,6 @@
  */
 
 #include "deepstream_app.h"
-#include "deepstream_config_file_parser.h"
 #include "gst-nvdssr.h"
 #include "nvds_version.h"
 #include "nvdsmeta_schema.h"
@@ -573,8 +572,6 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
     NvDsSRSessionId   sessId = 0;
     NvDsSrcParentBin *bin = &appCtx->pipeline.multi_src_bin;
     NvDsSrcBin       *src_bin = &bin->sub_bins[index];
-    guint             startTime = 7;
-    guint             duration = 8;
 
     NvBufSurface *ip_surf = NULL;
     if (appCtx->config.enable_jpeg_save) {
@@ -585,6 +582,38 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
         }
         ip_surf = (NvBufSurface *)inmap.data;
         gst_buffer_unmap(buf, &inmap);
+    }
+
+    /* 判断是否为单目标跟踪器 */
+    gboolean tracker_enabled = appCtx->config.tracker_config.enable;
+    gboolean single_object_tracker = FALSE;
+    if (tracker_enabled)
+    {
+        if (appCtx->config.tracker_config.ll_lib_file)
+        {
+            gchar *ll_lib_lower = g_ascii_strdown(
+                appCtx->config.tracker_config.ll_lib_file, -1);
+            if (g_strstr_len(ll_lib_lower, -1, "libsot") ||
+                g_strstr_len(ll_lib_lower, -1, "single_object") ||
+                g_strstr_len(ll_lib_lower, -1, "single-target"))
+            {
+                single_object_tracker = TRUE;
+            }
+            g_free(ll_lib_lower);
+        }
+        if (!single_object_tracker &&
+            appCtx->config.tracker_config.ll_config_file)
+        {
+            gchar *ll_cfg_lower = g_ascii_strdown(
+                appCtx->config.tracker_config.ll_config_file, -1);
+            if (g_strstr_len(ll_cfg_lower, -1, "sot") ||
+                g_strstr_len(ll_cfg_lower, -1, "single_object") ||
+                g_strstr_len(ll_cfg_lower, -1, "single-target"))
+            {
+                single_object_tracker = TRUE;
+            }
+            g_free(ll_cfg_lower);
+        }
     }
 
     for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame != NULL;
@@ -869,6 +898,107 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                 }
             }
 
+            /* 单目标跟踪器：类别计数统计与更新 */
+            if (single_object_tracker)
+            {
+                /* 初始化类别计数哈希表 */
+                if (!appCtx->tracker_stats_counts)
+                {
+                    appCtx->tracker_stats_counts = g_hash_table_new_full(
+                        g_str_hash, g_str_equal, g_free, g_free);
+                }
+
+                /* 如果目标未被跟踪，清空统计 */
+                if (obj_meta->object_id == UNTRACKED_OBJECT_ID)
+                {
+                    appCtx->tracker_stats_valid = FALSE;
+                    if (appCtx->tracker_stats_counts)
+                        g_hash_table_remove_all(appCtx->tracker_stats_counts);
+                }
+                else
+                {
+                    guint64 current_tracker_id = (guint64)obj_meta->object_id;
+                    
+                    /* 如果跟踪ID发生变化，重置统计 */
+                    if (!appCtx->tracker_stats_valid ||
+                        appCtx->tracker_stats_current_id != current_tracker_id)
+                    {
+                        if (appCtx->tracker_stats_counts)
+                            g_hash_table_remove_all(appCtx->tracker_stats_counts);
+                        appCtx->tracker_stats_current_id = current_tracker_id;
+                        appCtx->tracker_stats_valid = TRUE;
+                    }
+
+                    /* 获取当前对象的类别标签 */
+                    const gchar *label = NULL;
+                    gchar        label_buf[64];
+                    if (obj_meta->obj_label[0] != '\0')
+                    {
+                        label = obj_meta->obj_label;
+                    }
+                    else
+                    {
+                        g_snprintf(label_buf, sizeof(label_buf), "Class_%d",
+                                   obj_meta->class_id);
+                        label = label_buf;
+                    }
+
+                    /* 更新类别计数 */
+                    if (appCtx->tracker_stats_counts)
+                    {
+                        guint *count = (guint *)g_hash_table_lookup(
+                            appCtx->tracker_stats_counts, label);
+                        if (!count)
+                        {
+                            gchar *stored_key = g_strdup(label);
+                            count = g_new0(guint, 1);
+                            g_hash_table_insert(appCtx->tracker_stats_counts,
+                                                stored_key, count);
+                        }
+                        (*count)++;
+                    }
+
+                    /* 找出计数最大的类别，更新为最终的目标类别 */
+                    if (appCtx->tracker_stats_counts &&
+                        g_hash_table_size(appCtx->tracker_stats_counts) > 0)
+                    {
+                        GHashTableIter iter;
+                        gpointer       key, value;
+                        guint          max_count = 0;
+                        const gchar   *best_label = NULL;
+
+                        g_hash_table_iter_init(&iter, appCtx->tracker_stats_counts);
+                        while (g_hash_table_iter_next(&iter, &key, &value))
+                        {
+                            guint count = *((guint *)value);
+                            if (count > max_count)
+                            {
+                                max_count = count;
+                                best_label = (const gchar *)key;
+                            }
+                        }
+
+                        /* 如果找到最佳类别且与当前不同，更新对象的类别 */
+                        if (best_label && g_strcmp0(best_label, label) != 0)
+                        {
+                            /* 更新对象标签 */
+                            g_strlcpy(obj_meta->obj_label, best_label,
+                                      MAX_LABEL_SIZE);
+                            
+                            /* 尝试从标签中提取class_id（如果是Class_N格式） */
+                            if (g_str_has_prefix(best_label, "Class_"))
+                            {
+                                gint parsed_id = atoi(best_label + 6);
+                                if (parsed_id >= 0)
+                                {
+                                    obj_meta->class_id = parsed_id;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             /**
              * 仅在此回调在 tiler 之后启用
              * 注意：缩放回代码注释
@@ -934,6 +1064,67 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
             {
                 g_print("Error in attaching event meta to buffer\n");
             }
+        }
+    }
+
+    /* 显示单目标跟踪器的统计信息 */
+    if (single_object_tracker && appCtx->tracker_stats_valid &&
+        appCtx->tracker_stats_counts &&
+        g_hash_table_size(appCtx->tracker_stats_counts) > 0)
+    {
+        NvDsFrameMeta *stats_frame =
+            nvds_get_nth_frame_meta(batch_meta->frame_meta_list, 0);
+        if (stats_frame)
+        {
+            NvDsDisplayMeta *stats_meta =
+                nvds_acquire_display_meta_from_pool(batch_meta);
+            stats_meta->num_labels = 1;
+
+            GString *stats_str = g_string_new(NULL);
+            /* 添加跟踪ID */
+            g_string_append_printf(stats_str, "Tracker ID: %" G_GUINT64_FORMAT,
+                                   appCtx->tracker_stats_current_id);
+
+            GHashTableIter iter;
+            gpointer       key, value;
+            g_hash_table_iter_init(&iter, appCtx->tracker_stats_counts);
+            /* 遍历统计表，添加每个类别的计数 */
+            while (g_hash_table_iter_next(&iter, &key, &value))
+            {
+                guint count = *((guint *)value);
+                g_string_append_printf(stats_str, "\n%s: %u",
+                                       (gchar *)key, count);
+            }
+
+            stats_meta->text_params[0].display_text =
+                g_string_free(stats_str, FALSE);
+            stats_meta->text_params[0].set_bg_clr = 1;
+            /* 设置半透明黑色背景 */
+            stats_meta->text_params[0].text_bg_clr =
+                (NvOSD_ColorParams){0.f, 0.f, 0.f, 0.6f};
+            /* 设置白色字体 */
+            stats_meta->text_params[0].font_params.font_color =
+                (NvOSD_ColorParams){1.f, 1.f, 1.f, 1.f};
+            stats_meta->text_params[0].font_params.font_size =
+                appCtx->config.osd_config.text_size > 0
+                    ? appCtx->config.osd_config.text_size
+                    : 14;
+            stats_meta->text_params[0].font_params.font_name = "Serif";
+
+            /* 计算文本位置：右上角，留出边距 */
+            int frame_w = stats_frame->source_frame_width > 0
+                              ? stats_frame->source_frame_width
+                              : appCtx->config.streammux_config.pipeline_width;
+            if (frame_w <= 0)
+                frame_w = 1920;
+            int x_offset = frame_w - 280;
+            if (x_offset < 20)
+                x_offset = 20;
+            stats_meta->text_params[0].x_offset = x_offset;
+            stats_meta->text_params[0].y_offset = 20;
+
+            /* 将显示元数据添加到帧中 */
+            nvds_add_display_meta_to_frame(stats_frame, stats_meta);
         }
     }
 
@@ -1833,6 +2024,7 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
         }
     }
 
+    /* 显示单目标跟踪器的统计信息，包括跟踪ID和检测到的类别计数 */
     if (single_object_tracker && appCtx->tracker_stats_valid &&
         appCtx->tracker_stats_counts &&
         g_hash_table_size(appCtx->tracker_stats_counts) > 0)
@@ -1846,12 +2038,14 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
             stats_meta->num_labels = 1;
 
             GString *stats_str = g_string_new(NULL);
+            /* 添加跟踪ID */
             g_string_append_printf(stats_str, "Tracker ID: %" G_GUINT64_FORMAT,
                                    appCtx->tracker_stats_current_id);
 
             GHashTableIter iter;
             gpointer       key, value;
             g_hash_table_iter_init(&iter, appCtx->tracker_stats_counts);
+            /* 遍历统计表，添加每个类别的计数 */
             while (g_hash_table_iter_next(&iter, &key, &value))
             {
                 guint count = *((guint *)value);
@@ -1862,8 +2056,10 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
             stats_meta->text_params[0].display_text =
                 g_string_free(stats_str, FALSE);
             stats_meta->text_params[0].set_bg_clr = 1;
+            /* 设置半透明黑色背景 */
             stats_meta->text_params[0].text_bg_clr =
                 (NvOSD_ColorParams){0.f, 0.f, 0.f, 0.6f};
+            /* 设置白色字体 */
             stats_meta->text_params[0].font_params.font_color =
                 (NvOSD_ColorParams){1.f, 1.f, 1.f, 1.f};
             stats_meta->text_params[0].font_params.font_size =
@@ -1872,6 +2068,7 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
                     : 14;
             stats_meta->text_params[0].font_params.font_name = "Serif";
 
+            /* 计算文本位置：右上角，留出边距 */
             int frame_w = stats_frame->source_frame_width > 0
                               ? stats_frame->source_frame_width
                               : appCtx->config.streammux_config.pipeline_width;
@@ -1883,6 +2080,7 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
             stats_meta->text_params[0].x_offset = x_offset;
             stats_meta->text_params[0].y_offset = 20;
 
+            /* 将显示元数据添加到帧中 */
             nvds_add_display_meta_to_frame(stats_frame, stats_meta);
         }
     }

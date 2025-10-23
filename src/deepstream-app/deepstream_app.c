@@ -16,9 +16,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <json-glib/json-glib.h>
-
 #include "deepstream_app.h"
-#include "nvbufsurface.h"
 #include "nvds_obj_encode.h"
 #include <gst/app/gstappsink.h>
 
