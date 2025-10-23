@@ -20,7 +20,7 @@ cudadec-memtype=0
 rtsp-reconnect-interval-sec=3
 rtsp-reconnect-attempts=-1
 latency=300
-select-rtp-protocol=4
+select-rtp-protocol=0
 smart-record=3
 smart-rec-dir-path=../smart_rec_rgb
 smart-rec-default-duration=180
@@ -155,6 +155,8 @@ ll-lib-file=/opt/nvidia/deepstream/deepstream/lib/libsot.so
 ll-config-file=/opt/nvidia/deepstream/deepstream/sot_plugin/config/config_sot.yml
 gpu-id=0
 display-tracking-id=1
+# 启用单目标跟踪类别计数更新功能：1=启用（默认），0=关闭
+enable-class-count-update=1
 
 # [secondary-pre-process0]
 # enable=0

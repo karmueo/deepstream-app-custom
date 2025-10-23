@@ -142,6 +142,7 @@ GST_DEBUG_CATEGORY(APP_CFG_PARSER_CAT);
 #define CONFIG_GROUP_TRACKER_USER_META_POOL_SIZE "user-meta-pool-size"
 #define CONFIG_GROUP_TRACKER_SUB_BATCHES "sub-batches"
 #define CONFIG_GROUP_TRACKER_SUB_BATCH_ERR_RECOVERY_TRIAL_CNT "sub-batch-err-recovery-trial-cnt"
+#define CONFIG_GROUP_TRACKER_ENABLE_CLASS_COUNT_UPDATE "enable-class-count-update"
 
 #define CONFIG_GROUP_SINK_TYPE "type"
 #define CONFIG_GROUP_SINK_WIDTH "width"
@@ -2078,6 +2079,7 @@ parse_tracker(NvDsTrackerConfig *config, GKeyFile *key_file,
     config->user_meta_pool_size = 32;
     config->sub_batches = NULL;
     config->sub_batch_err_recovery_trial_cnt = 0;
+    config->enable_class_count_update = TRUE; /* 默认启用 */
 
     for (key = keys; *key; key++)
     {
@@ -2217,6 +2219,13 @@ parse_tracker(NvDsTrackerConfig *config, GKeyFile *key_file,
             config->sub_batch_err_recovery_trial_cnt =
                 g_key_file_get_integer(key_file, CONFIG_GROUP_TRACKER,
                                        CONFIG_GROUP_TRACKER_SUB_BATCH_ERR_RECOVERY_TRIAL_CNT, &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, CONFIG_GROUP_TRACKER_ENABLE_CLASS_COUNT_UPDATE))
+        {
+            config->enable_class_count_update =
+                g_key_file_get_integer(key_file, CONFIG_GROUP_TRACKER,
+                                       CONFIG_GROUP_TRACKER_ENABLE_CLASS_COUNT_UPDATE, &error);
             CHECK_ERROR(error);
         }
         else

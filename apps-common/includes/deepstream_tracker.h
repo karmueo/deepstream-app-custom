@@ -40,6 +40,7 @@ typedef struct
   guint user_meta_pool_size;
   gchar* sub_batches;
   gint sub_batch_err_recovery_trial_cnt;
+  gboolean enable_class_count_update; /* 启用单目标跟踪类别计数更新，默认1 */
 } NvDsTrackerConfig;
 
 typedef struct

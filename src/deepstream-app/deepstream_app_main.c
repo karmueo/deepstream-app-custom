@@ -899,7 +899,7 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
             }
 
             /* 单目标跟踪器：类别计数统计与更新 */
-            if (single_object_tracker)
+            if (single_object_tracker && appCtx->config.tracker_config.enable_class_count_update)
             {
                 /* 初始化类别计数哈希表 */
                 if (!appCtx->tracker_stats_counts)
@@ -1068,7 +1068,8 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
     }
 
     /* 显示单目标跟踪器的统计信息 */
-    if (single_object_tracker && appCtx->tracker_stats_valid &&
+    if (single_object_tracker && appCtx->config.tracker_config.enable_class_count_update &&
+        appCtx->tracker_stats_valid &&
         appCtx->tracker_stats_counts &&
         g_hash_table_size(appCtx->tracker_stats_counts) > 0)
     {

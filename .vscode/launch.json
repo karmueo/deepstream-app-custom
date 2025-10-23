@@ -12,7 +12,7 @@
             "args": [
                 "-c",
                 // "${workspaceFolder}/src/deepstream-app/configs/ir_app_config.txt"
-                "${workspaceFolder}/src/deepstream-app/configs/rgb_app_config.txt"
+                "${workspaceFolder}/src/deepstream-app/configs/debug_rgb_app_config.txt"
             ],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
