@@ -13,7 +13,6 @@
 #include "deepstream_common.h"
 #include "deepstream_config_file_parser.h"
 #include <string.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 
