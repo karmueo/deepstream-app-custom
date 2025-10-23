@@ -6,7 +6,7 @@ perf-measurement-interval-sec=5
 [source0]
 enable=1
 type=4
-uri=rtsp://admin:Abc.12345@192.168.1.64/ch0/stream1
+uri=rtsp://192.168.1.80/live/rgb
 #rtsp://192.168.1.80/live/rgb
 #rtsp://admin:12345yyz@192.168.1.21:554/h264/ch1/main/av_stream
 #rtsp://192.168.2.9:8554/ds-test
@@ -194,7 +194,7 @@ trt-engine-file=/workspace/deepstream-app-custom/src/gst-videorecognition/models
 [message-consumer]
 enable=1
 proto-lib=/opt/nvidia/deepstream/deepstream/lib/libnvds_mqtt_proto.so
-conn-str=127.0.0.1;1883
+conn-str=192.168.1.80;1883
 # config-file=cfg_mqtt.txt
 subscribe-topic-list=command;test2;test3
 # Use this option if message has sensor name as id instead of index (0,1,2 etc.).

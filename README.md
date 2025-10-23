@@ -1,25 +1,3 @@
-- [1. 安装依赖](#1-安装依赖)
-  - [安装依赖包](#安装依赖包)
-  - [安装显卡驱动](#安装显卡驱动)
-  - [安装CUDA Toolkit](#安装cuda-toolkit)
-  - [安装TensorRT](#安装tensorrt)
-- [2. 安装Deepstream SDK](#2-安装deepstream-sdk)
-  - [环境变量配置](#环境变量配置)
-  - [时区设置](#时区设置)
-- [3. 安装](#3-安装)
-  - [获取项目](#获取项目)
-  - [安装必要的依赖](#安装必要的依赖)
-  - [编译DeepStream-Yolo](#编译deepstream-yolo)
-  - [编译报文发送插件](#编译报文发送插件)
-  - [编译单目标跟踪插件](#编译单目标跟踪插件)
-  - [(可选)MQTT报文服务](#可选mqtt报文服务)
-  - [编译多帧识别插件](#编译多帧识别插件)
-  - [编译主工程](#编译主工程)
-- [4. 准备模型](#4-准备模型)
-  - [目标检测模型](#目标检测模型)
-    - [二次分类模型](#二次分类模型)
-    - [单目标跟踪模型](#单目标跟踪模型)
-  - [开机自启动](#开机自启动)
 
 # 1. 安装依赖
 
@@ -45,58 +23,57 @@ protobuf-compiler \
 gcc \
 make \
 git \
-python3
+python3 \
+python3-pip \
+libjson-glib-dev \
+libgstreamer1.0-dev \
+libgstrtspserver-1.0-dev \
+libx11-dev \
+libgbm1 \
+libglapi-mesa
 ```
+> 注：安装时不要在conda环境下安装，如果在conda环境则执行`conda deactivate`来退出conda虚拟环境。
 ## 安装显卡驱动
 pass
 
-## 开机自启动
-创建并编辑文件 `/etc/systemd/system/deepstream-app.service`，该服务直接启动本地的 `deepstream-app` 可执行文件：
-
-```ini
-[Unit]
-Description=DeepStream App Service
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-WorkingDirectory=/opt/nvidia/deepstream/deepstream
-ExecStart=/opt/nvidia/deepstream/deepstream/bin/deepstream-app -c /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/rgb_app_config.txt
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-启用并启动服务：
+## 安装CUDA Toolkit
+历史版本下载地址: https://developer.nvidia.com/cuda-toolkit-archive。历史版本下载地址: https://developer.nvidia.com/cuda-toolkit-archive 这里使用的版本是: cuda-repo-ubuntu2404-12-9-local_12.9.0-575.51.03-1_amd64.deb。
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable deepstream-app.service
-sudo systemctl start deepstream-app.service
+sudo dpkg -i cuda-repo-ubuntu2404-12-9-local_12.9.0-575.51.03-1_amd64.deb
+sudo cp /var/cuda-repo-ubuntu2404-12-9-local/cuda-*-keyring.gpg /usr/share/keyrings/
+sudo apt-get update
+sudo apt-get -y install cuda-toolkit-12-9
 ```
 
-检查服务状态：
-
+安装完查看环境变量:
 ```bash
-systemctl status deepstream-app.service
+# CUDA
+export CUDA_HOME=/usr/local/cuda
+export PATH=$CUDA_HOME/bin:$PATH
+export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
+"
 ```
 
-停止服务（或手动停止正在运行的 deepstream-app）：
-
+## 安装TensorRT
+下载地址: https://developer.nvidia.com/tensorrt/download/10x。这里使用的版本是: nv-tensorrt-local-repo-ubuntu2404-10.10.0-cuda-12.9_1.0-1_amd64.deb
 ```bash
-sudo systemctl stop deepstream-app.service
-# 或者如果需要直接停止运行的进程，可以使用：
-sudo pkill -f deepstream-app || true
+sudo dpkg -i nv-tensorrt-local-repo-ubuntu2404-10.10.0-cuda-12.9_1.0-1_amd64.deb
+sudo cp /var/nv-tensorrt-local-repo-ubuntu2404-10.10.0-cuda-12.9/nv-tensorrt-local-CD20EDBE-keyring.gpg /usr/share/keyrings/
+sudo apt-get update
+sudo apt-get install tensorrt
 ```
 
-彻底取消开机自动启动：
-
+## 安装Deepstream SDK
+下载地址: https://catalog.ngc.nvidia.com/orgs/nvidia/resources/deepstream?version=8.0, 这里使用的版本是: nv-tensorrt-local-repo-ubuntu2404-10.10.0-cuda-12.9_1.0-1_amd64.deb
 ```bash
-sudo systemctl disable deepstream-app.service
+sudo dpkg -i nv-tensorrt-local-repo-ubuntu2404-10.10.0-cuda-12.9_1.0-1_amd64.deb
+sudo cp /var/nv-tensorrt-local-repo-ubuntu2404-10.10.0-cuda-12.9/nv-tensorrt-local-CD20EDBE-keyring.gpg /usr/share/keyrings/
+sudo apt-get update
+sudo apt-get install tensorrt
 ```
+
+# 2.安装
 ## 获取项目
 ```sh
 git clone --recurse-submodules git@github.com:karmueo/deepstream-app-custom.git
@@ -113,18 +90,6 @@ cd /nvdsinfer_yolo_efficient_nms
 make
 make install
 ``` -->
-
-## 安装必要的依赖
-```sh
-sudo apt-get install libgstreamer-plugins-base1.0-dev libgstreamer1.0-dev \
-    libgstrtspserver-1.0-dev libx11-dev libjson-glib-dev libyaml-cpp-dev \
-    libgbm1 libglapi-mesa libgles2-mesa-dev libopencv-dev pkg-config
-
-sudo apt reinstall libxvidcore4
-sudo apt reinstall libmp3lame0
-# 中文显示
-sudo apt-get install ttf-wqy-microhei
-```
 
 ## 编译DeepStream-Yolo
 ```sh
@@ -183,6 +148,59 @@ mosquitto -v -c ./my_config.conf &
 ```
 然后就可以使用mqtt发送和接收消息了
 
+## 作为服务安装并开机自启动
+如果要将 mosquitto 作为系统服务运行并设置开机自启动，请按照以下步骤操作：
+
+1. 创建配置文件目录并放置配置文件：
+```sh
+sudo mkdir -p /etc/mosquitto
+sudo cp my_config.conf /etc/mosquitto/
+```
+
+2. 创建 systemd 服务文件 `/etc/systemd/system/mosquitto.service`：
+```
+[Unit]
+Description=Mosquitto MQTT Broker
+After=network.target
+
+[Service]
+Type=simple
+User=mosquitto
+ExecStart=/usr/local/sbin/mosquitto -v -c /etc/mosquitto/my_config.conf
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+3. 重新加载 systemd 配置并启用服务：
+```sh
+sudo systemctl daemon-reload
+sudo systemctl enable mosquitto.service
+sudo systemctl start mosquitto.service
+```
+
+4. 检查服务状态：
+```sh
+sudo systemctl status mosquitto.service
+```
+
+5. 如果需要停止服务：
+```sh
+sudo systemctl stop mosquitto.service
+```
+
+6. 彻底取消自动重启（本次与下次开机都不拉起）：
+```sh
+sudo systemctl stop mosquitto.service
+sudo systemctl disable mosquitto.service
+```
+
+7. 查看日志
+```bash
+sudo journalctl -u mosquitto.service
+```
+
 ## 编译多帧识别插件
 ```sh
 cd /workspace/deepstream-app-custom/src/gst-videorecognition
@@ -215,13 +233,13 @@ make
     ...
 }
 ```
-# 4. 准备模型
+# 3. 准备模型
 ## 目标检测模型
 把目标检测模型onnx文件放入src/deepstream-app/models目录下，根据实际的模型名称修改下面的参数：
 动态 batch: ./convert2trt.sh <ONNX_PATH> <ENGINE_PATH> dynamic [min_batch] [opt_batch] [max_batch] [fp16]
 ```sh
-./convert2trt.sh yolov11m_detect_ir_640_v2.onnx yolov11m_detect_ir_640_b4_v2_fp16.engine dynamic 1 4 4 fp16
-./convert2trt.sh yolov11m_detect_rgb_640_v6.onnx yolov11m_detect_rgb_640_v6_b4_fp16.engine dynamic 1 4 4 fp16
+./convert2trt.sh yolov11m_detect_ir_640_v2.onnx yolov11m_detect_ir_640_b4_v2_fp16.engine fp16
+./convert2trt.sh yolov11m_detect_rgb_640_v6.onnx yolov11m_detect_rgb_640_v6_b4_fp16.engine fp16
 ```
 然后根据实际的engine文件名修改src/deepstream-app/configs/config_infer_primary_yoloV11.txt中model-engine-file的值
 
@@ -239,14 +257,14 @@ trtyolo export -w yolov11.pt -v ultralytics -o output --max_boxes 100 --iou_thre
 ```
  -->
 
-### 二次分类模型
+## 二次分类模型
 把分类模型比如yolov11m_classify_rgb_b4_v2.onnx放到src/deepstream-app/models目录下，根据实际的模型名称修改下面的参数：
 ```bash
 ./convert2trt.sh yolov11m_classify_rgb_b4_v2.onnx yolov11m_classify_rgb_b4_v2_fp16.engine fp16
 ./convert2trt.sh yolov11m_classify_ir_b4_v2.onnx yolov11m_classify_ir_b4_v2_fp16.engine fp16
 ```
 
-### 单目标跟踪模型
+## 单目标跟踪模型
 把模型sutrack.onnx文件放入src/sot_plugin/models目录下，
 
 ```sh
@@ -265,46 +283,59 @@ trtyolo export -w yolov11.pt -v ultralytics -o output --max_boxes 100 --iou_thre
 ./convert2trt.sh
 ``` -->
 
-## 开机自启动
-创建和编辑文件/etc/systemd/system/deepstream-compose.service
+# 4.开机自启动
 
+## 程序开机自启动
+将如下命令作为 systemd 服务开机自启动：
+
+```bash
+/opt/nvidia/deepstream/deepstream/bin/deepstream-app -c /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/rgb_app_config.txt
 ```
+
+步骤如下：
+
+1) 创建服务文件 `/etc/systemd/system/deepstream-app-rgb.service`
+
+```ini
 [Unit]
-Description=DeepStream Compose Stack
-After=network-online.target docker.service
-Wants=network-online.target docker.service
+Description=DeepStream RGB App
+# 网络就绪后再启动，如依赖 MQTT，请追加 mosquitto.service
+After=network-online.target mosquitto.service
+Wants=network-online.target mosquitto.service
 
 [Service]
-Type=oneshot
+Type=simple
 WorkingDirectory=/opt/nvidia/deepstream/deepstream
-RemainAfterExit=yes
-ExecStart=bin/docker compose up -d
-ExecStop=/usr/bin/docker compose down
-TimeoutStartSec=0
+ExecStart=/opt/nvidia/deepstream/deepstream/bin/deepstream-app -c /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/rgb_app_config.txt
+Restart=on-failure
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-启用:
+2) 重新加载并启用/启动服务
+
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable deepstream-compose.service
-sudo systemctl start deepstream-compose.service
+sudo systemctl enable deepstream-app-rgb.service
+sudo systemctl start deepstream-app-rgb.service
 ```
 
-状态检查：
-```
-systemctl status deepstream-compose.service
-```
+3) 查看状态与日志
 
-停止:
 ```bash
-docker compose down
+sudo systemctl status deepstream-app-rgb.service
+sudo journalctl -u deepstream-app-rgb.service -f
 ```
 
-彻底取消自动重启（本次与下次开机都不拉起）
+4) 停止和取消自启动
+
+```bash
+sudo systemctl stop deepstream-app-rgb.service
+sudo systemctl disable deepstream-app-rgb.service
 ```
-systemctl stop deepstream-compose.service
-systemctl disable deepstream-compose.service
-```
+
+注意：
+- 如果你的应用依赖其他服务（如 MQTT），可在 `[Unit]` 中追加：`After=mosquitto.service` 与/或 `Wants=mosquitto.service`。
+- 若启用 `User=...` 以非 root 运行，请确保该用户有 GPU 与摄像头、模型及日志目录等资源的访问权限。
