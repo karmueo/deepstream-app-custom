@@ -414,6 +414,10 @@ create_mynework_bin(NvDsMyNetworkConfig *config,
     {
         g_object_set(G_OBJECT(bin->sink), "port", config->multicast_port, NULL);
     }
+    if (config->iface)
+    {
+        g_object_set(G_OBJECT(bin->sink), "iface", config->iface, NULL);
+    }
 
     // 添加一个虚拟pad
     NVGSTDS_BIN_ADD_GHOST_PAD(bin->bin, bin->queue, "sink");

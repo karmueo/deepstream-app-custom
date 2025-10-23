@@ -73,6 +73,10 @@ topic=dddd
 enable=0
 #Type - 1=FakeSink 2=EglSink 3=File 4=UDPSink 5=nvdrmvideosink 6=MsgConvBroker 7=MyNetwork
 type=7
+ip=239.255.10.10
+multicast-port=6000
+# 指定组播网卡名称，例如: eth0, enp5s0, ens33 等
+multicast-iface=eth0
 
 # mqtt
 [sink3]

@@ -2564,6 +2564,13 @@ parse_sink(NvDsSinkSubBinConfig *config, GKeyFile *key_file, gchar *group,
                 g_key_file_get_integer(key_file, group, "multicast-port", &error);
             CHECK_ERROR(error);
         }
+        else if (!g_strcmp0(*key, "multicast-iface"))
+        {
+            // 设置报文发送组播网卡
+            config->mynetwork_config.iface =
+                g_key_file_get_string(key_file, group, "multicast-iface", &error);
+            CHECK_ERROR(error);
+        }
         else
         {
             NVGSTDS_WARN_MSG_V("Unknown key '%s' for group [%s]", *key, group);

@@ -70,6 +70,8 @@ enable=1
 type=7
 ip=239.255.10.10
 multicast-port=6000
+# 指定组播网卡名称，例如: eth0, enp5s0, ens33 等
+multicast-iface=eno2
 # multicast-ttl=32
 
 [message-converter]

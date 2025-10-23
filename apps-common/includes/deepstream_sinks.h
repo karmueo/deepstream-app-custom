@@ -149,6 +149,8 @@ extern "C"
         gchar *ip;
         // 组播port
         guint multicast_port;
+        // 组播网卡名称
+        gchar *iface;
     } NvDsMyNetworkConfig;
 
     typedef struct
