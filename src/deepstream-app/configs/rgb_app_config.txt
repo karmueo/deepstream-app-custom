@@ -157,6 +157,8 @@ ll-lib-file=/opt/nvidia/deepstream/deepstream/lib/libsot.so
 ll-config-file=/opt/nvidia/deepstream/deepstream/sot_plugin/config/config_sot.yml
 gpu-id=0
 display-tracking-id=1
+# 启用单目标跟踪类别计数更新功能：1=启用（默认），0=关闭
+enable-class-count-update=1
 
 # [secondary-pre-process0]
 # enable=0
