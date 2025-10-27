@@ -231,6 +231,7 @@ extern "C"
     gboolean    tracker_stats_valid;
     guint64     tracker_stats_current_id;
     GHashTable *tracker_stats_counts; /* key: gchar*, value: guint* */
+    GQueue     *tracker_label_history; /* 最近100次识别标签的滑动窗口 */
     };
 
     /**

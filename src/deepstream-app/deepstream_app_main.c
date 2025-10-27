@@ -745,175 +745,26 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                 }
             }
 
-            // FIXME:
-            sgie_on = FALSE;
-            if (tracker_on && sgie_on &&
-                obj_meta->object_id != UNTRACKED_OBJECT_ID)
-            {
-                /* 定义对象聚合结构 */
-                typedef struct _ObjClsAgg
-                {
-                    GHashTable *label_scores; /* key: gchar*, value: gdouble* */
-                    guint       last_seen_frame;
-                } ObjClsAgg;
-
-                /* 懒初始化全局缓存表 */
-                if (!appCtx->cls_agg_map)
-                {
-                    appCtx->cls_agg_map = g_hash_table_new_full(
-                        g_int64_hash, g_int64_equal, g_free, (GDestroyNotify)NULL /* value freed below when destroying map at exit */);
-                }
-
-                guint64    oid = obj_meta->object_id;
-                ObjClsAgg *agg =
-                    (ObjClsAgg *)g_hash_table_lookup(appCtx->cls_agg_map, &oid);
-                if (!agg)
-                {
-                    guint64 *key = (guint64 *)g_malloc(sizeof(guint64));
-                    *key = oid;
-                    agg = g_new0(ObjClsAgg, 1);
-                    agg->label_scores = g_hash_table_new_full(
-                        g_str_hash, g_str_equal, g_free, g_free);
-                    agg->last_seen_frame = frame_meta->frame_num;
-                    g_hash_table_insert(appCtx->cls_agg_map, key, agg);
-                }
-
-                /* 计算归一化目标面积作为权重之一，并进行可调平衡 */
-                gdouble area = (gdouble)(obj_meta->rect_params.width *
-                                         obj_meta->rect_params.height);
-                gdouble pW =
-                    appCtx->config.streammux_config.pipeline_width
-                        ? appCtx->config.streammux_config.pipeline_width
-                        : frame_meta->pipeline_width;
-                gdouble pH =
-                    appCtx->config.streammux_config.pipeline_height
-                        ? appCtx->config.streammux_config.pipeline_height
-                        : frame_meta->pipeline_height;
-                gdouble norm_area =
-                    (pW > 0 && pH > 0) ? (area / (pW * pH)) : 1.0;
-                if (norm_area < 0.0)
-                    norm_area = 0.0;
-                /* clip 到 [eps, 1]，避免极端缩小目标权重为0 */
-                const gdouble eps = 1e-6;
-                if (norm_area < eps)
-                    norm_area = eps;
-
-                /* 平衡参数：alpha 控制对分类置信度的偏好，beta 控制对面积的偏好
-                    ref_area 用来拉升小目标的面积贡献（例如 0.02 表示 2% 画面）
-                 */
-                const gdouble alpha = 0.8;     /* 推荐范围 [0.6, 0.95] */
-                const gdouble beta = 0.2;      /* 推荐范围 [0.05, 0.4] */
-                const gdouble ref_area = 0.02; /* 推荐范围 [0.01, 0.05] */
-
-                /* 面积项映射：使用归一化后除以参考面积，限制上限，避免过大 */
-                gdouble area_term =
-                    norm_area / ref_area; /* 小目标 <1，大目标 >1 */
-                if (area_term > 1.0)
-                    area_term = 1.0;
-
-                /* 累加每个分类标签的加权得分：score += prob * norm_area */
-                for (NvDsClassifierMetaList *cl =
-                         obj_meta->classifier_meta_list;
-                     cl; cl = cl->next)
-                {
-                    NvDsClassifierMeta *cl_meta =
-                        (NvDsClassifierMeta *)cl->data;
-                    for (NvDsLabelInfoList *ll = cl_meta->label_info_list; ll;
-                         ll = ll->next)
-                    {
-                        NvDsLabelInfo *ll_meta = (NvDsLabelInfo *)ll->data;
-                        if (ll_meta->result_label[0] == '\0')
-                            continue;
-                        if (ll_meta->result_prob <= 0.0)
-                            continue;
-
-                        gchar   *label_key = g_strdup(ll_meta->result_label);
-                        gdouble *sum_ptr = (gdouble *)g_hash_table_lookup(
-                            agg->label_scores, label_key);
-                        if (!sum_ptr)
-                        {
-                            sum_ptr = g_new0(gdouble, 1);
-                            g_hash_table_insert(agg->label_scores, label_key,
-                                                sum_ptr);
-                        }
-                        else
-                        {
-                            g_free(label_key); /* key already exists */
-                        }
-                        /* 可调融合：置信度^alpha 与 面积项^beta 的加权几何式 */
-                        gdouble prob_term = ll_meta->result_prob;
-                        if (prob_term < eps)
-                            prob_term = eps;
-                        gdouble fused =
-                            pow(prob_term, alpha) * pow(area_term, beta);
-                        *sum_ptr += fused;
-                    }
-                }
-                agg->last_seen_frame = frame_meta->frame_num;
-
-                /* 选择累计得分最高的标签，并用归一化后概率替换当前结果 */
-                GHashTableIter it;
-                gpointer       k, v;
-                gdouble        best_score = -1.0, total_score = 0.0;
-                gchar         *best_label = NULL;
-                g_hash_table_iter_init(&it, agg->label_scores);
-                while (g_hash_table_iter_next(&it, &k, &v))
-                {
-                    gdouble s = *((gdouble *)v);
-                    total_score += s;
-                    if (s > best_score)
-                    {
-                        best_score = s;
-                        best_label = (gchar *)k;
-                    }
-                }
-                if (best_label && total_score > 0.0)
-                {
-                    gdouble best_prob = best_score / total_score; /* 归一化 */
-                    /* 将该对象的分类列表中的概率重写：仅保留最佳标签为
-                     * best_prob，其它置0 */
-                    for (NvDsClassifierMetaList *cl =
-                             obj_meta->classifier_meta_list;
-                         cl; cl = cl->next)
-                    {
-                        NvDsClassifierMeta *cl_meta =
-                            (NvDsClassifierMeta *)cl->data;
-                        for (NvDsLabelInfoList *ll = cl_meta->label_info_list;
-                             ll; ll = ll->next)
-                        {
-                            NvDsLabelInfo *ll_meta = (NvDsLabelInfo *)ll->data;
-                            if (ll_meta->result_label[0] == '\0')
-                                continue;
-                            if (g_strcmp0(ll_meta->result_label, best_label) ==
-                                0)
-                            {
-                                ll_meta->result_prob = best_prob;
-                            }
-                            else
-                            {
-                                ll_meta->result_prob = 0.0;
-                            }
-                        }
-                    }
-                }
-            }
-
-            /* 单目标跟踪器：类别计数统计与更新 */
+            /* 单目标跟踪器：类别计数统计与更新（限制最近100次） */
             if (single_object_tracker && appCtx->config.tracker_config.enable_class_count_update)
             {
-                /* 初始化类别计数哈希表 */
-                if (!appCtx->tracker_stats_counts)
+                const guint MAX_HISTORY = 100; // 最多保留最近100次历史记录
+                
+                /* 初始化历史队列（使用GQueue存储标签字符串） */
+                if (!appCtx->tracker_label_history)
                 {
-                    appCtx->tracker_stats_counts = g_hash_table_new_full(
-                        g_str_hash, g_str_equal, g_free, g_free);
+                    appCtx->tracker_label_history = g_queue_new();
                 }
 
                 /* 如果目标未被跟踪，清空统计 */
                 if (obj_meta->object_id == UNTRACKED_OBJECT_ID)
                 {
                     appCtx->tracker_stats_valid = FALSE;
-                    if (appCtx->tracker_stats_counts)
-                        g_hash_table_remove_all(appCtx->tracker_stats_counts);
+                    if (appCtx->tracker_label_history)
+                    {
+                        g_queue_foreach(appCtx->tracker_label_history, (GFunc)g_free, NULL);
+                        g_queue_clear(appCtx->tracker_label_history);
+                    }
                 }
                 else
                 {
@@ -923,8 +774,11 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                     if (!appCtx->tracker_stats_valid ||
                         appCtx->tracker_stats_current_id != current_tracker_id)
                     {
-                        if (appCtx->tracker_stats_counts)
-                            g_hash_table_remove_all(appCtx->tracker_stats_counts);
+                        if (appCtx->tracker_label_history)
+                        {
+                            g_queue_foreach(appCtx->tracker_label_history, (GFunc)g_free, NULL);
+                            g_queue_clear(appCtx->tracker_label_history);
+                        }
                         appCtx->tracker_stats_current_id = current_tracker_id;
                         appCtx->tracker_stats_valid = TRUE;
                     }
@@ -943,31 +797,48 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                         label = label_buf;
                     }
 
-                    /* 更新类别计数 */
-                    if (appCtx->tracker_stats_counts)
+                    /* 将当前标签添加到历史队列 */
+                    if (appCtx->tracker_label_history)
                     {
-                        guint *count = (guint *)g_hash_table_lookup(
-                            appCtx->tracker_stats_counts, label);
-                        if (!count)
+                        g_queue_push_tail(appCtx->tracker_label_history, g_strdup(label));
+                        
+                        /* 如果超过100次，移除最旧的记录 */
+                        while (g_queue_get_length(appCtx->tracker_label_history) > MAX_HISTORY)
                         {
-                            gchar *stored_key = g_strdup(label);
-                            count = g_new0(guint, 1);
-                            g_hash_table_insert(appCtx->tracker_stats_counts,
-                                                stored_key, count);
+                            gchar *old_label = (gchar *)g_queue_pop_head(appCtx->tracker_label_history);
+                            g_free(old_label);
                         }
-                        (*count)++;
                     }
 
-                    /* 找出计数最大的类别，更新为最终的目标类别 */
-                    if (appCtx->tracker_stats_counts &&
-                        g_hash_table_size(appCtx->tracker_stats_counts) > 0)
+                    /* 从最近100次历史中统计每个类别出现的次数 */
+                    if (appCtx->tracker_label_history &&
+                        g_queue_get_length(appCtx->tracker_label_history) > 0)
                     {
+                        /* 使用临时哈希表统计计数 */
+                        GHashTable *temp_counts = g_hash_table_new_full(
+                            g_str_hash, g_str_equal, NULL, g_free);
+                        
+                        /* 遍历历史队列，统计每个标签的出现次数 */
+                        for (GList *iter = appCtx->tracker_label_history->head; 
+                             iter != NULL; iter = iter->next)
+                        {
+                            const gchar *hist_label = (const gchar *)iter->data;
+                            guint *count = (guint *)g_hash_table_lookup(temp_counts, hist_label);
+                            if (!count)
+                            {
+                                count = g_new0(guint, 1);
+                                g_hash_table_insert(temp_counts, (gpointer)hist_label, count);
+                            }
+                            (*count)++;
+                        }
+
+                        /* 找出计数最大的类别 */
                         GHashTableIter iter;
                         gpointer       key, value;
                         guint          max_count = 0;
                         const gchar   *best_label = NULL;
 
-                        g_hash_table_iter_init(&iter, appCtx->tracker_stats_counts);
+                        g_hash_table_iter_init(&iter, temp_counts);
                         while (g_hash_table_iter_next(&iter, &key, &value))
                         {
                             guint count = *((guint *)value);
@@ -995,6 +866,9 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                                 }
                             }
                         }
+                        
+                        /* 清理临时哈希表 */
+                        g_hash_table_destroy(temp_counts);
                     }
                 }
             }
@@ -1776,59 +1650,6 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
 
             if (single_object_tracker)
             {
-                if (!appCtx->tracker_stats_counts)
-                {
-                    appCtx->tracker_stats_counts = g_hash_table_new_full(
-                        g_str_hash, g_str_equal, g_free, g_free);
-                }
-
-                if (obj_meta->object_id == UNTRACKED_OBJECT_ID)
-                {
-                    appCtx->tracker_stats_valid = FALSE;
-                    if (appCtx->tracker_stats_counts)
-                        g_hash_table_remove_all(appCtx->tracker_stats_counts);
-                }
-                else
-                {
-                    guint64 current_tracker_id = (guint64)obj_meta->object_id;
-                    if (!appCtx->tracker_stats_valid ||
-                        appCtx->tracker_stats_current_id != current_tracker_id)
-                    {
-                        if (appCtx->tracker_stats_counts)
-                            g_hash_table_remove_all(
-                                appCtx->tracker_stats_counts);
-                        appCtx->tracker_stats_current_id = current_tracker_id;
-                        appCtx->tracker_stats_valid = TRUE;
-                    }
-
-                    const gchar *label = NULL;
-                    gchar        label_buf[64];
-                    if (obj_meta->obj_label[0] != '\0')
-                    {
-                        label = obj_meta->obj_label;
-                    }
-                    else
-                    {
-                        g_snprintf(label_buf, sizeof(label_buf), "Class_%d",
-                                   obj_meta->class_id);
-                        label = label_buf;
-                    }
-
-                    if (appCtx->tracker_stats_counts)
-                    {
-                        guint *count = (guint *)g_hash_table_lookup(
-                            appCtx->tracker_stats_counts, label);
-                        if (!count)
-                        {
-                            gchar *stored_key = g_strdup(label);
-                            count = g_new0(guint, 1);
-                            g_hash_table_insert(appCtx->tracker_stats_counts,
-                                                stored_key, count);
-                        }
-                        (*count)++;
-                    }
-                }
-
                 g_string_append_printf(gstr, " 跟踪(%.2f) ID:%" G_GUINT64_FORMAT,
                                        obj_meta->tracker_confidence,
                                        (guint64)obj_meta->object_id);
@@ -2520,6 +2341,13 @@ done:
         {
             g_hash_table_destroy(appCtx[i]->tracker_stats_counts);
             appCtx[i]->tracker_stats_counts = NULL;
+        }
+
+        if (appCtx[i]->tracker_label_history)
+        {
+            g_queue_foreach(appCtx[i]->tracker_label_history, (GFunc)g_free, NULL);
+            g_queue_free(appCtx[i]->tracker_label_history);
+            appCtx[i]->tracker_label_history = NULL;
         }
 
         if (appCtx[i]->label_anchor_map)
