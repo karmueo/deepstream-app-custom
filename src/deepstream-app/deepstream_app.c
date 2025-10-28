@@ -2735,9 +2735,11 @@ create_pipeline(AppCtx *appCtx,
     {
         for (i = 0; i < config->num_message_consumers; i++)
         {
+            /* Pass AppCtx as user data so the subscribe callback can
+             * toggle instance-level state correctly. */
             appCtx->c2d_ctx[i] =
                 start_cloud_to_device_messaging(&config->message_consumer_config[i],
-                                                msg_broker_subscribe_cb, &appCtx->pipeline.multi_src_bin);
+                                                msg_broker_subscribe_cb, appCtx);
             if (appCtx->c2d_ctx[i] == NULL)
             {
                 NVGSTDS_ERR_MSG_V("Failed to create message consumer");

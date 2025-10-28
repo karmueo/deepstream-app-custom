@@ -2,6 +2,7 @@
 enable-perf-measurement=1
 perf-measurement-interval-sec=5
 #enable-jpeg-save=1
+smart-rec-detect-default=1
 
 [source0]
 enable=1
@@ -200,7 +201,7 @@ enable=1
 proto-lib=/opt/nvidia/deepstream/deepstream/lib/libnvds_mqtt_proto.so
 conn-str=127.0.0.1;1883
 # config-file=cfg_mqtt.txt
-subscribe-topic-list=command;test2;test3
+subscribe-topic-list=command
 # Use this option if message has sensor name as id instead of index (0,1,2 etc.).
 #sensor-list-file=dstest5_msgconv_sample_config.txt
 

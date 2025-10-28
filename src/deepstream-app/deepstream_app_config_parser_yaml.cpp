@@ -122,6 +122,10 @@ parse_app_yaml(NvDsConfig *config, gchar *cfg_file_path)
             get_absolute_file_path_yaml(cfg_file_path, str, config->shadow_track_output_path);
             g_free(str);
         }
+        else if (paramKey == "smart-rec-detect-default")
+        {
+            config->detect_record_default_enable = itr->second.as<gboolean>();
+        }
         else
         {
             cout << "Unknown key " << paramKey << " for group application" << endl;

@@ -86,15 +86,15 @@ static gboolean g_pending_request = FALSE; // 是否有待处理的请求
 static volatile gint g_detect_record_enabled = 0;
 
 static inline void
-set_detect_record_enabled(gboolean enabled)
+set_detect_record_enabled(AppCtx *appCtx, gboolean enabled)
 {
-    g_atomic_int_set(&g_detect_record_enabled, enabled ? 1 : 0);
+    appCtx->detect_record_enabled = enabled ? TRUE : FALSE;
 }
 
 static inline gboolean
-is_detect_record_enabled(void)
+is_detect_record_enabled(AppCtx *appCtx)
 {
-    return g_atomic_int_get(&g_detect_record_enabled) != 0;
+    return appCtx->detect_record_enabled;
 }
 
 static inline gboolean
@@ -316,7 +316,7 @@ static void meta_free_func(gpointer data, gpointer user_data)
  * @param data 消息数据
  * @param size 消息大小
  */
-static void parse_cloud_message(gpointer data, guint size)
+static void parse_cloud_message(AppCtx *appCtx, gpointer data, guint size)
 {
     JsonNode *rootNode = NULL;
     GError   *error = NULL;
@@ -358,14 +358,30 @@ static void parse_cloud_message(gpointer data, guint size)
         const gchar *type = json_object_get_string_member(object, "command");
         if (!g_strcmp0(type, "start-detect-recording"))
         {
-            set_detect_record_enabled(TRUE);
+            set_detect_record_enabled(appCtx, TRUE);
             NVGSTDS_INFO_MSG_V(
                 "Received command to enable detect recording trigger");
             handled_command = TRUE;
         }
         else if (!g_strcmp0(type, "stop-detect-recording"))
         {
-            set_detect_record_enabled(FALSE);
+            set_detect_record_enabled(appCtx, FALSE);
+            /* Also stop any ongoing smart-record sessions immediately */
+            NvDsSrcParentBin *pbin = &appCtx->pipeline.multi_src_bin;
+            for (guint si = 0; si < MAX_SOURCE_BINS; ++si)
+            {
+                NvDsSrcBin *sbin = &pbin->sub_bins[si];
+                if (!sbin || !sbin->config)
+                    continue;
+                if (sbin->recordCtx && !sbin->reconfiguring)
+                {
+                    NvDsSRContext *ctx = (NvDsSRContext *)sbin->recordCtx;
+                    if (ctx->recordOn)
+                    {
+                        NvDsSRStop(ctx, 0);
+                    }
+                }
+            }
             NVGSTDS_INFO_MSG_V(
                 "Received command to disable detect recording trigger");
             handled_command = TRUE;
@@ -643,7 +659,7 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
             obj_meta = (NvDsObjectMeta *)(l->data);
 
             if (src_bin->config->smart_record == 3 &&
-                is_detect_record_enabled() &&
+                is_detect_record_enabled(appCtx) &&
                 has_detection_target(obj_meta))
             {
                 /* 检测到符合条件的目标才触发智能录像，g_pending_request 防抖 */
@@ -1486,7 +1502,7 @@ static void my_msg_broker_subscribe_cb(NvMsgBrokerErrorType status, void *msg,
         NvDsEventMsgMeta *event_msg_meta = (NvDsEventMsgMeta *)msg;
         AppCtx           *appCtx = (AppCtx *)user_ptr;
 
-        parse_cloud_message(msg, msglen);
+        parse_cloud_message(appCtx, msg, msglen);
         status = NV_MSGBROKER_API_OK;
     }
     else
@@ -1967,6 +1983,7 @@ static gboolean recreate_pipeline_thread_func(gpointer arg)
     destroy_pipeline(appCtx);
 
     g_print("Recreate pipeline\n");
+    set_detect_record_enabled(appCtx, appCtx->config.detect_record_default_enable);
     if (!create_pipeline(appCtx, bbox_generated_probe_after_analytics,
                          all_bbox_generated, perf_cb, overlay_graphics,
                          NULL))
@@ -2115,6 +2132,9 @@ int main(int argc, char *argv[])
                 goto done;
             }
         }
+
+        /* Initialize detect_record_enabled based on config */
+        set_detect_record_enabled(appCtx[i], appCtx[i]->config.detect_record_default_enable);
     }
 
     for (i = 0; i < num_instances; i++)

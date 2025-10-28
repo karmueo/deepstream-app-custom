@@ -121,6 +121,7 @@ extern "C"
         gchar   *terminated_track_output_path;
         gchar   *shadow_track_output_path;
         gboolean enable_jpeg_save; /* runtime JPEG save switch */
+        gboolean detect_record_default_enable; /* initial detect-trigger state */
 
         gchar              **uri_list;
         gchar              **sensor_id_list;
@@ -232,6 +233,9 @@ extern "C"
     guint64     tracker_stats_current_id;
     GHashTable *tracker_stats_counts; /* key: gchar*, value: guint* */
     GQueue     *tracker_label_history; /* 最近100次识别标签的滑动窗口 */
+
+    /* 检测触发录制状态 */
+    gboolean    detect_record_enabled;
     };
 
     /**

@@ -25,6 +25,7 @@
 #define CONFIG_GROUP_APP_TERMINATED_TRACK_OUTPUT_DIR "terminated-track-output-dir"
 #define CONFIG_GROUP_APP_SHADOW_TRACK_OUTPUT_DIR "shadow-track-output-dir"
 #define CONFIG_GROUP_APP_ENABLE_JPEG_SAVE "enable-jpeg-save"
+#define CONFIG_GROUP_APP_SMART_REC_DETECT_DEFAULT "smart-rec-detect-default"
 
 #define CONFIG_GROUP_TESTS "tests"
 #define CONFIG_GROUP_TESTS_FILE_LOOP "file-loop"
@@ -406,6 +407,13 @@ parse_app(NvDsConfig *config, GKeyFile *key_file, gchar *cfg_file_path)
         {
             config->enable_jpeg_save = g_key_file_get_integer(key_file, CONFIG_GROUP_APP,
                                                               CONFIG_GROUP_APP_ENABLE_JPEG_SAVE, &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, CONFIG_GROUP_APP_SMART_REC_DETECT_DEFAULT))
+        {
+            config->detect_record_default_enable = g_key_file_get_integer(
+                key_file, CONFIG_GROUP_APP,
+                CONFIG_GROUP_APP_SMART_REC_DETECT_DEFAULT, &error);
             CHECK_ERROR(error);
         }
         else
