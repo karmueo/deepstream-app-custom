@@ -239,7 +239,7 @@ make
 动态 batch: ./convert2trt.sh <ONNX_PATH> <ENGINE_PATH> dynamic [min_batch] [opt_batch] [max_batch] [fp16]
 ```sh
 ./convert2trt.sh yolov11m_detect_ir_640_v2.onnx yolov11m_detect_ir_640_b4_v2_fp16.engine fp16
-./convert2trt.sh yolov11m_detect_rgb_640_v6.onnx yolov11m_detect_rgb_640_v6_b4_fp16.engine fp16
+./convert2trt.sh yolov11m_detect_rgb_640_v7.onnx yolov11m_detect_rgb_640_v7_b5_fp16.engine fp16
 ```
 然后根据实际的engine文件名修改src/deepstream-app/configs/config_infer_primary_yoloV11.txt中model-engine-file的值
 
@@ -339,3 +339,11 @@ sudo systemctl disable deepstream-app-rgb.service
 注意：
 - 如果你的应用依赖其他服务（如 MQTT），可在 `[Unit]` 中追加：`After=mosquitto.service` 与/或 `Wants=mosquitto.service`。
 - 若启用 `User=...` 以非 root 运行，请确保该用户有 GPU 与摄像头、模型及日志目录等资源的访问权限。
+
+## *可选，服务可视化
+```bash
+sudo apt install cockpit -y
+# 启动并启用服务
+sudo systemctl enable cockpit.socket
+```
+浏览器访问 https://服务器IP:9090，使用系统用户名和密码登录即可进入管理界面。
