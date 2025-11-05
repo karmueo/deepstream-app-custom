@@ -30,6 +30,9 @@ custom-lib-path=../../../DeepStream-Yolo/nvdsinfer_custom_impl_Yolo/libnvdsinfer
 engine-create-func-name=NvDsInferYoloCudaEngineGet
 
 [class-attrs-all]
+threshold=0.5
 nms-iou-threshold=0.45
 # threshold被pre-cluster-threshold代替了
 pre-cluster-threshold=0.5
+# detected-min-w=32
+detected-min-h=9

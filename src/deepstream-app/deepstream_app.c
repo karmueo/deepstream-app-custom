@@ -392,14 +392,17 @@ bus_callback(GstBus *bus, GstMessage *message, gpointer data)
             // Error from one of RTSP source.
             NvDsSrcBin *subBin = &bin->sub_bins[i];
 
-            if (!subBin->reconfiguring ||
+            // 直接退出
+            /* if (!subBin->reconfiguring ||
                 g_strrstr(debuginfo, "500 (Internal Server Error)"))
             {
                 subBin->reconfiguring = TRUE;
                 g_timeout_add(0, reset_source_pipeline, subBin);
-            }
+            } */
             g_error_free(error);
             g_free(debuginfo);
+            appCtx->return_value = 0;
+            appCtx->quit = TRUE;
             return TRUE;
         }
 

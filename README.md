@@ -307,8 +307,8 @@ Wants=network-online.target mosquitto.service
 Type=simple
 WorkingDirectory=/opt/nvidia/deepstream/deepstream
 ExecStart=/opt/nvidia/deepstream/deepstream/bin/deepstream-app -c /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/rgb_app_config.txt
-Restart=on-failure
-RestartSec=5
+Restart=always
+RestartSec=30
 
 [Install]
 WantedBy=multi-user.target
