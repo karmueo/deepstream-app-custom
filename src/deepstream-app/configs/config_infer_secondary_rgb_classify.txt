@@ -3,7 +3,7 @@ gpu-id=0
 # （如果启用了input-tensor-meta则忽略）
 net-scale-factor=0.0039215697906911373
 onnx-file=../models/yolov11m_classify_rgb_b4_v2.onnx
-model-engine-file=../models/yolov11m_classify_rgb_b4_v2_fp16.engine
+model-engine-file=../models/yolov11m_classify_rgb_b4_v3_fp32.engine
 labelfile-path=classify_labels.txt
 batch-size=4
 # 0: RGB 1: BGR 2: GRAY

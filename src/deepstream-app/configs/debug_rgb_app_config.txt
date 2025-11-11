@@ -2,12 +2,12 @@
 enable-perf-measurement=1
 perf-measurement-interval-sec=5
 #enable-jpeg-save=1
-smart-rec-detect-default=1
+smart-rec-detect-default=0
 
 [source0]
 enable=1
 type=4
-uri=rtsp://127.0.0.1/live/test
+uri=rtsp://192.168.1.80/live/rgb
 #rtsp://127.0.0.1/live/test
 #rtsp://192.168.1.80/live/rgb
 #rtsp://admin:12345yyz@192.168.1.21:554/h264/ch1/main/av_stream
