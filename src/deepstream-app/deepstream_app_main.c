@@ -1709,9 +1709,9 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
                 obj_meta->text_params.font_params.font_size = font_size;
                 obj_meta->text_params.font_params.font_name = "Serif";
                 obj_meta->text_params.set_bg_clr = 1;
-                /* 透明度稍低，减轻遮挡 (A=0.4) */
+                /* 更透明的背景，减轻遮挡感 (A=0.25) */
                 obj_meta->text_params.text_bg_clr =
-                    (NvOSD_ColorParams){0.f, 0.f, 0.f, 0.4f};
+                    (NvOSD_ColorParams){0.f, 0.f, 0.f, 0.25f};
 
                 /* 估算文本高度：字号 + 顶/底边距(简单) */
                 int text_h = font_size + 4;
@@ -1721,41 +1721,39 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
                 if (x > frame_w - 4)
                     x = frame_w - 4;
 
-                /* 判断小目标比例阈值（例如 <1% 认为小） */
-                float area_ratio =
-                    (bw * bh) / ((float)frame_w * (float)frame_h + 1e-3f);
+                /* 统一策略：所有目标优先放在框外上方，避免遮挡
+                 * 增加间距像素，确保标签背景不会覆盖目标框边界 */
                 int y;
-                if (area_ratio < 0.01f)
+                int y_above = (int)obj_meta->rect_params.top - text_h - 15;
+                
+                if (y_above >= 0)
                 {
-                    /* 优先放在框外上方 */
-                    int y_above = (int)obj_meta->rect_params.top - text_h - 2;
-                    if (y_above >= 0)
-                    {
-                        y = y_above;
-                    }
-                    else
-                    {
-                        /* 上面放不下，放框下方 */
-                        y = (int)(obj_meta->rect_params.top +
-                                  obj_meta->rect_params.height + 2);
-                        if (y > frame_h - text_h)
-                            y = frame_h - text_h;
-                    }
+                    /* 框上方有足够空间，放在框外上方 */
+                    y = y_above;
                 }
                 else
                 {
-                    /* 大一点的框，仍尝试放到上方内部或外侧 */
-                    int y_try = (int)obj_meta->rect_params.top - text_h - 2;
-                    if (y_try < 0)
+                    /* 上方空间不足，尝试放在框下方，同样增加间距 */
+                    int y_below = (int)(obj_meta->rect_params.top +
+                                       obj_meta->rect_params.height + 8);
+                    if (y_below + text_h <= frame_h)
                     {
-                        y = (int)obj_meta->rect_params.top +
-                            2; /* 放到框内靠上 */
-                        if (y + text_h > frame_h)
-                            y = frame_h - text_h;
+                        /* 框下方有空间 */
+                        y = y_below;
                     }
                     else
                     {
-                        y = y_try;
+                        /* 上下都不够，只能放框内，选择遮挡较少的位置 */
+                        /* 如果框足够大，放框内顶部；否则就贴着上边界 */
+                        if (obj_meta->rect_params.height > text_h * 3)
+                        {
+                            y = (int)obj_meta->rect_params.top + 2;
+                        }
+                        else
+                        {
+                            /* 框很小，放在最不遮挡的位置（上边界） */
+                            y = 0;
+                        }
                     }
                 }
                 gfloat        target_x = (gfloat)x;
