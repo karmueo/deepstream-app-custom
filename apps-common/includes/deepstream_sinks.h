@@ -151,6 +151,8 @@ extern "C"
         guint multicast_port;
         // 组播网卡名称
         gchar *iface;
+        // 帧率
+        guint fps;
     } NvDsMyNetworkConfig;
 
     typedef struct

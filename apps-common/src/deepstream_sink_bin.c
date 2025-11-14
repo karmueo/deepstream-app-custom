@@ -418,6 +418,9 @@ create_mynework_bin(NvDsMyNetworkConfig *config,
     {
         g_object_set(G_OBJECT(bin->sink), "iface", config->iface, NULL);
     }
+    // 设置帧率，默认为25
+    guint fps_value = config->fps > 0 ? config->fps : 25;
+    g_object_set(G_OBJECT(bin->sink), "fps", fps_value, NULL);
 
     // 添加一个虚拟pad
     NVGSTDS_BIN_ADD_GHOST_PAD(bin->bin, bin->queue, "sink");

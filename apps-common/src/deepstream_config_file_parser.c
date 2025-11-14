@@ -2571,6 +2571,13 @@ parse_sink(NvDsSinkSubBinConfig *config, GKeyFile *key_file, gchar *group,
                 g_key_file_get_string(key_file, group, "multicast-iface", &error);
             CHECK_ERROR(error);
         }
+        else if (!g_strcmp0(*key, "fps"))
+        {
+            // 设置帧率
+            config->mynetwork_config.fps =
+                g_key_file_get_integer(key_file, group, "fps", &error);
+            CHECK_ERROR(error);
+        }
         else
         {
             NVGSTDS_WARN_MSG_V("Unknown key '%s' for group [%s]", *key, group);

@@ -75,6 +75,7 @@ multicast-port=6000
 # 指定组播网卡名称，例如: eth0, enp5s0, ens33 等
 multicast-iface=eno2
 # multicast-ttl=32
+fps=30  # 可选参数，不配置时默认为25
 
 [message-converter]
 enable=0
