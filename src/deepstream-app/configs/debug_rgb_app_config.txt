@@ -2,7 +2,7 @@
 enable-perf-measurement=1
 perf-measurement-interval-sec=5
 #enable-jpeg-save=1
-smart-rec-detect-default=0
+smart-rec-detect-default=1
 
 [source0]
 enable=1
@@ -26,6 +26,7 @@ select-rtp-protocol=0
 smart-record=3
 smart-rec-dir-path=../smart_rec_rgb
 smart-rec-default-duration=180
+smart-rec-retention-days=7
 #smart-rec-duration=20
 #smart-rec-start-time=5
 

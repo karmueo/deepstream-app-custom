@@ -44,6 +44,7 @@ typedef struct
   gboolean Intra_decode;
   gboolean low_latency_mode;
   guint smart_record;
+  guint smart_rec_retention_days; /* days to keep smart-record files; 0=disabled */
   gint source_width;
   gint source_height;
   gint source_fps_n;
@@ -147,6 +148,7 @@ typedef struct
   NvDsSourceConfig *config;
   NvDsSrcParentBin *parent_bin;
   gpointer recordCtx;
+  guint cleanup_timeout_id; /* g_timeout source id for retention cleanup */
 } NvDsSrcBin;
 
 struct NvDsSrcParentBin

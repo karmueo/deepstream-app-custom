@@ -52,6 +52,7 @@ GST_DEBUG_CATEGORY(APP_CFG_PARSER_CAT);
 #define CONFIG_GROUP_SOURCE_SMART_RECORD_DEFAULT_DURATION "smart-rec-default-duration"
 #define CONFIG_GROUP_SOURCE_SMART_RECORD_DURATION "smart-rec-duration"
 #define CONFIG_GROUP_SOURCE_SMART_RECORD_INTERVAL "smart-rec-interval"
+#define CONFIG_GROUP_SOURCE_SMART_RECORD_RETENTION_DAYS "smart-rec-retention-days"
 #define CONFIG_GROUP_SOURCE_ALSA_DEVICE "alsa-device"
 #define CONFIG_GROUP_SOURCE_UDP_BUFFER_SIZE "udp-buffer-size"
 #define CONFIG_GROUP_SOURCE_VIDEO_FORMAT "video-format"
@@ -768,6 +769,13 @@ parse_source(NvDsSourceConfig *config, GKeyFile *key_file, gchar *group,
             config->smart_rec_interval =
                 g_key_file_get_integer(key_file, group,
                                        CONFIG_GROUP_SOURCE_SMART_RECORD_INTERVAL, &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, CONFIG_GROUP_SOURCE_SMART_RECORD_RETENTION_DAYS))
+        {
+            config->smart_rec_retention_days =
+                g_key_file_get_integer(key_file, group,
+                                       CONFIG_GROUP_SOURCE_SMART_RECORD_RETENTION_DAYS, &error);
             CHECK_ERROR(error);
         }
         else if (!g_strcmp0(*key, CONFIG_GROUP_SOURCE_EXTRACT_SEI_TYPE5_DATA))

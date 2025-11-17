@@ -152,6 +152,8 @@ parse_source_yaml (NvDsSourceConfig *config, std::vector<std::string> headers,
       config->smart_rec_duration = std::stoul(source_values[i]);
     } else if (paramKey == "smart-rec-interval") {
       config->smart_rec_interval = std::stoul(source_values[i]);
+    } else if (paramKey == "smart-rec-retention-days") {
+      config->smart_rec_retention_days = std::stoul(source_values[i]);
     }
 #if defined(__aarch64__) && !defined(AARCH64_IS_SBSA)
     else if (paramKey == "copy-hw") {

@@ -116,6 +116,7 @@ extern "C"
 #define CONFIG_GROUP_SOURCE_SMART_RECORD_DEFAULT_DURATION "smart-rec-default-duration"
 #define CONFIG_GROUP_SOURCE_SMART_RECORD_DURATION "smart-rec-duration"
 #define CONFIG_GROUP_SOURCE_SMART_RECORD_INTERVAL "smart-rec-interval"
+#define CONFIG_GROUP_SOURCE_SMART_RECORD_RETENTION_DAYS "smart-rec-retention-days"
 
     /**
      * Function to parse class label file. Parses the labels into a 2D-array of
