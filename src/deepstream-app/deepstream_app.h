@@ -236,6 +236,10 @@ extern "C"
 
     /* 检测触发录制状态 */
     gboolean    detect_record_enabled;
+
+    /* ROI-based NMS 配置缓存 (初始化时读取一次，避免每帧重复解析) */
+    gboolean    roi_nms_enabled;
+    GArray     *roi_centers;  /* 存储 ROI 中心点，元素类型 gfloat，扁平数组 [cx0,cy0,cx1,cy1,...] */
     };
 
     /**

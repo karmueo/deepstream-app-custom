@@ -1340,8 +1340,14 @@ gie_primary_processing_done_buf_prob(GstPad *pad, GstPadProbeInfo *info,
     }
 
     // ==== 可选：在修改框尺寸/写出之前执行 NMS 去重 ====
-    // 简单 NMS: 按置信度排序，IoU>阈值则删除低置信度框（不再按类别区分，跨类别也抑制）
+    // 使用缓存的 ROI 配置（已在初始化时读取）
+    gboolean use_roi_nms = appCtx->roi_nms_enabled;
+    GArray *roi_centers = appCtx->roi_centers;
+    
+    // TODO: 简单 NMS: 按置信度排序，IoU>阈值则删除低置信度框（不再按类别区分，跨类别也抑制）
+    // 如果启用了 ROI，则在 IoU 相同情况下优先保留离 ROI 中心点更近的框
     const gfloat IOU_THRESH = 0.01f;  // 可调，>0 且 <1
+    
     // 统计 & 处理每个帧
     for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame; l_frame = l_frame->next) {
         NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)l_frame->data;
@@ -1380,6 +1386,11 @@ gie_primary_processing_done_buf_prob(GstPad *pad, GstPadProbeInfo *info,
                 float ax2 = ax1 + aw;
                 float ay2 = ay1 + ah;
                 if (aw <= 0 || ah <=0) { keep->data[i]=0; continue; }
+                
+                // 计算 a 的中心点
+                float acx = ax1 + aw / 2.0f;
+                float acy = ay1 + ah / 2.0f;
+                
                 for (guint j=i+1;j<n;j++) {
                     if (!keep->data[j]) continue;
                     NvDsObjectMeta *b = g_array_index(objs, NvDsObjectMeta*, j);
@@ -1399,8 +1410,44 @@ gie_primary_processing_done_buf_prob(GstPad *pad, GstPadProbeInfo *info,
                     float inter = iw * ih;
                     float uni = aw*ah + bw*bh - inter;
                     float iou = (uni <= 0.f) ? 0.f : inter / uni;
+                    
                     if (iou > IOU_THRESH) {
-                        keep->data[j] = 0; // 抑制低置信度的 (排序保证 j>i 置信度不高于 i)
+                        // 如果启用了 ROI-based NMS，需要比较哪个框离 ROI 中心点更近
+                        gboolean suppress_j = TRUE;
+                        
+                        if (use_roi_nms && roi_centers && roi_centers->len >= 2) {
+                            // 计算 b 的中心点
+                            float bcx = bx1 + bw / 2.0f;
+                            float bcy = by1 + bh / 2.0f;
+                            
+                            // 找到离 a 和 b 最近的 ROI 中心点
+                            gfloat min_dist_a = G_MAXFLOAT;
+                            gfloat min_dist_b = G_MAXFLOAT;
+                            
+                            for (guint k = 0; k < roi_centers->len / 2; k++) {
+                                gfloat roi_cx = g_array_index(roi_centers, gfloat, k * 2);
+                                gfloat roi_cy = g_array_index(roi_centers, gfloat, k * 2 + 1);
+                                
+                                gfloat dist_a = sqrtf((acx - roi_cx) * (acx - roi_cx) + 
+                                                      (acy - roi_cy) * (acy - roi_cy));
+                                gfloat dist_b = sqrtf((bcx - roi_cx) * (bcx - roi_cx) + 
+                                                      (bcy - roi_cy) * (bcy - roi_cy));
+                                
+                                if (dist_a < min_dist_a) min_dist_a = dist_a;
+                                if (dist_b < min_dist_b) min_dist_b = dist_b;
+                            }
+                            
+                            // 如果 b 离 ROI 中心点更近，则抑制 a 而不是 b
+                            if (min_dist_b < min_dist_a) {
+                                suppress_j = FALSE;
+                                keep->data[i] = 0;  // 抑制 a
+                                break;  // a 已被抑制，退出内层循环
+                            }
+                        }
+                        
+                        if (suppress_j) {
+                            keep->data[j] = 0; // 抑制低置信度的或离ROI中心点更远的
+                        }
                     }
                 }
             }
@@ -1415,6 +1462,8 @@ gie_primary_processing_done_buf_prob(GstPad *pad, GstPadProbeInfo *info,
         }
         g_array_free(objs, TRUE);
     }
+    
+    // 注意：不要在这里释放 roi_centers，它是 AppCtx 的缓存数据
 
     // 边界 clamp + 最小尺寸过滤 (>=4) 确保后续 SGIE/OSD 安全
     for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame; l_frame = l_frame->next) {
@@ -2281,6 +2330,69 @@ create_pipeline(AppCtx *appCtx,
     appCtx->sensorInfoHash = g_hash_table_new(NULL, NULL);
     appCtx->perf_struct.FPSInfoHash = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, NULL);
 
+    // 初始化 ROI-based NMS 配置（只读取一次，避免每帧重复解析）
+    appCtx->roi_nms_enabled = FALSE;
+    appCtx->roi_centers = NULL;
+    
+    if (config->preprocess_config.config_file_path) {
+        GKeyFile *key_file = g_key_file_new();
+        GError *error = NULL;
+        
+        if (g_key_file_load_from_file(key_file, config->preprocess_config.config_file_path, 
+                                       G_KEY_FILE_NONE, &error)) {
+            // 检查 [group-0] 中的 process-on-roi
+            if (g_key_file_has_group(key_file, "group-0") && 
+                g_key_file_has_key(key_file, "group-0", "process-on-roi", NULL)) {
+                gint process_on_roi = g_key_file_get_integer(key_file, "group-0", "process-on-roi", NULL);
+                
+                if (process_on_roi == 1 && g_key_file_has_key(key_file, "group-0", "roi-params-src-0", NULL)) {
+                    gchar *roi_params_str = g_key_file_get_string(key_file, "group-0", "roi-params-src-0", NULL);
+                    
+                    if (roi_params_str) {
+                        // 解析 ROI 参数: left;top;width;height;left;top;width;height;...
+                        gchar **roi_tokens = g_strsplit(roi_params_str, ";", -1);
+                        guint num_tokens = g_strv_length(roi_tokens);
+                        
+                        // 移除末尾的空字符串（如果配置末尾有分号）
+                        while (num_tokens > 0 && roi_tokens[num_tokens - 1][0] == '\0') {
+                            num_tokens--;
+                        }
+                        
+                        if (num_tokens >= 4 && num_tokens % 4 == 0) {
+                            appCtx->roi_nms_enabled = TRUE;
+                            appCtx->roi_centers = g_array_new(FALSE, FALSE, sizeof(gfloat));
+                            
+                            g_print("[ROI-NMS] ROI-based NMS enabled. ROI count: %u\n", num_tokens / 4);
+                            
+                            for (guint i = 0; i < num_tokens; i += 4) {
+                                gfloat left = g_ascii_strtod(roi_tokens[i], NULL);
+                                gfloat top = g_ascii_strtod(roi_tokens[i+1], NULL);
+                                gfloat width = g_ascii_strtod(roi_tokens[i+2], NULL);
+                                gfloat height = g_ascii_strtod(roi_tokens[i+3], NULL);
+                                
+                                gfloat center[2];
+                                center[0] = left + width / 2.0f;   // center_x
+                                center[1] = top + height / 2.0f;   // center_y
+                                g_array_append_vals(appCtx->roi_centers, center, 2);
+                                
+                                g_print("[ROI-NMS]   ROI %u: left=%.0f top=%.0f width=%.0f height=%.0f center=(%.1f, %.1f)\n",
+                                        i/4, left, top, width, height, center[0], center[1]);
+                            }
+                        }
+                        
+                        g_strfreev(roi_tokens);
+                        g_free(roi_params_str);
+                    }
+                }
+            }
+        }
+        
+        if (error) {
+            g_error_free(error);
+        }
+        g_key_file_free(key_file);
+    }
+
     if (config->osd_config.num_out_buffers < 8)
     {
         config->osd_config.num_out_buffers = 8;
@@ -2848,6 +2960,14 @@ void destroy_pipeline(AppCtx *appCtx)
         g_free(appCtx->custom_msg_data);
         appCtx->custom_msg_data = NULL;
     }
+    
+    // 清理 ROI NMS 配置缓存
+    if (appCtx->roi_centers)
+    {
+        g_array_free(appCtx->roi_centers, TRUE);
+        appCtx->roi_centers = NULL;
+    }
+    appCtx->roi_nms_enabled = FALSE;
 
     destroy_sink_bin();
     g_mutex_clear(&appCtx->latency_lock);
