@@ -638,21 +638,6 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
         NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)l_frame->data;
         stream_id = frame_meta->source_id;
 
-        /* if (appCtx->custom_msg_data)
-        {
-            guint64 custom_timest = appCtx->custom_msg_data->timestamp;
-            // rtsp时间戳获取
-            guint64 ntp = frame_meta->ntp_timestamp;
-            // 转成可读的时间格式
-            char time_str[64];
-            if (custom_timest > 0 && ntp > 0)
-            {
-                // TODO:时间戳更具需要修改
-                gdouble ntp_unix = ntp_to_unix(ntp);
-                time_t  t = (time_t)ntp_unix;
-            }
-        } */
-
         GList *l;
         for (l = frame_meta->obj_meta_list; l != NULL; l = l->next)
         {
@@ -761,12 +746,18 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                 }
             }
 
-            /* 单目标跟踪器：类别计数统计与更新（限制最近100次） */
+            /* TODO: 单目标跟踪器：类别加权统计与更新（限制最近9999次，根据置信度加权） */
             if (single_object_tracker && appCtx->config.tracker_config.enable_class_count_update)
             {
-                const guint MAX_HISTORY = 100; // 最多保留最近100次历史记录
+                const guint MAX_HISTORY = 9999; // 最多保留最近9999次历史记录
+
+                /* 定义带权重的历史记录结构 */
+                typedef struct {
+                    gchar *label;
+                    gfloat confidence;
+                } WeightedLabel;
                 
-                /* 初始化历史队列（使用GQueue存储标签字符串） */
+                /* 初始化历史队列（使用GQueue存储WeightedLabel指针） */
                 if (!appCtx->tracker_label_history)
                 {
                     appCtx->tracker_label_history = g_queue_new();
@@ -776,9 +767,23 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                 if (obj_meta->object_id == UNTRACKED_OBJECT_ID)
                 {
                     appCtx->tracker_stats_valid = FALSE;
+                    /* 清空统计计数表 */
+                    if (appCtx->tracker_stats_counts)
+                    {
+                        g_hash_table_remove_all(appCtx->tracker_stats_counts);
+                    }
                     if (appCtx->tracker_label_history)
                     {
-                        g_queue_foreach(appCtx->tracker_label_history, (GFunc)g_free, NULL);
+                        /* 释放WeightedLabel结构 */
+                        for (GList *iter = appCtx->tracker_label_history->head;
+                             iter != NULL; iter = iter->next)
+                        {
+                            WeightedLabel *wl = (WeightedLabel *)iter->data;
+                            if (wl) {
+                                g_free(wl->label);
+                                g_free(wl);
+                            }
+                        }
                         g_queue_clear(appCtx->tracker_label_history);
                     }
                 }
@@ -790,18 +795,34 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                     if (!appCtx->tracker_stats_valid ||
                         appCtx->tracker_stats_current_id != current_tracker_id)
                     {
+                        /* 清空统计计数表 */
+                        if (appCtx->tracker_stats_counts)
+                        {
+                            g_hash_table_remove_all(appCtx->tracker_stats_counts);
+                        }
                         if (appCtx->tracker_label_history)
                         {
-                            g_queue_foreach(appCtx->tracker_label_history, (GFunc)g_free, NULL);
+                            /* 释放WeightedLabel结构 */
+                            for (GList *iter = appCtx->tracker_label_history->head;
+                                 iter != NULL; iter = iter->next)
+                            {
+                                WeightedLabel *wl = (WeightedLabel *)iter->data;
+                                if (wl) {
+                                    g_free(wl->label);
+                                    g_free(wl);
+                                }
+                            }
                             g_queue_clear(appCtx->tracker_label_history);
                         }
                         appCtx->tracker_stats_current_id = current_tracker_id;
                         appCtx->tracker_stats_valid = TRUE;
                     }
 
-                    /* 获取当前对象的类别标签 */
+                    /* 获取当前对象的类别标签和置信度 */
                     const gchar *label = NULL;
                     gchar        label_buf[64];
+                    gfloat       confidence = obj_meta->confidence;
+                    
                     if (obj_meta->obj_label[0] != '\0')
                     {
                         label = obj_meta->obj_label;
@@ -813,54 +834,92 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                         label = label_buf;
                     }
 
-                    /* 将当前标签添加到历史队列 */
+                    /* 将当前标签和置信度添加到历史队列 */
                     if (appCtx->tracker_label_history)
                     {
-                        g_queue_push_tail(appCtx->tracker_label_history, g_strdup(label));
+                        WeightedLabel *wl = g_new0(WeightedLabel, 1);
+                        wl->label = g_strdup(label);
+                        wl->confidence = confidence;
+                        g_queue_push_tail(appCtx->tracker_label_history, wl);
                         
                         /* 如果超过100次，移除最旧的记录 */
                         while (g_queue_get_length(appCtx->tracker_label_history) > MAX_HISTORY)
                         {
-                            gchar *old_label = (gchar *)g_queue_pop_head(appCtx->tracker_label_history);
-                            g_free(old_label);
+                            WeightedLabel *old_wl = (WeightedLabel *)g_queue_pop_head(appCtx->tracker_label_history);
+                            if (old_wl) {
+                                g_free(old_wl->label);
+                                g_free(old_wl);
+                            }
                         }
                     }
 
-                    /* 从最近100次历史中统计每个类别出现的次数 */
+                    /* 从最近历史中统计每个类别的加权分数并更新统计表 */
                     if (appCtx->tracker_label_history &&
                         g_queue_get_length(appCtx->tracker_label_history) > 0)
                     {
-                        /* 使用临时哈希表统计计数 */
-                        GHashTable *temp_counts = g_hash_table_new_full(
+                        /* 初始化统计计数哈希表（用于显示） */
+                        if (!appCtx->tracker_stats_counts)
+                        {
+                            appCtx->tracker_stats_counts = g_hash_table_new_full(
+                                g_str_hash, g_str_equal, g_free, g_free);
+                        }
+                        else
+                        {
+                            /* 清空旧的统计数据 */
+                            g_hash_table_remove_all(appCtx->tracker_stats_counts);
+                        }
+
+                        /* 使用临时哈希表统计加权分数 */
+                        GHashTable *temp_weights = g_hash_table_new_full(
                             g_str_hash, g_str_equal, NULL, g_free);
                         
-                        /* 遍历历史队列，统计每个标签的出现次数 */
+                        /* 遍历历史队列，累加每个标签的置信度权重 */
                         for (GList *iter = appCtx->tracker_label_history->head; 
                              iter != NULL; iter = iter->next)
                         {
-                            const gchar *hist_label = (const gchar *)iter->data;
-                            guint *count = (guint *)g_hash_table_lookup(temp_counts, hist_label);
-                            if (!count)
+                            WeightedLabel *wl = (WeightedLabel *)iter->data;
+                            if (!wl) continue;
+                            
+                            gfloat *weight = (gfloat *)g_hash_table_lookup(temp_weights, wl->label);
+                            if (!weight)
                             {
-                                count = g_new0(guint, 1);
-                                g_hash_table_insert(temp_counts, (gpointer)hist_label, count);
+                                weight = g_new0(gfloat, 1);
+                                g_hash_table_insert(temp_weights, (gpointer)wl->label, weight);
                             }
-                            (*count)++;
+                            /* 累加置信度作为权重 */
+                            (*weight) += wl->confidence;
                         }
 
-                        /* 找出计数最大的类别 */
+                        /* 找出加权分数最高的类别 */
                         GHashTableIter iter;
                         gpointer       key, value;
-                        guint          max_count = 0;
+                        gfloat         max_weight = 0.0f;
                         const gchar   *best_label = NULL;
 
-                        g_hash_table_iter_init(&iter, temp_counts);
+                        g_hash_table_iter_init(&iter, temp_weights);
                         while (g_hash_table_iter_next(&iter, &key, &value))
                         {
-                            guint count = *((guint *)value);
-                            if (count > max_count)
+                            gfloat weight = *((gfloat *)value);
+                            
+                            /* 同时更新统计计数表（显示用），计数为出现次数 */
+                            guint occurrence_count = 0;
+                            for (GList *count_iter = appCtx->tracker_label_history->head;
+                                 count_iter != NULL; count_iter = count_iter->next)
                             {
-                                max_count = count;
+                                WeightedLabel *wl = (WeightedLabel *)count_iter->data;
+                                if (wl && g_strcmp0(wl->label, (const gchar *)key) == 0)
+                                {
+                                    occurrence_count++;
+                                }
+                            }
+                            guint *count_ptr = g_new(guint, 1);
+                            *count_ptr = occurrence_count;
+                            g_hash_table_insert(appCtx->tracker_stats_counts,
+                                              g_strdup((const gchar *)key), count_ptr);
+                            
+                            if (weight > max_weight)
+                            {
+                                max_weight = weight;
                                 best_label = (const gchar *)key;
                             }
                         }
@@ -884,7 +943,7 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                         }
                         
                         /* 清理临时哈希表 */
-                        g_hash_table_destroy(temp_counts);
+                        g_hash_table_destroy(temp_weights);
                     }
                 }
             }
@@ -957,7 +1016,7 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
         }
     }
 
-    /* 显示单目标跟踪器的统计信息 */
+    /* NOTE: 显示单目标跟踪器的统计信息 */
     if (single_object_tracker && appCtx->config.tracker_config.enable_class_count_update &&
         appCtx->tracker_stats_valid &&
         appCtx->tracker_stats_counts &&
@@ -973,7 +1032,7 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
 
             GString *stats_str = g_string_new(NULL);
             /* 添加跟踪ID */
-            g_string_append_printf(stats_str, "Tracker ID: %" G_GUINT64_FORMAT,
+            g_string_append_printf(stats_str, "ID: %" G_GUINT64_FORMAT,
                                    appCtx->tracker_stats_current_id);
 
             GHashTableIter iter;
@@ -1002,17 +1061,47 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                     : 14;
             stats_meta->text_params[0].font_params.font_name = "Serif";
 
-            /* 计算文本位置：右上角，留出边距 */
+            /* 计算文本位置：右下角，动态估算尺寸避免被裁剪 */
             int frame_w = stats_frame->source_frame_width > 0
                               ? stats_frame->source_frame_width
                               : appCtx->config.streammux_config.pipeline_width;
-            if (frame_w <= 0)
-                frame_w = 1920;
-            int x_offset = frame_w - 280;
-            if (x_offset < 20)
-                x_offset = 20;
+            int frame_h = stats_frame->source_frame_height > 0
+                              ? stats_frame->source_frame_height
+                              : appCtx->config.streammux_config.pipeline_height;
+            if (frame_w <= 0) frame_w = 1920;
+            if (frame_h <= 0) frame_h = 1080;
+            /* 使用左右/上下分离的 margin，便于单独调整底部偏移（上移） */
+            const int margin_right = 20; /* 右侧边距（不常改） */
+            const int margin_bottom = 60; /* 底部边距，增大可整体上移显示（默认20 -> 60）*/
+            const int margin_top = 20; /* 顶部最小间距，防止移动太靠上被裁剪 */
+            int font_size = stats_meta->text_params[0].font_params.font_size;
+            if (font_size <= 0) font_size = 14;
+            const char *txt = stats_meta->text_params[0].display_text ? stats_meta->text_params[0].display_text : "";
+            int lines = 1;
+            int longest = 0, current = 0;
+            for (const char *p = txt; *p; ++p) {
+                if (*p == '\n') { lines++; if (current > longest) longest = current; current = 0; }
+                else current++;
+            }
+            if (current > longest) longest = current;
+            /* 更保守的字符宽估算，避免背景右侧超出 */
+            float char_w = font_size * 0.60f; /* 放大系数以匹配渲染实际宽度 */
+            int text_w = (int)(longest * char_w) + 20; /* 内边距微增 */
+            int line_height = font_size + 6; /* 行间距 */
+            int block_h = lines * line_height + 10; /* 上下内边距微增 */
+            int x_offset = frame_w - text_w - margin_right;
+            if (x_offset + text_w + margin_right > frame_w) {
+                /* 再次左移确保完全在帧内 */
+                x_offset = frame_w - text_w - margin_right;
+            }
+            if (x_offset < margin_right) x_offset = margin_right;
+            int y_offset = frame_h - block_h - margin_bottom;
+            if (y_offset + block_h + margin_bottom > frame_h) {
+                y_offset = frame_h - block_h - margin_bottom;
+            }
+            if (y_offset < margin_top) y_offset = margin_top;
             stats_meta->text_params[0].x_offset = x_offset;
-            stats_meta->text_params[0].y_offset = 20;
+            stats_meta->text_params[0].y_offset = y_offset;
 
             /* 将显示元数据添加到帧中 */
             nvds_add_display_meta_to_frame(stats_frame, stats_meta);
@@ -1029,7 +1118,6 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
          l_user_meta = l_user_meta->next)
     {
         user_meta = (NvDsUserMeta *)(l_user_meta->data);
-        // TODO:
         if (user_meta->base_meta.meta_type == NVDS_PREPROCESS_BATCH_META)
         {
             g_print("Preprocess batch meta found\n");
@@ -1860,7 +1948,7 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
         }
     }
 
-    /* 显示单目标跟踪器的统计信息，包括跟踪ID和检测到的类别计数 */
+    /* NOTE: 显示单目标跟踪器的统计信息，包括跟踪ID和检测到的类别计数 */
     if (single_object_tracker && appCtx->tracker_stats_valid &&
         appCtx->tracker_stats_counts &&
         g_hash_table_size(appCtx->tracker_stats_counts) > 0)
@@ -1904,17 +1992,47 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
                     : 14;
             stats_meta->text_params[0].font_params.font_name = "Serif";
 
-            /* 计算文本位置：右上角，留出边距 */
+            /* 计算文本位置：右下角，动态估算尺寸避免被裁剪 */
             int frame_w = stats_frame->source_frame_width > 0
                               ? stats_frame->source_frame_width
                               : appCtx->config.streammux_config.pipeline_width;
-            if (frame_w <= 0)
-                frame_w = 1920;
-            int x_offset = frame_w - 280;
-            if (x_offset < 20)
-                x_offset = 20;
+            int frame_h = stats_frame->source_frame_height > 0
+                              ? stats_frame->source_frame_height
+                              : appCtx->config.streammux_config.pipeline_height;
+            if (frame_w <= 0) frame_w = 1920;
+            if (frame_h <= 0) frame_h = 1080;
+            /* 使用左右/上下分离的 margin，便于单独调整底部偏移（上移） */
+            const int margin_right = 20; /* 右侧边距（不常改） */
+            const int margin_bottom = 60; /* 底部边距，增大可整体上移显示（默认20 -> 60）*/
+            const int margin_top = 20; /* 顶部最小间距，防止移动太靠上被裁剪 */
+            int font_size = stats_meta->text_params[0].font_params.font_size;
+            if (font_size <= 0) font_size = 14;
+            const char *txt = stats_meta->text_params[0].display_text ? stats_meta->text_params[0].display_text : "";
+            int lines = 1;
+            int longest = 0, current = 0;
+            for (const char *p = txt; *p; ++p) {
+                if (*p == '\n') { lines++; if (current > longest) longest = current; current = 0; }
+                else current++;
+            }
+            if (current > longest) longest = current;
+            /* 更保守的字符宽估算，避免背景右侧超出 */
+            float char_w = font_size * 0.60f; /* 放大系数以匹配渲染实际宽度 */
+            int text_w = (int)(longest * char_w) + 20; /* 内边距微增 */
+            int line_height = font_size + 6; /* 行间距 */
+            int block_h = lines * line_height + 10; /* 上下内边距微增 */
+            int x_offset = frame_w - text_w - margin_right;
+            if (x_offset + text_w + margin_right > frame_w) {
+                /* 再次左移确保完全在帧内 */
+                x_offset = frame_w - text_w - margin_right;
+            }
+            if (x_offset < margin_right) x_offset = margin_right;
+            int y_offset = frame_h - block_h - margin_bottom;
+            if (y_offset + block_h + margin_bottom > frame_h) {
+                y_offset = frame_h - block_h - margin_bottom;
+            }
+            if (y_offset < margin_top) y_offset = margin_top;
             stats_meta->text_params[0].x_offset = x_offset;
-            stats_meta->text_params[0].y_offset = 20;
+            stats_meta->text_params[0].y_offset = y_offset;
 
             /* 将显示元数据添加到帧中 */
             nvds_add_display_meta_to_frame(stats_frame, stats_meta);
