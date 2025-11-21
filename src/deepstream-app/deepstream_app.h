@@ -240,6 +240,11 @@ extern "C"
     /* ROI-based NMS 配置缓存 (初始化时读取一次，避免每帧重复解析) */
     gboolean    roi_nms_enabled;
     GArray     *roi_centers;  /* 存储 ROI 中心点，元素类型 gfloat，扁平数组 [cx0,cy0,cx1,cy1,...] */
+
+    /* 单目标跟踪连续性检测（用于智能录像触发条件） */
+    GstClockTime tracking_start_time;        /* 当前目标开始连续跟踪的时间戳（纳秒） */
+    guint64      last_tracked_object_id;     /* 上一次跟踪的目标ID */
+    gboolean     is_tracking_continuous;     /* 是否正在连续跟踪同一目标 */
     };
 
     /**

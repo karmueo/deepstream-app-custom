@@ -638,6 +638,9 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
         NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)l_frame->data;
         stream_id = frame_meta->source_id;
 
+        /* 用于单目标跟踪连续性检测：标记当前帧是否有有效跟踪目标 */
+        gboolean has_valid_tracking_target = FALSE;
+
         GList *l;
         for (l = frame_meta->obj_meta_list; l != NULL; l = l->next)
         {
@@ -647,8 +650,50 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                 is_detect_record_enabled(appCtx) &&
                 has_detection_target(obj_meta))
             {
+                gboolean should_trigger_recording = FALSE;
+
+                /* 如果启用单目标跟踪，需要连续3秒跟踪同一目标才触发录像 */
+                if (single_object_tracker)
+                {
+                    guint64 current_object_id = obj_meta->object_id;
+                    GstClockTime current_time = frame_meta->buf_pts;
+
+                    /* 标记当前帧有有效跟踪目标 */
+                    has_valid_tracking_target = TRUE;
+
+                    /* 检查是否是同一个目标 */
+                    if (appCtx->is_tracking_continuous &&
+                        appCtx->last_tracked_object_id == current_object_id)
+                    {
+                        /* 计算连续跟踪时长（秒） */
+                        gdouble tracking_duration_sec = 
+                            (gdouble)(current_time - appCtx->tracking_start_time) / GST_SECOND;
+                        
+                        if (tracking_duration_sec >= 3.0)
+                        {
+                            /* 已连续跟踪3秒以上，可以触发录像 */
+                            should_trigger_recording = TRUE;
+                        }
+                    }
+                    else
+                    {
+                        /* 目标发生变化或首次跟踪，重置计时 */
+                        appCtx->tracking_start_time = current_time;
+                        appCtx->last_tracked_object_id = current_object_id;
+                        appCtx->is_tracking_continuous = TRUE;
+                    }
+                }
+                else
+                {
+                    /* 未启用单目标跟踪，保持原有逻辑：直接触发 */
+                    should_trigger_recording = TRUE;
+                }
+
                 /* 检测到符合条件的目标才触发智能录像，g_pending_request 防抖 */
-                smart_record_event_generator(src_bin);
+                if (should_trigger_recording)
+                {
+                    smart_record_event_generator(src_bin);
+                }
 
                 if (appCtx->config.enable_jpeg_save && ip_surf)
                 {
@@ -1013,6 +1058,15 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
             {
                 g_print("Error in attaching event meta to buffer\n");
             }
+        }
+
+        /* 单目标跟踪连续性检测：如果当前帧没有有效跟踪目标，重置跟踪状态 */
+        if (single_object_tracker && !has_valid_tracking_target)
+        {
+            /* 当前帧没有检测到有效的跟踪目标，重置连续跟踪状态 */
+            appCtx->is_tracking_continuous = FALSE;
+            appCtx->tracking_start_time = 0;
+            appCtx->last_tracked_object_id = 0;
         }
     }
 
