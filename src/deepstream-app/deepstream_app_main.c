@@ -836,18 +836,18 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                 }
             }
 
-            /* TODO: 单目标跟踪器：类别加权统计与更新（限制最近9999次，根据置信度加权） */
+            /* TODO: 单目标跟踪器：类别统计与更新（统计最近次，使用置信度最高的类别） */
             if (single_object_tracker && appCtx->config.tracker_config.enable_class_count_update)
             {
-                const guint MAX_HISTORY = 9999; // 最多保留最近9999次历史记录
+                const guint MAX_HISTORY = 50; // 最多保留最近次历史记录
 
-                /* 定义带权重的历史记录结构 */
+                /* 定义历史记录结构 */
                 typedef struct {
                     gchar *label;
                     gfloat confidence;
-                } WeightedLabel;
+                } DetectionRecord;
                 
-                /* 初始化历史队列（使用GQueue存储WeightedLabel指针） */
+                /* 初始化历史队列（使用GQueue存储DetectionRecord指针） */
                 if (!appCtx->tracker_label_history)
                 {
                     appCtx->tracker_label_history = g_queue_new();
@@ -864,14 +864,14 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                     }
                     if (appCtx->tracker_label_history)
                     {
-                        /* 释放WeightedLabel结构 */
+                        /* 释放DetectionRecord结构 */
                         for (GList *iter = appCtx->tracker_label_history->head;
                              iter != NULL; iter = iter->next)
                         {
-                            WeightedLabel *wl = (WeightedLabel *)iter->data;
-                            if (wl) {
-                                g_free(wl->label);
-                                g_free(wl);
+                            DetectionRecord *record = (DetectionRecord *)iter->data;
+                            if (record) {
+                                g_free(record->label);
+                                g_free(record);
                             }
                         }
                         g_queue_clear(appCtx->tracker_label_history);
@@ -892,14 +892,14 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                         }
                         if (appCtx->tracker_label_history)
                         {
-                            /* 释放WeightedLabel结构 */
+                            /* 释放DetectionRecord结构 */
                             for (GList *iter = appCtx->tracker_label_history->head;
                                  iter != NULL; iter = iter->next)
                             {
-                                WeightedLabel *wl = (WeightedLabel *)iter->data;
-                                if (wl) {
-                                    g_free(wl->label);
-                                    g_free(wl);
+                                DetectionRecord *record = (DetectionRecord *)iter->data;
+                                if (record) {
+                                    g_free(record->label);
+                                    g_free(record);
                                 }
                             }
                             g_queue_clear(appCtx->tracker_label_history);
@@ -927,23 +927,23 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                     /* 将当前标签和置信度添加到历史队列 */
                     if (appCtx->tracker_label_history)
                     {
-                        WeightedLabel *wl = g_new0(WeightedLabel, 1);
-                        wl->label = g_strdup(label);
-                        wl->confidence = confidence;
-                        g_queue_push_tail(appCtx->tracker_label_history, wl);
+                        DetectionRecord *record = g_new0(DetectionRecord, 1);
+                        record->label = g_strdup(label);
+                        record->confidence = confidence;
+                        g_queue_push_tail(appCtx->tracker_label_history, record);
                         
-                        /* 如果超过次，移除最旧的记录 */
+                        /* 如果超过MAX_HISTORY次，移除最旧的记录 */
                         while (g_queue_get_length(appCtx->tracker_label_history) > MAX_HISTORY)
                         {
-                            WeightedLabel *old_wl = (WeightedLabel *)g_queue_pop_head(appCtx->tracker_label_history);
-                            if (old_wl) {
-                                g_free(old_wl->label);
-                                g_free(old_wl);
+                            DetectionRecord *old_record = (DetectionRecord *)g_queue_pop_head(appCtx->tracker_label_history);
+                            if (old_record) {
+                                g_free(old_record->label);
+                                g_free(old_record);
                             }
                         }
                     }
 
-                    /* 从最近历史中统计每个类别的加权分数并更新统计表 */
+                    /* 从最近历史中找出置信度最高的记录并更新统计表 */
                     if (appCtx->tracker_label_history &&
                         g_queue_get_length(appCtx->tracker_label_history) > 0)
                     {
@@ -959,58 +959,42 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                             g_hash_table_remove_all(appCtx->tracker_stats_counts);
                         }
 
-                        /* 使用临时哈希表统计加权分数 */
-                        GHashTable *temp_weights = g_hash_table_new_full(
-                            g_str_hash, g_str_equal, NULL, g_free);
+                        /* 遍历历史队列，找出置信度最高的记录和统计每个类别的出现次数 */
+                        gfloat max_confidence = 0.0f;
+                        const gchar *best_label = NULL;
                         
-                        /* 遍历历史队列，累加每个标签的置信度权重 */
                         for (GList *iter = appCtx->tracker_label_history->head; 
                              iter != NULL; iter = iter->next)
                         {
-                            WeightedLabel *wl = (WeightedLabel *)iter->data;
-                            if (!wl) continue;
+                            DetectionRecord *record = (DetectionRecord *)iter->data;
+                            if (!record) continue;
                             
-                            gfloat *weight = (gfloat *)g_hash_table_lookup(temp_weights, wl->label);
-                            if (!weight)
+                            /* 查找置信度最高的记录 */
+                            if (record->confidence > max_confidence)
                             {
-                                weight = g_new0(gfloat, 1);
-                                g_hash_table_insert(temp_weights, (gpointer)wl->label, weight);
+                                max_confidence = record->confidence;
+                                best_label = record->label;
                             }
-                            /* 累加置信度作为权重 */
-                            (*weight) += wl->confidence;
                         }
 
-                        /* 找出加权分数最高的类别 */
-                        GHashTableIter iter;
-                        gpointer       key, value;
-                        gfloat         max_weight = 0.0f;
-                        const gchar   *best_label = NULL;
-
-                        g_hash_table_iter_init(&iter, temp_weights);
-                        while (g_hash_table_iter_next(&iter, &key, &value))
+                        /* 统计每个类别的出现次数（用于显示） */
+                        for (GList *iter = appCtx->tracker_label_history->head; 
+                             iter != NULL; iter = iter->next)
                         {
-                            gfloat weight = *((gfloat *)value);
+                            DetectionRecord *record = (DetectionRecord *)iter->data;
+                            if (!record) continue;
                             
-                            /* 同时更新统计计数表（显示用），计数为出现次数 */
-                            guint occurrence_count = 0;
-                            for (GList *count_iter = appCtx->tracker_label_history->head;
-                                 count_iter != NULL; count_iter = count_iter->next)
+                            guint *count_ptr = (guint *)g_hash_table_lookup(appCtx->tracker_stats_counts, record->label);
+                            if (count_ptr)
                             {
-                                WeightedLabel *wl = (WeightedLabel *)count_iter->data;
-                                if (wl && g_strcmp0(wl->label, (const gchar *)key) == 0)
-                                {
-                                    occurrence_count++;
-                                }
+                                (*count_ptr)++;
                             }
-                            guint *count_ptr = g_new(guint, 1);
-                            *count_ptr = occurrence_count;
-                            g_hash_table_insert(appCtx->tracker_stats_counts,
-                                              g_strdup((const gchar *)key), count_ptr);
-                            
-                            if (weight > max_weight)
+                            else
                             {
-                                max_weight = weight;
-                                best_label = (const gchar *)key;
+                                count_ptr = g_new(guint, 1);
+                                *count_ptr = 1;
+                                g_hash_table_insert(appCtx->tracker_stats_counts,
+                                                  g_strdup(record->label), count_ptr);
                             }
                         }
 
@@ -1031,9 +1015,6 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                                 }
                             }
                         }
-                        
-                        /* 清理临时哈希表 */
-                        g_hash_table_destroy(temp_weights);
                     }
                 }
             }
