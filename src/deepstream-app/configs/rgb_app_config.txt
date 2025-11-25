@@ -23,9 +23,9 @@ rtsp-reconnect-attempts=-1
 latency=300
 select-rtp-protocol=4
 smart-record=3
-smart-rec-dir-path=../smart_rec_rgb
+smart-rec-dir-path=/home/tl/data2/smart_rec_rgb
 smart-rec-default-duration=180
-smart-rec-retention-days=7
+smart-rec-retention-days=3
 #smart-rec-duration=20
 #smart-rec-start-time=5
 
@@ -70,12 +70,12 @@ udp-buffer-size=524288
 enable=1
 #Type - 1=FakeSink 2=EglSink 3=File 4=UDPSink 5=nvdrmvideosink 6=MsgConvBroker 7=MyNetwork
 type=7
-ip=230.1.8.31
+ip=230.1.88.31
 multicast-port=8128
 # 指定组播网卡名称，例如: eth0, enp5s0, ens33 等
-multicast-iface=eno2
+multicast-iface=enp3s0
 # multicast-ttl=32
-fps=30  # 可选参数，不配置时默认为25
+fps=2  # 可选参数，不配置时默认为25
 
 [message-converter]
 enable=0

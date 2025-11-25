@@ -137,7 +137,7 @@ static gboolean on_cooldown_end()
     return G_SOURCE_REMOVE;
 }
 
-static gboolean smart_record_event_generator(NvDsSrcBin *src_bin)
+static gboolean smart_record_event_generator(NvDsSrcBin *src_bin, const gchar *class_label)
 {
     if (g_pending_request)
     {
@@ -157,11 +157,43 @@ static gboolean smart_record_event_generator(NvDsSrcBin *src_bin)
     if (src_bin->recordCtx && !src_bin->reconfiguring)
     {
         NvDsSRContext *ctx = (NvDsSRContext *)src_bin->recordCtx;
+        
+        /* 根据类别创建子文件夹路径 */
+        gchar *category_path = NULL;
+        gchar *original_dirpath = ctx->initParams.dirpath;
+        
+        if (class_label && class_label[0] != '\0')
+        {
+            /* 构建类别子文件夹路径 */
+            category_path = g_build_filename(original_dirpath, class_label, NULL);
+            
+            /* 检查并创建类别文件夹（如果不存在） */
+            if (g_mkdir_with_parents(category_path, 0755) != 0)
+            {
+                g_print("Warning: Failed to create category directory: %s\n", category_path);
+                g_free(category_path);
+                category_path = NULL;
+            }
+            else
+            {
+                /* 临时更改录像路径到类别子文件夹 */
+                ctx->initParams.dirpath = category_path;
+            }
+        }
+        
         if (ctx->recordOn)
         {
             NvDsSRStop(ctx, 0);
         }
         NvDsSRStart(ctx, &sessId, startTime, duration, NULL);
+        
+        /* 恢复原始路径 */
+        if (category_path)
+        {
+            ctx->initParams.dirpath = original_dirpath;
+            g_free(category_path);
+        }
+        
         g_pending_request = TRUE;
         g_timeout_add(30000, on_cooldown_end, NULL);
     }
@@ -692,7 +724,20 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                 /* 检测到符合条件的目标才触发智能录像，g_pending_request 防抖 */
                 if (should_trigger_recording)
                 {
-                    smart_record_event_generator(src_bin);
+                    /* 获取检测目标的类别标签 */
+                    const gchar *class_label = NULL;
+                    if (obj_meta->obj_label[0] != '\0')
+                    {
+                        class_label = obj_meta->obj_label;
+                    }
+                    else
+                    {
+                        /* 如果没有标签，使用类别ID构建标签 */
+                        static gchar class_id_buf[32];
+                        g_snprintf(class_id_buf, sizeof(class_id_buf), "Class_%d", obj_meta->class_id);
+                        class_label = class_id_buf;
+                    }
+                    smart_record_event_generator(src_bin, class_label);
                 }
 
                 if (appCtx->config.enable_jpeg_save && ip_surf)
@@ -887,7 +932,7 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                         wl->confidence = confidence;
                         g_queue_push_tail(appCtx->tracker_label_history, wl);
                         
-                        /* 如果超过100次，移除最旧的记录 */
+                        /* 如果超过次，移除最旧的记录 */
                         while (g_queue_get_length(appCtx->tracker_label_history) > MAX_HISTORY)
                         {
                             WeightedLabel *old_wl = (WeightedLabel *)g_queue_pop_head(appCtx->tracker_label_history);
