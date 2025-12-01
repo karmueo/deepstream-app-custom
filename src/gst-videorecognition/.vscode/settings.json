@@ -1,4 +1,17 @@
 {
+    "clangd.arguments": [
+        "--compile-commands-dir=${workspaceFolder}/build",
+        "--background-index",
+        "--clang-tidy",
+        "--completion-style=detailed",
+        "--header-insertion=iwyu"
+    ],
+    "C_Cpp.intelliSenseEngine": "disabled",
+    "C_Cpp.errorSquiggles": "disabled",
+    "C_Cpp.formatting": "disabled",
+    "C_Cpp.enhancedColorization": "disabled",
+    "commentTranslate.browse.mode": "inplace",
+    "remote.autoForwardPortsFallback": 0,
     "files.associations": {
         "*.pbtxt": "plaintext",
         "array": "cpp",
@@ -75,7 +88,4 @@
         "shared_mutex": "cpp",
         "codecvt": "cpp"
     },
-    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
-    "cmake.loggingLevel": "info",
-    "cmake.configureOnOpen": true
 }

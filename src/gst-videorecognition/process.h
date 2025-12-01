@@ -45,6 +45,13 @@ public:
                                   int height,
                                   int width);
 
+    // X3D 预处理：32帧，64x64，中心裁剪，归一化
+    void convertCvInputToX3dTensorRT(std::vector<float> &input_data,
+                                    const int &num_frames,
+                                    const int &height,
+                                    const int &width,
+                                    const int &sampling_rate);
+
     // 获取当前视频帧长度
     int getCurrentFrameLength() const
     {

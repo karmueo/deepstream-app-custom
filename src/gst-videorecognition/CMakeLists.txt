@@ -6,10 +6,6 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# 2. 自定义变量 (匹配原Makefile)
-set(CUDA_VER "12.6" CACHE STRING "CUDA version")
-set(NVDS_VERSION "7.1" CACHE STRING "DeepStream version")
-
 # add_definitions(-DSAVE_IMAGES)
 
 # 3. 查找依赖包
@@ -25,12 +21,12 @@ find_package(OpenCV)
 include_directories(
     ${GST_INCLUDE_DIRS}
     ${OpenCV_INCLUDE_DIRS}
-    "/usr/local/cuda-${CUDA_VER}/include"
-    "/usr/local/cuda-${CUDA_VER}/targets/x86_64-linux/include"
-    "/opt/nvidia/deepstream/deepstream-${NVDS_VERSION}/sources/includes"
-    "/opt/nvidia/deepstream/deepstream-${NVDS_VERSION}/sources/includes/nvdsinferserver"
-    "/opt/nvidia/deepstream/deepstream-${NVDS_VERSION}/sources/libs/nvdsinferserver"
-    "/opt/nvidia/deepstream/deepstream-${NVDS_VERSION}/sources/libs/nvdsinferserver/tritonserver_include"
+    "/usr/local/cuda/include"
+    "/usr/local/cuda/targets/x86_64-linux/include"
+    "/opt/nvidia/deepstream/deepstream/sources/includes"
+    "/opt/nvidia/deepstream/deepstream/sources/includes/nvdsinferserver"
+    "/opt/nvidia/deepstream/deepstream/sources/libs/nvdsinferserver"
+    "/opt/nvidia/deepstream/deepstream/sources/libs/nvdsinferserver/tritonserver_include"
     "/opt/tritonclient/include"
 )
 
@@ -40,8 +36,8 @@ file(GLOB INCS ${CMAKE_SOURCE_DIR}/*.h)
 
 # 6. 库路径设置
 link_directories(
-    "/usr/local/cuda-${CUDA_VER}/lib64"
-    "/opt/nvidia/deepstream/deepstream-${NVDS_VERSION}/lib"
+    "/usr/local/cuda/lib64"
+    "/opt/nvidia/deepstream/deepstream/lib"
 )
 
 # 7. 构建共享库
@@ -65,7 +61,7 @@ target_link_libraries(gst_videorecognition
 )
 
 # 9. 安装规则
-set(GST_PLUGINS_DIR "/opt/nvidia/deepstream/deepstream-${NVDS_VERSION}/lib/gst-plugins")
+set(GST_PLUGINS_DIR "/opt/nvidia/deepstream/deepstream/lib/gst-plugins")
 install(TARGETS gst_videorecognition
     LIBRARY DESTINATION ${GST_PLUGINS_DIR}
     COMPONENT runtime
@@ -74,9 +70,4 @@ install(TARGETS gst_videorecognition
 # 10. 调试符号
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     target_compile_options(gst_videorecognition PRIVATE -g)
-endif()
-
-# 11. 兼容性检查
-if(NOT DEFINED CUDA_VER)
-    message(FATAL_ERROR "CUDA_VER is not set")
 endif()

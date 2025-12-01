@@ -40,8 +40,6 @@ void Process::addFrame(const cv::Mat &frame)
     m_vRawTargetFrames.push_back(frame);
 #endif
 
-    cv::cvtColor(frame, frame, cv::COLOR_BGR2RGB);
-    cv::Mat norm_img;
     m_vTargetFrames.push_back(frame);
 }
 
@@ -322,6 +320,94 @@ void Process::loadImagesFromDirectory(const std::string  &directoryPath,
     input_data = output2;
 
     // SaveVectorToTxt(input_data, "input_data.txt");
+}
+
+void Process::convertCvInputToX3dTensorRT(std::vector<float> &input_data,
+                                         const int          &num_frames,
+                                         const int          &height,
+                                         const int          &width,
+                                         const int          &sampling_rate)
+{
+    // 参数校验
+    assert(m_vTargetFrames[0].channels() == 3);
+
+    // 计算需要的总帧数
+    int total_frames_needed = num_frames * sampling_rate;
+    
+    // 计算中心偏移
+    int clip_offset = 0;
+    if (m_vTargetFrames.size() > total_frames_needed)
+    {
+        clip_offset = (m_vTargetFrames.size() - total_frames_needed) / 2;
+    }
+
+    // 采样帧
+    std::vector<cv::Mat> sampled_frames;
+    sampled_frames.reserve(num_frames);
+    
+    for (int i = 0; i < num_frames; ++i)
+    {
+        int frame_idx = clip_offset + i * sampling_rate;
+        if (frame_idx >= m_vTargetFrames.size())
+        {
+            frame_idx = frame_idx % m_vTargetFrames.size(); // 循环填充
+        }
+        sampled_frames.push_back(m_vTargetFrames[frame_idx]);
+    }
+
+    // 预处理每一帧：检查尺寸 + normalize
+    std::vector<cv::Mat> processed_frames;
+    processed_frames.reserve(num_frames);
+    
+    const float MEAN[3] = {0.45f, 0.45f, 0.45f};
+    const float STD[3] = {0.225f, 0.225f, 0.225f};
+    
+    for (const auto &frame : sampled_frames)
+    {
+        cv::Mat img = frame.clone();
+        
+        // 检查尺寸是否正确（应该已经是 height x width）
+        assert(img.rows == height && img.cols == width);
+        
+        // 转换为float并归一化 [0, 1]
+        img.convertTo(img, CV_32FC3, 1.0 / 255.0);
+        
+        // BGR to RGB (OpenCV默认是BGR)
+        cv::cvtColor(img, img, cv::COLOR_BGR2RGB);
+        
+        processed_frames.push_back(img);
+    }
+
+    // 转换为NCTHW格式: [1, 3, num_frames, height, width]
+    std::vector<float> output(1 * 3 * num_frames * height * width);
+    
+    for (int c = 0; c < 3; ++c)
+    {
+        for (int t = 0; t < num_frames; ++t)
+        {
+            for (int h = 0; h < height; ++h)
+            {
+                for (int w = 0; w < width; ++w)
+                {
+                    float pixel = processed_frames[t].at<cv::Vec3f>(h, w)[c];
+                    // 归一化
+                    pixel = (pixel - MEAN[c]) / STD[c];
+                    
+                    // 计算索引: c * (T * H * W) + t * (H * W) + h * W + w
+                    int idx = c * (num_frames * height * width) + 
+                              t * (height * width) + 
+                              h * width + w;
+                    output[idx] = pixel;
+                }
+            }
+        }
+    }
+    
+    input_data = output;
+
+#ifdef SAVE_IMAGES
+    /* Lines 164-170 omitted */
+#endif
 }
 
 void Process::loadImagesFromDirectory2(const std::string  &directoryPath,

@@ -182,25 +182,21 @@ operate-on-class-ids=0;1;2
 config-file=config_infer_secondary_rgb_classify.txt
 
 [videorecognition]
-enable=0
+enable=1
 unique-id=15
 gpu-id=0
 nvbuf-memory-type=3
-#processing-width=32
-#processing-height=32
-processing-width=224
-processing-height=224
-model-clip-length=8
+processing-width=64
+processing-height=64
+model-clip-length=32
 # keep-aspect-ratio=1
-num-clips=4
-# model-type: 0=multi-frame image classification (默认), 1=video recognition
-model-type=1
-#trt-engine-file=/workspace/deepstream-app-custom/src/deepstream-app/models/yolov11m_classify_rgb_b4_v2_fp16.engine
-trt-engine-file=/workspace/deepstream-app-custom/src/gst-videorecognition/models/uniformerv2_softmax_rgb_fp16.engine
+# num-clips=5  # 此属性不存在，已注释
+# model-type=1  # 此属性不存在，已注释
+trt-engine-file=/home/tl/work/host_deepstream/deepstream-app-custom/src/gst-videorecognition/models/x3d_fp32.engine
 
 # Configure this group to enable cloud message consumer.
 [message-consumer]
-enable=0
+enable=0 
 proto-lib=/opt/nvidia/deepstream/deepstream/lib/libnvds_mqtt_proto.so
 conn-str=127.0.0.1;1883
 # config-file=cfg_mqtt.txt

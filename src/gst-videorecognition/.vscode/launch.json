@@ -8,12 +8,10 @@
             "name": "(gdb) 启动",
             "type": "cppdbg",
             "request": "launch",
-            "program": "/workspace/deepstream-app-custom/src/deepstream-app/deepstream-app",
+            "program": "${workspaceFolder}/../../build/deepstream-app",
             "args": [
                 "-c",
-                "/workspace/deepstream-app-custom/src/deepstream-app/configs/rgb_app_config.txt"], 
-                // "${workspaceFolder}/src/deepstream-app/configs/deepstream_app_"],
-                // "/workspace/deepstream-app-custom/src/deepstream-app/configs/ir_app_config.txt"
+                "${workspaceFolder}/../deepstream-app/configs/debug_rgb_app_config.txt", 
             ],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",
@@ -30,27 +28,13 @@
                     "description": "将反汇编风格设置为 Intel",
                     "text": "-gdb-set disassembly-flavor intel",
                     "ignoreFailures": true
+                },
+                {
+                    "description": "设置共享库搜索路径",
+                    "text": "set solib-search-path /opt/nvidia/deepstream/deepstream/lib/gst-plugins",
+                    "ignoreFailures": true
                 }
             ]
-        },
-        {
-            "type": "lldb",
-            "request": "attach",
-            "name": "Attach",
-            // "program": "/workspace/deepstream-app-custom/src/deepstream-app/deepstream-app",
-            "pid": "${command:pickProcess}",
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Launch",
-            "program": "/workspace/deepstream-app-custom/src/deepstream-app/deepstream-app",
-            "args": [
-                "-c",
-                // "/workspace/deepstream-app-custom/src/deepstream-app/configs/rgb_app_config.txt"], 
-                // "${workspaceFolder}/src/deepstream-app/configs/deepstream_app_"],
-                "/workspace/deepstream-app-custom/src/deepstream-app/configs/ir_app_config.txt"],
-            "cwd": "/workspace/deepstream-app-custom"
         },
     ]
 }
