@@ -724,19 +724,48 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                 /* 检测到符合条件的目标才触发智能录像，g_pending_request 防抖 */
                 if (should_trigger_recording)
                 {
-                    /* 获取检测目标的类别标签 */
+                    /* 获取目标的类别标签，优先使用分类结果 */
                     const gchar *class_label = NULL;
-                    if (obj_meta->obj_label[0] != '\0')
+                    static gchar class_buf[64];
+                    
+                    /* 首先检查是否有分类结果 */
+                    gboolean found_classification = FALSE;
+                    if (obj_meta->classifier_meta_list)
                     {
-                        class_label = obj_meta->obj_label;
+                        for (NvDsClassifierMetaList *cl = obj_meta->classifier_meta_list;
+                             cl && !found_classification; cl = cl->next)
+                        {
+                            NvDsClassifierMeta *cl_meta = (NvDsClassifierMeta *)cl->data;
+                            for (NvDsLabelInfoList *ll = cl_meta->label_info_list;
+                                 ll && !found_classification; ll = ll->next)
+                            {
+                                NvDsLabelInfo *li = (NvDsLabelInfo *)ll->data;
+                                if (li->result_label[0] != '\0' && li->result_prob > 0.5f)
+                                {
+                                    /* 使用分类标签 */
+                                    g_strlcpy(class_buf, li->result_label, sizeof(class_buf));
+                                    class_label = class_buf;
+                                    found_classification = TRUE;
+                                }
+                            }
+                        }
                     }
-                    else
+                    
+                    /* 如果没有分类结果，使用检测标签 */
+                    if (!found_classification)
                     {
-                        /* 如果没有标签，使用类别ID构建标签 */
-                        static gchar class_id_buf[32];
-                        g_snprintf(class_id_buf, sizeof(class_id_buf), "Class_%d", obj_meta->class_id);
-                        class_label = class_id_buf;
+                        if (obj_meta->obj_label[0] != '\0')
+                        {
+                            class_label = obj_meta->obj_label;
+                        }
+                        else
+                        {
+                            /* 如果没有标签，使用类别ID构建标签 */
+                            g_snprintf(class_buf, sizeof(class_buf), "Class_%d", obj_meta->class_id);
+                            class_label = class_buf;
+                        }
                     }
+                    
                     smart_record_event_generator(src_bin, class_label);
                 }
 
@@ -820,24 +849,10 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                 }
             }
 
-            /* NOTE: 分类显示逻辑已移至 overlay_graphics
-             * 中统一处理，这里不再拼接文本。 */
-
-            /* 分类结果历史加权平滑：仅在 tracker 与 secondary-gie 开启时启用 */
-            gboolean tracker_on = appCtx->config.tracker_config.enable;
-            gboolean sgie_on = FALSE;
-            for (guint si = 0; si < appCtx->config.num_secondary_gie_sub_bins;
-                 ++si)
-            {
-                if (appCtx->config.secondary_gie_sub_bin_config[si].enable)
-                {
-                    sgie_on = TRUE;
-                    break;
-                }
-            }
-
-            /* TODO: 单目标跟踪器：类别统计与更新（统计最近次，使用置信度最高的类别） */
-            if (single_object_tracker && appCtx->config.tracker_config.enable_class_count_update)
+            /* TODO: 单目标跟踪器：类别统计与更新（统计最近次，使用置信度最高的类别）
+             * 如果有分类信息，则不进行统计更新 */
+            if (single_object_tracker && appCtx->config.tracker_config.enable_class_count_update &&
+                !obj_meta->classifier_meta_list)
             {
                 const guint MAX_HISTORY = 50; // 最多保留最近次历史记录
 
@@ -1689,6 +1704,7 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
 
     /* 为每个对象生成完整的检测+分类标签(概率)文本，覆盖原来的
      * bbox_generated_probe_after_analytics 中逻辑 */
+    gboolean has_any_classification = FALSE; /* 标记批次中是否有任何分类结果 */
     for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame != NULL;
          l_frame = l_frame->next)
     {
@@ -1700,27 +1716,14 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
         {
             NvDsObjectMeta *obj_meta = (NvDsObjectMeta *)l_obj->data;
 
-            /* 构建完整标签：检测类别(置信度) + 分类结果(概率) */
+            /* 构建完整标签：优先显示分类结果，否则显示检测类别 */
             GString *gstr = g_string_new(NULL);
+            gboolean has_classification = FALSE;
 
-            /* 首先添加检测结果 */
-            if (obj_meta->obj_label[0] != '\0')
-            {
-                g_string_append_printf(gstr, "%s(%.2f)", obj_meta->obj_label,
-                                       obj_meta->confidence);
-            }
-            else
-            {
-                /* 如果没有标签，使用类别ID */
-                g_string_append_printf(gstr, "Class_%d(%.2f)",
-                                       obj_meta->class_id,
-                                       obj_meta->confidence);
-            }
-
-            /* 如果有分类结果，追加分类信息 */
+            /* 检查是否有分类结果 */
             if (obj_meta->classifier_meta_list)
             {
-                g_string_append_printf(gstr, " ");
+                guint cls_count = 0;
                 for (NvDsClassifierMetaList *cl =
                          obj_meta->classifier_meta_list;
                      cl; cl = cl->next)
@@ -1732,19 +1735,50 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
                     {
                         NvDsLabelInfo *li = (NvDsLabelInfo *)ll->data;
                         if (li->result_label[0] == '\0')
+                        {
                             continue;
-                        g_string_append_printf(gstr, "%s(%.2f) ",
+                        }
+                        if (cls_count > 0)
+                        {
+                            g_string_append_printf(gstr, " ");
+                        }
+                        g_string_append_printf(gstr, "%s(%.2f)",
                                                li->result_label,
                                                li->result_prob);
+                        cls_count++;
                     }
+                }
+                if (cls_count > 0)
+                {
+                    has_classification = TRUE;
+                    has_any_classification = TRUE; /* 标记批次中有分类结果 */
                 }
             }
 
-            if (single_object_tracker)
+            /* 如果没有分类结果，显示检测结果和跟踪信息 */
+            if (!has_classification)
             {
-                g_string_append_printf(gstr, " 跟踪(%.2f) ID:%" G_GUINT64_FORMAT,
-                                       obj_meta->tracker_confidence,
-                                       (guint64)obj_meta->object_id);
+                /* 添加检测结果 */
+                if (obj_meta->obj_label[0] != '\0')
+                {
+                    g_string_append_printf(gstr, "%s(%.2f)", obj_meta->obj_label,
+                                           obj_meta->confidence);
+                }
+                else
+                {
+                    /* 如果没有标签，使用类别ID */
+                    g_string_append_printf(gstr, "Class_%d(%.2f)",
+                                           obj_meta->class_id,
+                                           obj_meta->confidence);
+                }
+
+                /* 添加跟踪信息 */
+                if (single_object_tracker)
+                {
+                    g_string_append_printf(gstr, " 跟踪(%.2f) ID:%" G_GUINT64_FORMAT,
+                                           obj_meta->tracker_confidence,
+                                           (guint64)obj_meta->object_id);
+                }
             }
 
             /* 设置显示文本 - 所有对象都会有标签 */
@@ -1936,8 +1970,9 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
         }
     }
 
-    /* NOTE: 显示单目标跟踪器的统计信息，包括跟踪ID和检测到的类别计数 */
-    if (single_object_tracker && appCtx->tracker_stats_valid &&
+    /* NOTE: 显示单目标跟踪器的统计信息，包括跟踪ID和检测到的类别计数
+     * 仅在没有分类结果时显示 */
+    if (!has_any_classification && single_object_tracker && appCtx->tracker_stats_valid &&
         appCtx->tracker_stats_counts &&
         g_hash_table_size(appCtx->tracker_stats_counts) > 0)
     {
