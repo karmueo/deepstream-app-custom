@@ -1246,6 +1246,13 @@ parse_videorecognition(NvDsVideoRecognitionConfig *config, GKeyFile *key_file)
                                        "model-type", &error);
             CHECK_ERROR(error);
         }
+        else if (!g_strcmp0(*key, "sampling-rate"))
+        {
+            config->model_sampling_rate =
+                g_key_file_get_integer(key_file, CONFIG_GROUP_VIDEORECOGNITION,
+                                       "sampling-rate", &error);
+            CHECK_ERROR(error);
+        }
         else if (!g_strcmp0(*key, "trt-engine-file"))
         {
             config->trt_engine_name = g_key_file_get_string(
