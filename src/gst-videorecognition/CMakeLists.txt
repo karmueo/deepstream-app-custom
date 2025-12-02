@@ -67,6 +67,36 @@ install(TARGETS gst_videorecognition
     COMPONENT runtime
 )
 
+# 安装 models 目录到 deepstream-app-custom 下的 gst-videorecognition/models
+set(GST_VIDEORECOGNITION_MODELS_DEST "/opt/nvidia/deepstream/deepstream/deepstream-app-custom/gst-videorecognition/models" CACHE PATH "Destination to install gst_videorecognition models")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/models")
+        message(STATUS "Installing gst_videorecognition models symlink from ${CMAKE_CURRENT_SOURCE_DIR}/models to ${GST_VIDEORECOGNITION_MODELS_DEST}")
+        # 使用 install(CODE ...) 在安装时创建符号链接，而非复制目录
+        # 这里在安装阶段会运行 CMake 代码：创建父目录、删除现有目标并创建符号链接
+        set(_MODEL_SRC "${CMAKE_CURRENT_SOURCE_DIR}/models")
+        set(_MODEL_DEST "${GST_VIDEORECOGNITION_MODELS_DEST}")
+        install(CODE "\
+            set(_dest_dir \"/opt/nvidia/deepstream/deepstream/deepstream-app-custom/gst-videorecognition\")\n\
+            execute_process(COMMAND ${CMAKE_COMMAND} -E make_directory \"\${_dest_dir}\" RESULT_VARIABLE _mkdir_ret)\n\
+            if(NOT _mkdir_ret EQUAL 0)\n\
+                message(FATAL_ERROR \"Failed to create directory '\${_dest_dir}' (code \${_mkdir_ret}). You may need root permissions: try 'sudo make install'\")\n\
+            endif()\n\
+            if(NOT EXISTS \"${_MODEL_SRC}\")\n\
+                message(FATAL_ERROR \"Model source '${_MODEL_SRC}' does not exist at install time. Aborting symlink creation.\")\n\
+            endif()\n\
+            if(EXISTS \"${_MODEL_DEST}\")\n\
+                file(REMOVE_RECURSE \"${_MODEL_DEST}\")\n\
+            endif()\n\
+            execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink \"${_MODEL_SRC}\" \"${_MODEL_DEST}\" RESULT_VARIABLE _ln_ret)\n\
+            if(NOT _ln_ret EQUAL 0)\n\
+                message(FATAL_ERROR \"Failed to create symbolic link '${_MODEL_DEST}' -> '${_MODEL_SRC}' (code \${_ln_ret}). Check that source exists and you have permissions.\")\n\
+            endif()\n\
+            message(STATUS \"Created symlink: ${_MODEL_DEST} -> ${_MODEL_SRC}\")\n\
+        ")
+else()
+    message(STATUS "No models directory found at ${CMAKE_CURRENT_SOURCE_DIR}/models; skipping models installation.")
+endif()
+
 # 10. 调试符号
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     target_compile_options(gst_videorecognition PRIVATE -g)
