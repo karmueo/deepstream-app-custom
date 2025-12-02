@@ -115,6 +115,14 @@ cmake --build .
 sudo cmake --install .
 ```
 
+## 编译多帧目标识别插件
+```sh
+cd src/gst-videorecognition
+mkdir build && cd build
+cmake ..
+cmake --build .
+sudo cmake --install .
+
 ## (可选)MQTT报文服务
 安装
 ```sh
@@ -277,11 +285,11 @@ trtyolo export -w yolov11.pt -v ultralytics -o output --max_boxes 100 --iou_thre
 ./convert2trt.sh mixformerv2_online_small.onnx mixformerv2_online_small_fp32.engine
 ```
 
-<!-- ### 视频识别模型
-把模型uniformerv2_softmax.onnx文件放入src/gst-videorecognition/models目录下，根据实际的onnx文件名修改convert2trt.sh
+## 多帧识别模型
+把onnx模型如model_simplified.onnx放到src/gst-videorecognition/models目录下，
 ```sh
-./convert2trt.sh
-``` -->
+./convert2trt.sh model_simplified.onnx x3d_fp32.engine
+```
 
 # 4.开机自启动
 
@@ -305,6 +313,9 @@ Wants=network-online.target mosquitto.service
 
 [Service]
 Type=simple
+# 指定运行用户和组
+User=tl
+Group=tl
 WorkingDirectory=/opt/nvidia/deepstream/deepstream
 ExecStart=/opt/nvidia/deepstream/deepstream/bin/deepstream-app -c /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/rgb_app_config.txt
 Restart=always
@@ -339,6 +350,91 @@ sudo systemctl disable deepstream-app-rgb.service
 注意：
 - 如果你的应用依赖其他服务（如 MQTT），可在 `[Unit]` 中追加：`After=mosquitto.service` 与/或 `Wants=mosquitto.service`。
 - 若启用 `User=...` 以非 root 运行，请确保该用户有 GPU 与摄像头、模型及日志目录等资源的访问权限。
+
+## 定时关闭、启动服务（由此可以定时切换模型，比如夜间和白天用不同的模型）
+
+> 注意: 先停止前面的服务：`sudo systemctl stop deepstream-app-rgb.service`
+
+1) 创建白天服务文件 `/etc/systemd/system/deepstream-day.service`
+
+```ini
+[Unit]
+Description=DeepStream Day App (07:00 - 19:00)
+After=network-online.target mosquitto.service
+Wants=network-online.target mosquitto.service
+# 当本服务启动时，强制停止夜间服务
+Conflicts=deepstream-night.service
+
+[Service]
+Type=simple
+User=tl
+Group=tl
+WorkingDirectory=/opt/nvidia/deepstream/deepstream
+# 白天使用的 RGB 配置文件
+ExecStart=/opt/nvidia/deepstream/deepstream/bin/deepstream-app -c /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/rgb_app_config.txt
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
+```
+2) 创建夜晚服务文件 `/etc/systemd/system/deepstream-night.service`
+
+```ini
+[Unit]
+Description=DeepStream Night App (19:00 - 07:00)
+After=network-online.target mosquitto.service
+Wants=network-online.target mosquitto.service
+# 当本服务启动时，强制停止白天服务
+Conflicts=deepstream-day.service
+
+[Service]
+Type=simple
+User=tl
+Group=tl
+WorkingDirectory=/opt/nvidia/deepstream/deepstream
+# 晚上使用的 Night 配置文件
+ExecStart=/opt/nvidia/deepstream/deepstream/bin/deepstream-app -c /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/night_app_config.txt
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
+```
+
+3) 创建白天定时器文件 `/etc/systemd/system/deepstream-day.timer`
+
+```ini
+[Unit]
+Description=Start Day App at 07:00 daily
+
+[Timer]
+# 每天 07:00:00 触发
+OnCalendar=*-*-* 07:00:00
+Unit=deepstream-day.service
+# 如果关机错过了时间，开机后是否补发？(可选，建议 false 以免逻辑混乱)
+Persistent=false
+
+[Install]
+WantedBy=timers.target
+```
+
+4) 创建夜晚定时器文件 `/etc/systemd/system/deepstream-night.timer`
+
+```ini
+[Unit]
+Description=Start Night App at 19:00 daily
+
+[Timer]
+# 每天 19:00:00 触发
+OnCalendar=*-*-* 19:00:00
+Unit=deepstream-night.service
+Persistent=false
+
+[Install]
+WantedBy=timers.target
+```
+
 
 ## *可选，服务可视化
 ```bash
