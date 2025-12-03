@@ -122,6 +122,11 @@ mkdir build && cd build
 cmake ..
 cmake --build .
 sudo cmake --install .
+```
+添加环境变量
+```sh
+export GST_PLUGIN_PATH=/opt/nvidia/deepstream/deepstream/lib/gst-plugins:$GST_PLUGIN_PATH
+```
 
 ## (可选)MQTT报文服务
 安装
@@ -435,6 +440,22 @@ Persistent=false
 WantedBy=timers.target
 ```
 
+5) 部署
+```sh
+# 重新加载 systemd 配置
+sudo systemctl daemon-reload
+
+# 启用定时器（不是服务！）
+sudo systemctl enable deepstream-day.timer
+sudo systemctl enable deepstream-night.timer
+
+# 启动定时器
+sudo systemctl start deepstream-day.timer
+sudo systemctl start deepstream-night.timer
+
+# 检查定时器状态
+sudo systemctl list-timers --all
+```
 
 ## *可选，服务可视化
 ```bash

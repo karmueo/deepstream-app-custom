@@ -23,7 +23,7 @@ rtsp-reconnect-attempts=-1
 latency=300
 select-rtp-protocol=4
 smart-record=3
-smart-rec-dir-path=/home/tl/data2/smart_rec_rgb
+smart-rec-dir-path=/home/tl/data2/smart_rec_night
 smart-rec-default-duration=180
 smart-rec-retention-days=3
 #smart-rec-duration=20
@@ -118,7 +118,7 @@ attach-sys-ts-as-ntp=0
 
 [pre-process]
 enable=1
-config-file=config_preprocess_rgb_primary.txt
+config-file=config_preprocess_night_primary.txt
 
 # 直接推理
 [primary-gie]
