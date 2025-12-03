@@ -3,5 +3,6 @@
 export GST_DEBUG_NO_COLOR=1
 export GST_DEBUG_FILE=./app_rgb.log
 export GST_DEBUG=4
+export GST_PLUGIN_PATH=/opt/nvidia/deepstream/deepstream/lib/gst-plugins:$GST_PLUGIN_PATH
 # nohup src/deepstream-app/deepstream-app -c src/deepstream-app/configs/ir_app_config.txt &
 ./build/deepstream-app -c src/deepstream-app/configs/rgb_app_config.txt
