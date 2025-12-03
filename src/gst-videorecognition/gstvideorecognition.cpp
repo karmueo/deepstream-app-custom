@@ -32,6 +32,9 @@
 #include <gst/video/video.h>
 #include <math.h>
 #include <opencv2/opencv.hpp>
+#include <fstream>
+#include <string>
+#include <map>
 
 /* enable to write transformed cvmat to files */
 /* #define DSEXAMPLE_DEBUG */
@@ -92,7 +95,8 @@ enum
     PROP_PROCESSING_HEIGHT,
     PROP_MODEL_CLIP_LENGTH,
     PROP_SAMPLING_RATE,
-    PROP_TRT_ENGINE_NAME
+    PROP_TRT_ENGINE_NAME,
+    PROP_LABELS_FILE
 };
 
 #define DEFAULT_UNIQUE_ID 15
@@ -103,6 +107,7 @@ enum
 #define DEFAULT_TRT_ENGINE_NAME                                                \
     "/workspace/deepstream-app-custom/src/gst-videorecognition/models/"        \
     "x3d.engine"
+#define DEFAULT_LABELS_FILE "labels.txt"
 
 /* the capabilities of the inputs and outputs.
  *
@@ -501,6 +506,14 @@ static void gst_videorecognition_class_init(GstvideorecognitionClass *klass)
             DEFAULT_TRT_ENGINE_NAME,
             (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
+    g_object_class_install_property(
+        gobject_class, PROP_LABELS_FILE,
+        g_param_spec_string(
+            "labels-file", "Labels File",
+            "Path to the file containing class labels (one per line)",
+            DEFAULT_LABELS_FILE,
+            (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
     /* Set sink and src pad capabilities */
     gst_element_class_add_pad_template(
         gstelement_class,
@@ -562,6 +575,14 @@ static void gst_videorecognition_init(Gstvideorecognition *self)
     self->recognitionResultPtr->class_name.clear();
     self->recognitionResultPtr->score = 0.f;
     self->video_recognition = nullptr;
+    
+    // 初始化标签文件路径
+    const char *labels_file = DEFAULT_LABELS_FILE;
+    strncpy(self->labels_file, labels_file, sizeof(self->labels_file) - 1);
+    self->labels_file[sizeof(self->labels_file) - 1] = '\0';
+    
+    // 初始化标签映射
+    self->labels_map = (void*)(new std::map<int, std::string>());
 
     /* This quark is required to identify NvDsMeta when iterating through
      * the buffer metadatas */
@@ -717,23 +738,21 @@ static GstFlowReturn gst_videorecognition_transform_ip(GstBaseTransform *btrans,
                 label_info->result_class_id =
                     self->recognitionResultPtr->class_id;
                 label_info->result_prob = self->recognitionResultPtr->score;
-                // 类别名映射
-                if (label_info->result_class_id == 0)
+                
+                // 从标签映射中查找类别名
+                const char *label_name = "unknown";
+                if (self->labels_map)
                 {
-                    strncpy(label_info->result_label, "鸟",
-                            MAX_LABEL_SIZE - 1);
+                    std::map<int, std::string> *labels = (std::map<int, std::string>*)self->labels_map;
+                    if (labels->find(label_info->result_class_id) != labels->end())
+                    {
+                        label_name = (*labels)[label_info->result_class_id].c_str();
+                    }
                 }
-                else if (label_info->result_class_id == 1)
-                {
-                    strncpy(label_info->result_label, "无人机",
-                            MAX_LABEL_SIZE - 1);
-                }
-                else
-                {
-                    strncpy(label_info->result_label, "unknown",
-                            MAX_LABEL_SIZE - 1);
-                }
+                
+                strncpy(label_info->result_label, label_name, MAX_LABEL_SIZE - 1);
                 label_info->result_label[MAX_LABEL_SIZE - 1] = '\0';
+                
                 nvds_add_label_info_meta_to_classifier(classifier_meta,
                                                        label_info);
                 nvds_add_classifier_meta_to_object(obj_meta, classifier_meta);
@@ -759,6 +778,39 @@ static gboolean gst_videorecognition_start(GstBaseTransform *btrans)
     NvBufSurfaceCreateParams create_params = {0};
 
     CHECK_CUDA_STATUS(cudaSetDevice(self->gpu_id), "Unable to set cuda device");
+    
+    // 加载类别标签文件
+    if (strlen(self->labels_file) > 0)
+    {
+        std::ifstream label_file(self->labels_file);
+        if (label_file.is_open())
+        {
+            std::string line;
+            int class_id = 0;
+            std::map<int, std::string> *labels = (std::map<int, std::string>*)self->labels_map;
+            labels->clear();
+            
+            while (std::getline(label_file, line))
+            {
+                // 去除行首尾空白字符
+                line.erase(0, line.find_first_not_of(" \t\r\n"));
+                line.erase(line.find_last_not_of(" \t\r\n") + 1);
+                
+                if (!line.empty())
+                {
+                    (*labels)[class_id] = line;
+                    g_print("Loaded label [%d]: %s\n", class_id, line.c_str());
+                    class_id++;
+                }
+            }
+            label_file.close();
+            g_print("Successfully loaded %d labels from %s\n", class_id, self->labels_file);
+        }
+        else
+        {
+            GST_WARNING_OBJECT(self, "Failed to open labels file: %s, will use 'unknown' for all classes", self->labels_file);
+        }
+    }
 
     /* An intermediate buffer for NV12/RGBA to BGR conversion  will be
      * required. Can be skipped if custom algorithm can work directly on
@@ -903,6 +955,15 @@ void gst_videorecognition_set_property(GObject *object, guint property_id,
                         self->trt_engine_name);
         break;
     }
+    case PROP_LABELS_FILE:
+    {
+        const gchar *s = g_value_get_string(value);
+        const gchar *labels = s && *s ? s : DEFAULT_LABELS_FILE;
+        strncpy(self->labels_file, labels, sizeof(self->labels_file) - 1);
+        self->labels_file[sizeof(self->labels_file) - 1] = '\0';
+        GST_INFO_OBJECT(self, "Set labels file to: %s", self->labels_file);
+        break;
+    }
 
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
@@ -934,6 +995,9 @@ void gst_videorecognition_get_property(GObject *object, guint property_id,
         break;
     case PROP_SAMPLING_RATE:
         g_value_set_int(value, self->model_sampling_rate);
+        break;
+    case PROP_LABELS_FILE:
+        g_value_set_string(value, self->labels_file);
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
@@ -974,6 +1038,12 @@ void gst_videorecognition_finalize(GObject *object)
     {
         delete self->trtProcessPtr;
         self->trtProcessPtr = NULL;
+    }
+    
+    if (self->labels_map)
+    {
+        delete (std::map<int, std::string>*)self->labels_map;
+        self->labels_map = NULL;
     }
 
     G_OBJECT_CLASS(parent_class)->finalize(object);

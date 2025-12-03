@@ -91,6 +91,11 @@ create_dsvideorecognition_bin(NvDsVideoRecognitionConfig *config, NvDsVideoRecog
     {
         g_object_set(G_OBJECT(bin->elem_dsvideorecognition), "trt-engine-name", config->trt_engine_name, NULL);
     }
+    
+    if (config->labels_file)
+    {
+        g_object_set(G_OBJECT(bin->elem_dsvideorecognition), "labels-file", config->labels_file, NULL);
+    }
 
     if (config->batch_size)
     {

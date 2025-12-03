@@ -1259,6 +1259,12 @@ parse_videorecognition(NvDsVideoRecognitionConfig *config, GKeyFile *key_file)
                 key_file, CONFIG_GROUP_VIDEORECOGNITION, "trt-engine-file", &error);
             CHECK_ERROR(error);
         }
+        else if (!g_strcmp0(*key, "labels-file"))
+        {
+            config->labels_file = g_key_file_get_string(
+                key_file, CONFIG_GROUP_VIDEORECOGNITION, "labels-file", &error);
+            CHECK_ERROR(error);
+        }
         else
         {
             NVGSTDS_WARN_MSG_V("Unknown key '%s' for group [%s]", *key,
