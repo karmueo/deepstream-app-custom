@@ -189,10 +189,8 @@ processing-width=64
 processing-height=64
 model-clip-length=32
 sampling-rate=5
-# keep-aspect-ratio=1
-# num-clips=5  # 此属性不存在，已注释
-# model-type=1  # 此属性不存在，已注释
-trt-engine-file=/opt/nvidia/deepstream/deepstream/deepstream-app-custom/gst-videorecognition/models/x3d_fp32.engine
+trt-engine-file=/opt/nvidia/deepstream/deepstream/deepstream-app-custom/gst-videorecognition/models/x3d_3classes_v4_fp32.engine
+labels-file=/opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/labels.txt
 
 # Configure this group to enable cloud message consumer.
 [message-consumer]

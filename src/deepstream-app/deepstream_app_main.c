@@ -1766,6 +1766,8 @@ render_corner_box(CornerLineWriter *writer, NvDsObjectMeta *obj_meta, guint fall
 
     guint len_px = float_to_uint_clamped(corner_len);
     guint line_width = (fallback_line_width > 0) ? fallback_line_width : 2;
+    if (line_width < 3)
+        line_width = 3; /* 线条稍粗，提升可见度 */
     NvOSD_ColorParams color = r->border_color;
 
     gfloat x1 = r->left;
@@ -1953,18 +1955,11 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
                                   ? frame_meta->source_frame_height
                                   : 1080;
 
-                float bw = obj_meta->rect_params.width;
-                float bh = obj_meta->rect_params.height;
-                float min_side = bw < bh ? bw : bh;
                 int   base_font = appCtx->config.osd_config.text_size > 0
                                       ? appCtx->config.osd_config.text_size
                                       : 12;
-                float scale = 1.0f;
-                if (min_side < 40)
-                    scale = 0.6f;
-                else if (min_side < 80)
-                    scale = 0.8f; /* 可根据需要再细化 */
-                int font_size = (int)(base_font * scale);
+                /* 固定较小字号，采用原先缩小时的尺寸，避免忽大忽小但保持精简显示 */
+                int font_size = (int)(base_font * 0.8f);
                 if (font_size < 8)
                     font_size = 8; /* 最小字号 */
 
