@@ -70,7 +70,7 @@ udp-buffer-size=524288
 enable=1
 #Type - 1=FakeSink 2=EglSink 3=File 4=UDPSink 5=nvdrmvideosink 6=MsgConvBroker 7=MyNetwork
 type=7
-ip=230.1.88.31
+ip=230.1.8.31
 multicast-port=8128
 # 指定组播网卡名称，例如: eth0, enp5s0, ens33 等
 multicast-iface=enp3s0
