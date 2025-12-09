@@ -1664,6 +1664,146 @@ prune_label_anchor_entries(AppCtx *appCtx, guint stream_id, guint frame_num)
     }
 }
 
+typedef struct
+{
+    NvDsBatchMeta *batch_meta;
+    NvDsFrameMeta *frame_meta;
+    NvDsDisplayMeta *display_meta;
+} CornerLineWriter;
+
+static NvDsDisplayMeta *
+corner_writer_get_meta(CornerLineWriter *writer)
+{
+    if (!writer->display_meta || writer->display_meta->num_lines >= MAX_ELEMENTS_IN_DISPLAY_META)
+    {
+        if (writer->display_meta)
+        {
+            nvds_add_display_meta_to_frame(writer->frame_meta, writer->display_meta);
+        }
+        writer->display_meta = nvds_acquire_display_meta_from_pool(writer->batch_meta);
+        writer->display_meta->num_rects = 0;
+        writer->display_meta->num_labels = 0;
+        writer->display_meta->num_lines = 0;
+        writer->display_meta->num_arrows = 0;
+        writer->display_meta->num_circles = 0;
+    }
+    return writer->display_meta;
+}
+
+static void
+corner_writer_add_line(CornerLineWriter *writer, const NvOSD_LineParams *line)
+{
+    NvDsDisplayMeta *meta = corner_writer_get_meta(writer);
+    meta->line_params[meta->num_lines++] = *line;
+}
+
+static void
+corner_writer_commit(CornerLineWriter *writer)
+{
+    if (writer->display_meta)
+    {
+        nvds_add_display_meta_to_frame(writer->frame_meta, writer->display_meta);
+        writer->display_meta = NULL;
+    }
+}
+
+static inline guint
+float_to_uint_clamped(gfloat v)
+{
+    if (v < 0.f)
+        return 0;
+    return (guint)(v + 0.5f);
+}
+
+static void
+inflate_rect(NvOSD_RectParams *r, gfloat scale, gint frame_w, gint frame_h)
+{
+    if (!r || scale <= 1.0f || r->width <= 0.f || r->height <= 0.f)
+        return;
+
+    gfloat cx = r->left + r->width * 0.5f;
+    gfloat cy = r->top + r->height * 0.5f;
+    gfloat new_w = r->width * scale;
+    gfloat new_h = r->height * scale;
+
+    gfloat new_left = cx - new_w * 0.5f;
+    gfloat new_top = cy - new_h * 0.5f;
+
+    if (frame_w > 0)
+    {
+        if (new_left < 0.f)
+            new_left = 0.f;
+        if (new_left + new_w > frame_w)
+            new_w = MAX(1.f, frame_w - new_left);
+    }
+    if (frame_h > 0)
+    {
+        if (new_top < 0.f)
+            new_top = 0.f;
+        if (new_top + new_h > frame_h)
+            new_h = MAX(1.f, frame_h - new_top);
+    }
+
+    r->left = new_left;
+    r->top = new_top;
+    r->width = new_w;
+    r->height = new_h;
+}
+
+static void
+render_corner_box(CornerLineWriter *writer, NvDsObjectMeta *obj_meta, guint fallback_line_width)
+{
+    NvOSD_RectParams *r = &obj_meta->rect_params;
+    if (r->width <= 0.f || r->height <= 0.f)
+        return;
+
+    /* 角标长度稍短，避免侧面看起来像“括号”，控制在 6~24 像素 */
+    gfloat corner_len = MIN(r->width, r->height) * 0.18f;
+    if (corner_len < 6.f)
+        corner_len = 6.f;
+    else if (corner_len > 24.f)
+        corner_len = 24.f;
+
+    guint len_px = float_to_uint_clamped(corner_len);
+    guint line_width = (fallback_line_width > 0) ? fallback_line_width : 2;
+    NvOSD_ColorParams color = r->border_color;
+
+    gfloat x1 = r->left;
+    gfloat y1 = r->top;
+    gfloat x2 = r->left + r->width;
+    gfloat y2 = r->top + r->height;
+
+    struct
+    {
+        gfloat x1, y1, x2, y2;
+    } segments[8] = {
+        {x1, y1, x1 + len_px, y1},
+        {x1, y1, x1, y1 + len_px},
+        {x2 - len_px, y1, x2, y1},
+        {x2, y1, x2, y1 + len_px},
+        {x1, y2, x1 + len_px, y2},
+        {x1, y2 - len_px, x1, y2},
+        {x2 - len_px, y2, x2, y2},
+        {x2, y2 - len_px, x2, y2},
+    };
+
+    for (guint i = 0; i < G_N_ELEMENTS(segments); ++i)
+    {
+        NvOSD_LineParams line = {0};
+        line.line_width = line_width;
+        line.line_color = color;
+        line.x1 = float_to_uint_clamped(segments[i].x1);
+        line.y1 = float_to_uint_clamped(segments[i].y1);
+        line.x2 = float_to_uint_clamped(segments[i].x2);
+        line.y2 = float_to_uint_clamped(segments[i].y2);
+        corner_writer_add_line(writer, &line);
+    }
+
+    /* 不再让 NVOSD 绘制封闭矩形，只保留自定义的角标线段。 */
+    obj_meta->rect_params.border_width = 0;
+    obj_meta->rect_params.has_bg_color = 0;
+}
+
 static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
                                  NvDsBatchMeta *batch_meta, guint index)
 {
@@ -1711,10 +1851,24 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
         NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)l_frame->data;
        prune_label_anchor_entries(appCtx, frame_meta->source_id,
                             frame_meta->frame_num);
+        CornerLineWriter corner_writer = {
+            .batch_meta = batch_meta,
+            .frame_meta = frame_meta,
+            .display_meta = NULL,
+        };
+        int frame_w = frame_meta->source_frame_width > 0
+                          ? frame_meta->source_frame_width
+                          : appCtx->config.streammux_config.pipeline_width;
+        int frame_h = frame_meta->source_frame_height > 0
+                          ? frame_meta->source_frame_height
+                          : appCtx->config.streammux_config.pipeline_height;
         for (NvDsMetaList *l_obj = frame_meta->obj_meta_list; l_obj != NULL;
              l_obj = l_obj->next)
         {
             NvDsObjectMeta *obj_meta = (NvDsObjectMeta *)l_obj->data;
+
+            /* 适度膨胀框，便于角标留出空间 */
+            inflate_rect(&obj_meta->rect_params, 1.25f, frame_w, frame_h);
 
             /* 构建完整标签：优先显示分类结果，否则显示检测类别 */
             GString *gstr = g_string_new(NULL);
@@ -1833,8 +1987,12 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
 
                 /* 统一策略：所有目标优先放在框外上方，避免遮挡
                  * 增加间距像素，确保标签背景不会覆盖目标框边界 */
+                /* 为文字留出与膨胀后框体成比例的额外间距，避免覆盖角框 */
                 int y;
-                int y_above = (int)obj_meta->rect_params.top - text_h - 15;
+                int extra_gap = (int)(obj_meta->rect_params.height * 0.05f);
+                if (extra_gap < 6)
+                    extra_gap = 6;
+                int y_above = (int)obj_meta->rect_params.top - text_h - 15 - extra_gap;
                 
                 if (y_above >= 0)
                 {
@@ -1845,7 +2003,7 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
                 {
                     /* 上方空间不足，尝试放在框下方，同样增加间距 */
                     int y_below = (int)(obj_meta->rect_params.top +
-                                       obj_meta->rect_params.height + 8);
+                                       obj_meta->rect_params.height + 8 + extra_gap);
                     if (y_below + text_h <= frame_h)
                     {
                         /* 框下方有空间 */
@@ -1966,8 +2124,12 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
                     anchor->last_frame = frame_meta->frame_num;
                 }
             }
+            /* 用 L 形角标代替封闭矩形框 */
+            render_corner_box(&corner_writer, obj_meta,
+                              appCtx->config.osd_config.border_width);
             g_string_free(gstr, TRUE);
         }
+        corner_writer_commit(&corner_writer);
     }
 
     /* NOTE: 显示单目标跟踪器的统计信息，包括跟踪ID和检测到的类别计数
