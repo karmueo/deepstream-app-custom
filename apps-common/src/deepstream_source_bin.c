@@ -698,6 +698,10 @@ static gpointer smart_record_callback(NvDsSRRecordingInfo *info,
         gchar      old_path[512];
         gchar      new_filename[512];
         gchar      new_path[512];
+        gchar      filename_no_ext[512];
+        gchar      formatted_time[32] = {0};
+        gchar     *timestamp_part = NULL;
+        gchar     *suffix = NULL;
         time_t     now = time(NULL);
         struct tm *t = localtime(&now);
 
@@ -707,14 +711,69 @@ static gpointer smart_record_callback(NvDsSRRecordingInfo *info,
 
         // 获取文件扩展名
         const gchar *ext = g_strrstr(info->filename, ".");
+        size_t       base_len =
+            ext ? (size_t)(ext - info->filename) : strlen(info->filename);
+        if (base_len >= sizeof(filename_no_ext))
+            base_len = sizeof(filename_no_ext) - 1;
+        memcpy(filename_no_ext, info->filename, base_len);
+        filename_no_ext[base_len] = '\0';
         if (!ext)
             ext = ".mp4"; // 默认扩展名
 
-        // 构建新文件名: Smart_Record_SessionID_YYYYMMDD-HH:MM:SS.ext
-        g_snprintf(new_filename, sizeof(new_filename),
-               "Smart_Record_%05u_%04d%02d%02d-%02d:%02d:%02d%s",
-               info->sessionId, t->tm_year + 1900, t->tm_mon + 1,
-               t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec, ext);
+        // 从原始文件名中提取时间与尾缀，避免同一秒重名导致重命名失败
+        int underscore_count = 0;
+        for (gchar *p = filename_no_ext; *p; p++)
+        {
+            if (*p == '_')
+            {
+                underscore_count++;
+                if (underscore_count == 3 && *(p + 1) != '\0')
+                {
+                    timestamp_part = p + 1;
+                    break;
+                }
+            }
+        }
+
+        if (timestamp_part)
+        {
+            gchar *suffix_pos = g_strrstr(timestamp_part, "_");
+            if (suffix_pos)
+            {
+                *suffix_pos = '\0';
+                suffix = suffix_pos + 1;
+            }
+            if (strlen(timestamp_part) == 15 && timestamp_part[8] == '-')
+            {
+                g_snprintf(formatted_time, sizeof(formatted_time),
+                           "%.4s%.2s%.2s-%.2s:%.2s:%.2s", timestamp_part,
+                           timestamp_part + 4, timestamp_part + 6,
+                           timestamp_part + 9, timestamp_part + 11,
+                           timestamp_part + 13);
+            }
+        }
+
+        // 兜底使用当前时间
+        if (formatted_time[0] == '\0')
+        {
+            g_snprintf(formatted_time, sizeof(formatted_time),
+                       "%04d%02d%02d-%02d:%02d:%02d", t->tm_year + 1900,
+                       t->tm_mon + 1, t->tm_mday, t->tm_hour, t->tm_min,
+                       t->tm_sec);
+        }
+
+        if (suffix && *suffix)
+        {
+            g_snprintf(new_filename, sizeof(new_filename),
+                       "Smart_Record_%05u_%s_%s%s", info->sessionId,
+                       formatted_time, suffix, ext);
+        }
+        else
+        {
+            g_snprintf(new_filename, sizeof(new_filename),
+                       "Smart_Record_%05u_%s%s", info->sessionId,
+                       formatted_time, ext);
+        }
 
         // 构建新文件的完整路径
         g_snprintf(new_path, sizeof(new_path), "%s/%s", info->dirpath,

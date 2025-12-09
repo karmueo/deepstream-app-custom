@@ -799,7 +799,6 @@ static gboolean gst_videorecognition_start(GstBaseTransform *btrans)
                 if (!line.empty())
                 {
                     (*labels)[class_id] = line;
-                    g_print("Loaded label [%d]: %s\n", class_id, line.c_str());
                     class_id++;
                 }
             }
