@@ -67,6 +67,12 @@ struct _Gstvideorecognition
     
     // 分类器 TensorRT 引擎路径（来自 trt-engine-name 属性）
     char trt_engine_name[512];
+    
+    // 类别标签文件路径
+    char labels_file[512];
+    
+    // 类别ID到类别名的映射 (void* to std::map<int, std::string> in C++)
+    void *labels_map;
 };
 
 struct _GstvideorecognitionClass

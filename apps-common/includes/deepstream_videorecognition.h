@@ -37,6 +37,7 @@ extern "C"
     guint model_type;
         guint model_sampling_rate;
         gchar *trt_engine_name; // TensorRT engine name
+        gchar *labels_file; // Path to labels file
     } NvDsVideoRecognitionConfig;
 
     // Struct to store references to the bin and elements
