@@ -684,7 +684,7 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
             {
                 gboolean should_trigger_recording = FALSE;
 
-                /* 如果启用单目标跟踪，需要连续3秒跟踪同一目标才触发录像 */
+                /* NOTE: 如果启用单目标跟踪和多帧识别，有识别结果时触发；否则需要连续3秒跟踪同一目标才触发录像 */
                 if (single_object_tracker)
                 {
                     guint64 current_object_id = obj_meta->object_id;
@@ -693,26 +693,55 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                     /* 标记当前帧有有效跟踪目标 */
                     has_valid_tracking_target = TRUE;
 
-                    /* 检查是否是同一个目标 */
-                    if (appCtx->is_tracking_continuous &&
-                        appCtx->last_tracked_object_id == current_object_id)
+                    /* 检查是否同时启用了多帧识别并且有分类结果 */
+                    gboolean has_videorecognition_result = FALSE;
+                    if (appCtx->config.videorecognition_config.enable && obj_meta->classifier_meta_list)
                     {
-                        /* 计算连续跟踪时长（秒） */
-                        gdouble tracking_duration_sec = 
-                            (gdouble)(current_time - appCtx->tracking_start_time) / GST_SECOND;
-                        
-                        if (tracking_duration_sec >= 3.0)
+                        for (NvDsClassifierMetaList *cl = obj_meta->classifier_meta_list;
+                             cl && !has_videorecognition_result; cl = cl->next)
                         {
-                            /* 已连续跟踪3秒以上，可以触发录像 */
-                            should_trigger_recording = TRUE;
+                            NvDsClassifierMeta *cl_meta = (NvDsClassifierMeta *)cl->data;
+                            for (NvDsLabelInfoList *ll = cl_meta->label_info_list;
+                                 ll && !has_videorecognition_result; ll = ll->next)
+                            {
+                                NvDsLabelInfo *li = (NvDsLabelInfo *)ll->data;
+                                if (li->result_label[0] != '\0' && li->result_prob > 0.5f)
+                                {
+                                    has_videorecognition_result = TRUE;
+                                }
+                            }
                         }
+                    }
+
+                    /* 如果有多帧识别结果，直接触发录像 */
+                    if (has_videorecognition_result)
+                    {
+                        should_trigger_recording = TRUE;
                     }
                     else
                     {
-                        /* 目标发生变化或首次跟踪，重置计时 */
-                        appCtx->tracking_start_time = current_time;
-                        appCtx->last_tracked_object_id = current_object_id;
-                        appCtx->is_tracking_continuous = TRUE;
+                        /* 否则使用原有的连续3秒跟踪逻辑 */
+                        /* 检查是否是同一个目标 */
+                        if (appCtx->is_tracking_continuous &&
+                            appCtx->last_tracked_object_id == current_object_id)
+                        {
+                            /* 计算连续跟踪时长（秒） */
+                            gdouble tracking_duration_sec = 
+                                (gdouble)(current_time - appCtx->tracking_start_time) / GST_SECOND;
+                            
+                            if (tracking_duration_sec >= 3.0)
+                            {
+                                /* 已连续跟踪3秒以上，可以触发录像 */
+                                should_trigger_recording = TRUE;
+                            }
+                        }
+                        else
+                        {
+                            /* 目标发生变化或首次跟踪，重置计时 */
+                            appCtx->tracking_start_time = current_time;
+                            appCtx->last_tracked_object_id = current_object_id;
+                            appCtx->is_tracking_continuous = TRUE;
+                        }
                     }
                 }
                 else
