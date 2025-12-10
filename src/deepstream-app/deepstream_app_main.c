@@ -157,43 +157,49 @@ static gboolean smart_record_event_generator(NvDsSrcBin *src_bin, const gchar *c
     if (src_bin->recordCtx && !src_bin->reconfiguring)
     {
         NvDsSRContext *ctx = (NvDsSRContext *)src_bin->recordCtx;
-        
-        /* 根据类别创建子文件夹路径 */
-        gchar *category_path = NULL;
-        gchar *original_dirpath = ctx->initParams.dirpath;
-        
-        if (class_label && class_label[0] != '\0')
+
+        /* 根据类别创建子文件夹路径，并确保回调使用的 dirpath 与实际录像目录一致 */
+        const gchar *base_dirpath = src_bin->config->dir_path;
+        gchar       *category_path = NULL;
+
+        /* 兼容未配置 dir_path 的情况，退回当前 initParams */
+        if (!base_dirpath)
+            base_dirpath = ctx->initParams.dirpath;
+
+        if (class_label && class_label[0] != '\0' && base_dirpath)
         {
             /* 构建类别子文件夹路径 */
-            category_path = g_build_filename(original_dirpath, class_label, NULL);
-            
+            category_path = g_build_filename(base_dirpath, class_label, NULL);
+
             /* 检查并创建类别文件夹（如果不存在） */
             if (g_mkdir_with_parents(category_path, 0755) != 0)
             {
-                g_print("Warning: Failed to create category directory: %s\n", category_path);
+                g_print("Warning: Failed to create category directory: %s\n",
+                        category_path);
                 g_free(category_path);
                 category_path = NULL;
             }
             else
             {
-                /* 临时更改录像路径到类别子文件夹 */
+                /* 将录像目录固定到类别子目录，让回调能解析到正确路径 */
+                g_free(ctx->initParams.dirpath);
                 ctx->initParams.dirpath = category_path;
             }
         }
-        
+        else if (base_dirpath &&
+                 g_strcmp0(ctx->initParams.dirpath, base_dirpath) != 0)
+        {
+            /* 无类别时恢复到基础目录 */
+            g_free(ctx->initParams.dirpath);
+            ctx->initParams.dirpath = g_strdup(base_dirpath);
+        }
+
         if (ctx->recordOn)
         {
             NvDsSRStop(ctx, 0);
         }
         NvDsSRStart(ctx, &sessId, startTime, duration, NULL);
-        
-        /* 恢复原始路径 */
-        if (category_path)
-        {
-            ctx->initParams.dirpath = original_dirpath;
-            g_free(category_path);
-        }
-        
+
         g_pending_request = TRUE;
         g_timeout_add(30000, on_cooldown_end, NULL);
     }
