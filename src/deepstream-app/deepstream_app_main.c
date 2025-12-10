@@ -1987,7 +1987,7 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
                 int extra_gap = (int)(obj_meta->rect_params.height * 0.05f);
                 if (extra_gap < 6)
                     extra_gap = 6;
-                int y_above = (int)obj_meta->rect_params.top - text_h - 15 - extra_gap;
+                int y_above = (int)obj_meta->rect_params.top - text_h - 24 - extra_gap;
                 
                 if (y_above >= 0)
                 {

@@ -1,6 +1,6 @@
 # Repository Guidelines
 
-本指南用于统一本仓库（DeepStream 流水线、自定义 GStreamer 插件、Triton 客户端）的贡献方式。
+本指南用于统一本仓库（DeepStream 流水线、自定义 GStreamer 插件、Triton 客户端）的贡献方式。回答用中文回复。
 
 ## Project Structure & Module Organization
 - 主应用：`src/deepstream-app/`（配置、DeepStream pipeline 源码、模型）。
