@@ -30,7 +30,7 @@ smart-rec-duration=30
 smart-rec-start-time=1
 
 [sink0]
-enable=0
+enable=1
 type=4
 sync=1
 source-id=0
