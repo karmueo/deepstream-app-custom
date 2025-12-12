@@ -104,7 +104,7 @@ make -C nvdsinfer_custom_impl_Yolo clean && make -C nvdsinfer_custom_impl_Yolo
 ```sh
 cd src/gst-udpmulticast_sink
 mkdir build && cd build
-cmake ..
+cmake -DCMAKE_BUILD_TYPE=Release ..
 cmake --build .
 sudo cmake --install .
 ```
@@ -113,7 +113,7 @@ sudo cmake --install .
 ```sh
 cd sot_plugin
 mkdir build && cd build
-cmake ..
+cmake -DCMAKE_BUILD_TYPE=Release ..
 cmake --build .
 sudo cmake --install .
 ```
@@ -122,7 +122,7 @@ sudo cmake --install .
 ```sh
 cd src/gst-videorecognition
 mkdir build && cd build
-cmake ..
+cmake -DCMAKE_BUILD_TYPE=Release ..
 cmake --build .
 sudo cmake --install .
 ```
@@ -221,7 +221,7 @@ sudo journalctl -u mosquitto.service
 ```sh
 cd /workspace/deepstream-app-custom/src/gst-videorecognition
 mkdir build && cd build
-cmake ..
+cmake -DCMAKE_BUILD_TYPE=Release ..
 cmake --build .
 cmake --install .
 ```

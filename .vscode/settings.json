@@ -8,6 +8,20 @@
             // "${workspaceFolder}/src/deepstream-app/configs/rgb_app_config.txt"
             "${workspaceFolder}/src/deepstream-app/configs/debug_rgb_app_config.txt"
         ],
+        "environment": [
+            {
+                "name": "GST_PLUGIN_PATH",
+                "value": "/opt/nvidia/deepstream/deepstream/lib/gst-plugins:${env:GST_PLUGIN_PATH}"
+            },
+            {
+                "name": "LD_LIBRARY_PATH",
+                "value": "/opt/nvidia/deepstream/deepstream/lib:${env:LD_LIBRARY_PATH}"
+            },
+            {
+                "name": "DISPLAY",
+                "value": "tl-Ai:10.0"
+            }
+        ]
     },
     "clangd.arguments": [
         "--compile-commands-dir=${workspaceFolder}/build",
