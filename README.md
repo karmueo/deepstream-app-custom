@@ -52,6 +52,9 @@ sudo apt-get -y install cuda-toolkit-12-9
 export CUDA_HOME=/usr/local/cuda
 export PATH=$CUDA_HOME/bin:$PATH
 export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
+
+# deepstream
+export LD_LIBRARY_PATH=/opt/nvidia/deepstream/deepstream/lib:/opt/nvidia/deepstream/deepstream/lib/gst-plugins:${LD_LIBRARY_PATH}
 "
 ```
 

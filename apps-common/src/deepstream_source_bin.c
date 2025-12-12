@@ -16,6 +16,7 @@
 #include <string.h>
 #include <time.h>
 #include <dirent.h>
+#include <stdlib.h>
 #include <sys/stat.h>
 
 #include "deepstream_common.h"
@@ -702,6 +703,14 @@ static gpointer smart_record_callback(NvDsSRRecordingInfo *info,
         gchar      formatted_time[32] = {0};
         gchar     *timestamp_part = NULL;
         gchar     *suffix = NULL;
+        /* 强制使用北京时间/上海时区，避免系统默认时区不一致 */
+        static volatile gsize tz_inited = 0;
+        if (g_once_init_enter(&tz_inited))
+        {
+            setenv("TZ", "Asia/Shanghai", 1);
+            tzset();
+            g_once_init_leave(&tz_inited, 1);
+        }
         time_t     now = time(NULL);
         struct tm *t = localtime(&now);
 
@@ -746,7 +755,7 @@ static gpointer smart_record_callback(NvDsSRRecordingInfo *info,
             if (strlen(timestamp_part) == 15 && timestamp_part[8] == '-')
             {
                 g_snprintf(formatted_time, sizeof(formatted_time),
-                           "%.4s%.2s%.2s-%.2s:%.2s:%.2s", timestamp_part,
+                           "%.4s%.2s%.2s-%.2s-%.2s-%.2s", timestamp_part,
                            timestamp_part + 4, timestamp_part + 6,
                            timestamp_part + 9, timestamp_part + 11,
                            timestamp_part + 13);
@@ -757,7 +766,7 @@ static gpointer smart_record_callback(NvDsSRRecordingInfo *info,
         if (formatted_time[0] == '\0')
         {
             g_snprintf(formatted_time, sizeof(formatted_time),
-                       "%04d%02d%02d-%02d:%02d:%02d", t->tm_year + 1900,
+                       "%04d%02d%02d-%02d-%02d-%02d", t->tm_year + 1900,
                        t->tm_mon + 1, t->tm_mday, t->tm_hour, t->tm_min,
                        t->tm_sec);
         }

@@ -15,6 +15,7 @@
 #include "gst-nvdssr.h"
 #include "nvds_version.h"
 #include "nvdsmeta_schema.h"
+#include "nvbufsurftransform.h"
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <cuda_runtime_api.h>
@@ -1812,6 +1813,244 @@ render_corner_box(CornerLineWriter *writer, NvDsObjectMeta *obj_meta, guint fall
     obj_meta->rect_params.has_bg_color = 0;
 }
 
+static NvDsObjectMeta *select_primary_object(NvDsFrameMeta *frame_meta)
+{
+    NvDsObjectMeta *best = NULL;
+    gfloat          best_conf = -1.f;
+    for (NvDsMetaList *l_obj = frame_meta->obj_meta_list; l_obj;
+         l_obj = l_obj->next)
+    {
+        NvDsObjectMeta *obj_meta = (NvDsObjectMeta *)l_obj->data;
+        if (!obj_meta || obj_meta->rect_params.width <= 0.f ||
+            obj_meta->rect_params.height <= 0.f)
+        {
+            continue;
+        }
+        if (obj_meta->confidence > best_conf)
+        {
+            best_conf = obj_meta->confidence;
+            best = obj_meta;
+        }
+    }
+    return best;
+}
+
+static NvBufSurface *acquire_thumbnail_surface(const NvBufSurface *ref_surf,
+                                               guint               width,
+                                               guint               height)
+{
+    static NvBufSurface           *s_thumb_surf = NULL;
+    static int                     s_gpu_id = -1;
+    static NvBufSurfaceMemType     s_mem_type = NVBUF_MEM_DEFAULT;
+    static NvBufSurfaceColorFormat s_color_fmt = NVBUF_COLOR_FORMAT_INVALID;
+    static NvBufSurfaceLayout      s_layout = NVBUF_LAYOUT_PITCH;
+    static guint                   s_width = 0, s_height = 0;
+
+    NvBufSurfaceColorFormat color_fmt = ref_surf->surfaceList[0].colorFormat;
+    NvBufSurfaceLayout      layout = ref_surf->surfaceList[0].layout;
+    NvBufSurfaceMemType     mem_type = ref_surf->memType;
+    int                     gpu_id = ref_surf->gpuId;
+
+    gboolean need_recreate = (s_thumb_surf == NULL) || (s_width != width) ||
+                             (s_height != height) || (s_gpu_id != gpu_id) ||
+                             (s_mem_type != mem_type) ||
+                             (s_color_fmt != color_fmt) || (s_layout != layout);
+
+    if (need_recreate && s_thumb_surf)
+    {
+        NvBufSurfaceDestroy(s_thumb_surf);
+        s_thumb_surf = NULL;
+    }
+
+    if (!s_thumb_surf)
+    {
+        NvBufSurfaceCreateParams params;
+        memset(&params, 0, sizeof(params));
+        params.gpuId = gpu_id;
+        params.width = width;
+        params.height = height;
+        params.size = 0;
+        params.colorFormat = color_fmt;
+        params.layout = layout;
+        params.memType = mem_type;
+        if (NvBufSurfaceCreate(&s_thumb_surf, 1, &params) != 0)
+        {
+            g_printerr("Failed to create thumbnail surface %ux%u (gpu %d)\n",
+                       width, height, gpu_id);
+            return NULL;
+        }
+        s_gpu_id = gpu_id;
+        s_mem_type = mem_type;
+        s_color_fmt = color_fmt;
+        s_layout = layout;
+        s_width = width;
+        s_height = height;
+    }
+
+    s_thumb_surf->numFilled = s_thumb_surf->batchSize = 1;
+    return s_thumb_surf;
+}
+
+/**
+ * @brief 在底图右下角叠加以目标为中心的缩略图。
+ *
+ * 处理流程：
+ * 1) 以目标中心裁剪 64x64（对齐偶数并裁边界）；
+ * 2) 缩放到 224x224；
+ * 3) 贴到底图右下角并绘制边框。
+ *
+ * @param batch_surf  当前批次的 NvBufSurface（NVMM）。
+ * @param batch_meta  当前批次的元数据，用于申请显示元数据绘制边框。
+ * @param frame_meta  当前帧元数据，提供尺寸与 batch_id。
+ * @param obj_meta    目标元数据，提供中心点。
+ */
+static void overlay_thumbnail_to_corner(NvBufSurface *batch_surf,
+                                        NvDsBatchMeta *batch_meta,
+                                        NvDsFrameMeta *frame_meta,
+                                        NvDsObjectMeta *obj_meta)
+{
+    if (!batch_surf || !frame_meta || !obj_meta)
+        return;
+    if (frame_meta->batch_id >= batch_surf->batchSize)
+        return;
+
+    NvBufSurface frame_surf = *batch_surf;
+    frame_surf.numFilled = frame_surf.batchSize = 1;
+    frame_surf.surfaceList = &batch_surf->surfaceList[frame_meta->batch_id];
+
+    guint frame_w = frame_surf.surfaceList[0].width;
+    guint frame_h = frame_surf.surfaceList[0].height;
+    if (frame_w == 0 || frame_h == 0)
+        return;
+
+    guint patch_w = MIN((guint)224, frame_w);
+    guint patch_h = MIN((guint)224, frame_h);
+    patch_w = GST_ROUND_DOWN_2(patch_w);
+    patch_h = GST_ROUND_DOWN_2(patch_h);
+    if (patch_w == 0 || patch_h == 0)
+        return;
+
+    NvBufSurface *patch_surf =
+        acquire_thumbnail_surface(&frame_surf, patch_w, patch_h);
+    if (!patch_surf)
+        return;
+    NvBufSurfaceMemSet(patch_surf, 0, 0, 0);
+
+    gfloat center_x =
+        obj_meta->rect_params.left + (obj_meta->rect_params.width * 0.5f);
+    gfloat center_y =
+        obj_meta->rect_params.top + (obj_meta->rect_params.height * 0.5f);
+
+    gint src_w = MIN((guint)64, frame_w);
+    gint src_h = MIN((guint)64, frame_h);
+    gint src_left = (gint)(center_x - (src_w / 2));
+    gint src_top = (gint)(center_y - (src_h / 2));
+
+    if (src_left < 0)
+        src_left = 0;
+    if (src_top < 0)
+        src_top = 0;
+    if (src_left + src_w > (gint)frame_w)
+        src_left = (gint)frame_w - src_w;
+    if (src_top + src_h > (gint)frame_h)
+        src_top = (gint)frame_h - src_h;
+
+    src_left = GST_ROUND_UP_2(src_left);
+    src_top = GST_ROUND_UP_2(src_top);
+    src_w = GST_ROUND_DOWN_2(src_w);
+    src_h = GST_ROUND_DOWN_2(src_h);
+    if (src_left + src_w > (gint)frame_w)
+        src_left = (gint)frame_w - src_w;
+    if (src_top + src_h > (gint)frame_h)
+        src_top = (gint)frame_h - src_h;
+    if (src_w == 0 || src_h == 0)
+        return;
+
+    NvBufSurfTransformConfigParams config_params;
+    memset(&config_params, 0, sizeof(config_params));
+    config_params.compute_mode = NvBufSurfTransformCompute_Default;
+    config_params.gpu_id = frame_surf.gpuId;
+    config_params.cuda_stream = NULL;
+    if (NvBufSurfTransformSetSessionParams(&config_params) !=
+        NvBufSurfTransformError_Success)
+    {
+        static volatile gsize warn_once = 0;
+        if (g_once_init_enter(&warn_once))
+        {
+            g_printerr("NvBufSurfTransformSetSessionParams failed for "
+                       "thumbnail overlay\n");
+            g_once_init_leave(&warn_once, 1);
+        }
+        return;
+    }
+
+    NvBufSurfTransformRect src_rect = {(uint32_t)src_top, (uint32_t)src_left,
+                                       (uint32_t)src_w, (uint32_t)src_h};
+    NvBufSurfTransformRect dst_rect = {0, 0, patch_w, patch_h};
+    NvBufSurfTransformParams params;
+    memset(&params, 0, sizeof(params));
+    params.src_rect = &src_rect;
+    params.dst_rect = &dst_rect;
+    params.transform_flag = NVBUFSURF_TRANSFORM_CROP_SRC |
+                            NVBUFSURF_TRANSFORM_CROP_DST |
+                            NVBUFSURF_TRANSFORM_FILTER;
+    params.transform_filter = NvBufSurfTransformInter_Bilinear;
+
+    if (NvBufSurfTransform(&frame_surf, patch_surf, &params) !=
+        NvBufSurfTransformError_Success)
+    {
+        static volatile gsize warn_once = 0;
+        if (g_once_init_enter(&warn_once))
+        {
+            g_printerr("NvBufSurfTransform failed when cropping thumbnail\n");
+            g_once_init_leave(&warn_once, 1);
+        }
+        return;
+    }
+
+    gint dst_left = (gint)frame_w - (gint)patch_w;
+    gint dst_top = (gint)frame_h - (gint)patch_h;
+    if (dst_left < 0)
+        dst_left = 0;
+    if (dst_top < 0)
+        dst_top = 0;
+    dst_left = GST_ROUND_DOWN_2(dst_left);
+    dst_top = GST_ROUND_DOWN_2(dst_top);
+
+    NvBufSurfTransformRect dst_rect_frame = {
+        (uint32_t)dst_top, (uint32_t)dst_left, patch_w, patch_h};
+    NvBufSurfTransformRect src_rect_patch = {0, 0, patch_w, patch_h};
+    NvBufSurfTransformParams paste_params;
+    memset(&paste_params, 0, sizeof(paste_params));
+    paste_params.src_rect = &src_rect_patch;
+    paste_params.dst_rect = &dst_rect_frame;
+    paste_params.transform_flag = NVBUFSURF_TRANSFORM_CROP_SRC |
+                                  NVBUFSURF_TRANSFORM_CROP_DST |
+                                  NVBUFSURF_TRANSFORM_FILTER;
+    paste_params.transform_filter = NvBufSurfTransformInter_Bilinear;
+
+    NvBufSurfTransform(patch_surf, &frame_surf, &paste_params);
+
+    if (batch_meta)
+    {
+        NvDsDisplayMeta *dmeta =
+            nvds_acquire_display_meta_from_pool(batch_meta);
+        if (dmeta)
+        {
+            dmeta->num_rects = 1;
+            dmeta->rect_params[0].left = (int)dst_left;
+            dmeta->rect_params[0].top = (int)dst_top;
+            dmeta->rect_params[0].width = patch_w;
+            dmeta->rect_params[0].height = patch_h;
+            dmeta->rect_params[0].border_width = 3;
+            dmeta->rect_params[0].border_color = (NvOSD_ColorParams){
+                0.8f, 0.8f, 0.0f, 1.f};
+            dmeta->rect_params[0].has_bg_color = 0;
+            nvds_add_display_meta_to_frame(frame_meta, dmeta);
+        }
+    }
+}
+
 static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
                                  NvDsBatchMeta *batch_meta, guint index)
 {
@@ -1848,6 +2087,15 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
             }
             g_free(ll_cfg_lower);
         }
+    }
+
+    GstMapInfo   surf_map = GST_MAP_INFO_INIT;
+    NvBufSurface *batch_surf = NULL;
+    gboolean      mapped_surface = FALSE;
+    if (gst_buffer_map(buf, &surf_map, GST_MAP_READ))
+    {
+        batch_surf = (NvBufSurface *)surf_map.data;
+        mapped_surface = TRUE;
     }
 
     /* 为每个对象生成完整的检测+分类标签(概率)文本，覆盖原来的
@@ -2131,102 +2379,20 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
             g_string_free(gstr, TRUE);
         }
         corner_writer_commit(&corner_writer);
-    }
 
-    /* NOTE: 显示单目标跟踪器的统计信息，包括跟踪ID和检测到的类别计数
-     * 仅在没有分类结果时显示 */
-    if (!has_any_classification && single_object_tracker && appCtx->tracker_stats_valid &&
-        appCtx->tracker_stats_counts &&
-        g_hash_table_size(appCtx->tracker_stats_counts) > 0)
-    {
-        NvDsFrameMeta *stats_frame =
-            nvds_get_nth_frame_meta(batch_meta->frame_meta_list, 0);
-        if (stats_frame)
+        if (batch_surf)
         {
-            NvDsDisplayMeta *stats_meta =
-                nvds_acquire_display_meta_from_pool(batch_meta);
-            stats_meta->num_labels = 1;
-
-            GString *stats_str = g_string_new(NULL);
-            /* 添加跟踪ID */
-            g_string_append_printf(stats_str, "Tracker ID: %" G_GUINT64_FORMAT,
-                                   appCtx->tracker_stats_current_id);
-
-            GHashTableIter iter;
-            gpointer       key, value;
-            g_hash_table_iter_init(&iter, appCtx->tracker_stats_counts);
-            /* 遍历统计表，添加每个类别的计数 */
-            while (g_hash_table_iter_next(&iter, &key, &value))
+            NvDsObjectMeta *thumb_obj = select_primary_object(frame_meta);
+            if (thumb_obj)
             {
-                guint count = *((guint *)value);
-                g_string_append_printf(stats_str, "\n%s: %u",
-                                       (gchar *)key, count);
+                overlay_thumbnail_to_corner(batch_surf, batch_meta, frame_meta,
+                                            thumb_obj);
             }
-
-            stats_meta->text_params[0].display_text =
-                g_string_free(stats_str, FALSE);
-            stats_meta->text_params[0].set_bg_clr = 1;
-            /* 设置半透明黑色背景 */
-            stats_meta->text_params[0].text_bg_clr =
-                (NvOSD_ColorParams){0.f, 0.f, 0.f, 0.6f};
-            /* 设置白色字体 */
-            stats_meta->text_params[0].font_params.font_color =
-                (NvOSD_ColorParams){1.f, 1.f, 1.f, 1.f};
-            stats_meta->text_params[0].font_params.font_size =
-                appCtx->config.osd_config.text_size > 0
-                    ? appCtx->config.osd_config.text_size
-                    : 14;
-            stats_meta->text_params[0].font_params.font_name = "Serif";
-
-            /* 计算文本位置：右下角，动态估算尺寸避免被裁剪 */
-            int frame_w = stats_frame->source_frame_width > 0
-                              ? stats_frame->source_frame_width
-                              : appCtx->config.streammux_config.pipeline_width;
-            int frame_h = stats_frame->source_frame_height > 0
-                              ? stats_frame->source_frame_height
-                              : appCtx->config.streammux_config.pipeline_height;
-            if (frame_w <= 0) frame_w = 1920;
-            if (frame_h <= 0) frame_h = 1080;
-            /* 使用左右/上下分离的 margin，便于单独调整底部偏移（上移） */
-            const int margin_right = 20; /* 右侧边距（不常改） */
-            const int margin_bottom = 60; /* 底部边距，增大可整体上移显示（默认20 -> 60）*/
-            const int margin_top = 20; /* 顶部最小间距，防止移动太靠上被裁剪 */
-            int font_size = stats_meta->text_params[0].font_params.font_size;
-            if (font_size <= 0) font_size = 14;
-            const char *txt = stats_meta->text_params[0].display_text ? stats_meta->text_params[0].display_text : "";
-            int lines = 1;
-            int longest = 0, current = 0;
-            for (const char *p = txt; *p; ++p) {
-                if (*p == '\n') { lines++; if (current > longest) longest = current; current = 0; }
-                else current++;
-            }
-            if (current > longest) longest = current;
-            /* 更保守的字符宽估算，避免背景右侧超出 */
-            float char_w = font_size * 0.60f; /* 放大系数以匹配渲染实际宽度 */
-            int text_w = (int)(longest * char_w) + 20; /* 内边距微增 */
-            int line_height = font_size + 6; /* 行间距 */
-            int block_h = lines * line_height + 10; /* 上下内边距微增 */
-            int x_offset = frame_w - text_w - margin_right;
-            if (x_offset + text_w + margin_right > frame_w) {
-                /* 再次左移确保完全在帧内 */
-                x_offset = frame_w - text_w - margin_right;
-            }
-            if (x_offset < margin_right) x_offset = margin_right;
-            int y_offset = frame_h - block_h - margin_bottom;
-            if (y_offset + block_h + margin_bottom > frame_h) {
-                y_offset = frame_h - block_h - margin_bottom;
-            }
-            if (y_offset < margin_top) y_offset = margin_top;
-            stats_meta->text_params[0].x_offset = x_offset;
-            stats_meta->text_params[0].y_offset = y_offset;
-
-            /* 将显示元数据添加到帧中 */
-            nvds_add_display_meta_to_frame(stats_frame, stats_meta);
         }
     }
 
     if (srcIndex == -1)
-        return TRUE;
+        goto done;
 
     NvDsFrameLatencyInfo *latency_info = NULL;
     NvDsDisplayMeta      *display_meta =
@@ -2272,6 +2438,9 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
 
     nvds_add_display_meta_to_frame(
         nvds_get_nth_frame_meta(batch_meta->frame_meta_list, 0), display_meta);
+done:
+    if (mapped_surface)
+        gst_buffer_unmap(buf, &surf_map);
     return TRUE;
 }
 
