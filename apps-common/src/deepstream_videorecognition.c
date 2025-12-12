@@ -101,8 +101,6 @@ create_dsvideorecognition_bin(NvDsVideoRecognitionConfig *config, NvDsVideoRecog
     {
         g_object_set(G_OBJECT(bin->elem_dsvideorecognition), "batch-size", config->batch_size, NULL);
     }
-    // model-type 0: multi-frame image classification (per-object windowed), 1: video recognition (temporal clips)
-    g_object_set(G_OBJECT(bin->elem_dsvideorecognition), "model-type", config->model_type, NULL);
     g_object_set(G_OBJECT(bin->pre_conv), "gpu-id", config->gpu_id, NULL);
 
     g_object_set(G_OBJECT(bin->pre_conv), "nvbuf-memory-type",

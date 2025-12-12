@@ -244,8 +244,6 @@ processing-width=32
 processing-height=32
 model-clip-length=8
 num-clips=4
-# model-type: 0=multi-frame image classification (默认), 1=video recognition
-model-type=0
 trt-engine-file=/workspace/deepstream-app-custom/src/deepstream-app/models/yolov11m_classify_ir_b4_v2_fp16.engine
 
 # 新增的 UDP Multicast 源配置示例

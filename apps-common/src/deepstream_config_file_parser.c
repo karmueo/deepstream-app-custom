@@ -1239,13 +1239,6 @@ parse_videorecognition(NvDsVideoRecognitionConfig *config, GKeyFile *key_file)
                                        "num-clips", &error);
             CHECK_ERROR(error);
         }
-        else if (!g_strcmp0(*key, "model-type"))
-        {
-            config->model_type =
-                g_key_file_get_integer(key_file, CONFIG_GROUP_VIDEORECOGNITION,
-                                       "model-type", &error);
-            CHECK_ERROR(error);
-        }
         else if (!g_strcmp0(*key, "sampling-rate"))
         {
             config->model_sampling_rate =
