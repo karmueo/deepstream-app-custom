@@ -23,7 +23,7 @@ rtsp-reconnect-attempts=-1
 latency=300
 select-rtp-protocol=4
 smart-record=3
-smart-rec-dir-path=/home/tl/data2/smart_rec_rgb
+smart-rec-dir-path=/home/tl/data/smart_rec_rgb
 smart-rec-default-duration=180
 smart-rec-retention-days=3
 smart-rec-duration=30
@@ -72,7 +72,7 @@ enable=1
 type=7
 ip=230.1.8.31
 multicast-port=8128
-# 指定组播网卡名称，例如: eth0, enp5s0, ens33 等
+# NOTE: 通过ip a 查看网卡，指定组播网卡名称，例如: 福州：enp3s0, 训练：enp5s0, 110：ens33 等
 multicast-iface=enp3s0
 # multicast-ttl=32
 fps=2  # 可选参数，不配置时默认为25
@@ -163,23 +163,6 @@ display-tracking-id=1
 # 启用单目标跟踪类别计数更新功能：1=启用（默认），0=关闭
 enable-class-count-update=1
 
-# [secondary-pre-process0]
-# enable=0
-# operate-on-gie-id=1
-# config-file=config_preprocess_rgb_sgie.txt
-
-[secondary-gie0]
-enable=0
-#(0): nvinfer; (1): nvinferserver
-plugin-type=0
-# Use preprocessed input tensors attached as metadata by nvdspreprocess plugin instead of preprocessing inside the nvinfer.
-input-tensor-meta=0
-# nvinferserserver's gpu-id can only set from its own config-file
-gie-unique-id=4
-operate-on-gie-id=1
-operate-on-class-ids=0;1;2
-config-file=config_infer_secondary_rgb_classify.txt
-
 [videorecognition]
 enable=1
 unique-id=15
@@ -189,12 +172,12 @@ processing-width=64
 processing-height=64
 model-clip-length=32
 sampling-rate=5
-trt-engine-file=/opt/nvidia/deepstream/deepstream/deepstream-app-custom/gst-videorecognition/models/x3d_v6_4cls_fp16.engine
+trt-engine-file=/opt/nvidia/deepstream/deepstream/deepstream-app-custom/gst-videorecognition/models/x3d_v6_4cls_fp32.engine
 labels-file=/opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/cls_labels.txt
 
-# Configure this group to enable cloud message consumer.
+# NOTE: 不用暂时关闭。Configure this group to enable cloud message consumer.
 [message-consumer]
-enable=1
+enable=0
 proto-lib=/opt/nvidia/deepstream/deepstream/lib/libnvds_mqtt_proto.so
 conn-str=127.0.0.1;1883
 # config-file=cfg_mqtt.txt
