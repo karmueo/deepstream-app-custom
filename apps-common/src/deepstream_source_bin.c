@@ -1029,6 +1029,8 @@ static gboolean watch_source_status(gpointer data)
                                        "sec. Trying reconnection",
                                        src_bin->bin_id,
                                        time_since_last_buf_sec);
+                    // 标记为正在重建，避免在同一阶段重复重连
+                    src_bin->reconfiguring = TRUE;
                     reset_source_pipeline(src_bin);
                 }
                 else

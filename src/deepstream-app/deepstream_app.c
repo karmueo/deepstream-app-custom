@@ -391,14 +391,21 @@ bus_callback(GstBus *bus, GstMessage *message, gpointer data)
         {
             // Error from one of RTSP source.
             NvDsSrcBin *subBin = &bin->sub_bins[i];
-
-            // 直接退出
-            /* if (!subBin->reconfiguring ||
-                g_strrstr(debuginfo, "500 (Internal Server Error)"))
+            // 如果配置了无限重连（-1），则不要退出，直接触发重连
+            if (subBin->config &&
+                subBin->config->rtsp_reconnect_attempts == -1)
             {
-                subBin->reconfiguring = TRUE;
-                g_timeout_add(0, reset_source_pipeline, subBin);
-            } */
+                if (!subBin->reconfiguring)
+                {
+                    subBin->reconfiguring = TRUE;
+                    g_timeout_add(0, reset_source_pipeline, subBin);
+                }
+                g_error_free(error);
+                g_free(debuginfo);
+                return TRUE;
+            }
+
+            // 默认行为：退出
             g_error_free(error);
             g_free(debuginfo);
             appCtx->return_value = 0;

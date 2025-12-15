@@ -45,3 +45,6 @@ cmake -B build -S ./src/deepstream-app/ && cmake --build build && sudo cmake --i
 - 不要提交模型二进制或密钥，需放入本地 `triton_model/` 目录自行引用。
 - 调试前确认驱动/CUDA/TensorRT 版本满足 README 要求。
 - 将多播/RTSP 等地址放配置文件，提交时勿暴露内部地址。
+
+## 回答说明
+所有回答使用中文回复。
