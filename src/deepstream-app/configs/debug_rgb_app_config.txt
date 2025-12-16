@@ -27,8 +27,8 @@ smart-record=3
 smart-rec-dir-path=../smart_rec_rgb
 smart-rec-default-duration=180
 smart-rec-retention-days=7
-smart-rec-duration=30
-smart-rec-start-time=3
+#smart-rec-duration=20
+#smart-rec-start-time=5
 
 [sink0]
 enable=1
@@ -73,8 +73,8 @@ enable=1
 type=7
 ip=230.1.8.31
 multicast-port=8128
-# NOTE: 通过ip a 查看网卡，指定组播网卡名称，例如: eth0, enp5s0, ens33 等
-multicast-iface=enp5s0
+# 指定组播网卡名称，例如: eth0, enp5s0, ens33 等
+multicast-iface=eno2
 # multicast-ttl=32
 fps=30  # 可选参数，不配置时默认为25
 
@@ -190,10 +190,10 @@ processing-width=64
 processing-height=64
 model-clip-length=32
 sampling-rate=5
-trt-engine-file=/opt/nvidia/deepstream/deepstream/deepstream-app-custom/gst-videorecognition/models/x3d_v6_4cls_fp32.engine
-labels-file=/opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/cls_labels.txt
+trt-engine-file=/opt/nvidia/deepstream/deepstream/deepstream-app-custom/gst-videorecognition/models/x3d_3classes_v4_fp32.engine
+labels-file=/opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/labels.txt
 
-# NOTE: 暂时关闭Configure this group to enable cloud message consumer.
+# Configure this group to enable cloud message consumer.
 [message-consumer]
 enable=0 
 proto-lib=/opt/nvidia/deepstream/deepstream/lib/libnvds_mqtt_proto.so
