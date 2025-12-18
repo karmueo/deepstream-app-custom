@@ -235,29 +235,36 @@ make
 ```json
 {
     ...
-    "makefile.makeDirectory": "src/deepstream-app",
-    "makefile.launchConfigurations": [
-        {
-            "cwd": "/workspace/deepstream-app-custom/src/deepstream-app",
-            "binaryPath": "/workspace/deepstream-app-custom/src/deepstream-app/deepstream-app",
-            "binaryArgs": [
-                "-c",
-                "/workspace/deepstream-app-custom/src/deepstream-app/configs/ir_app_config.txt"
-            ]
-        }
-    ],
+    "cmake.ignoreCMakeListsMissing": true,
+    "cmake.sourceDirectory": "${workspaceFolder}/src/deepstream-app/CMakeLists.txt",
+    "cmake.debugConfig": {
+        "args": [
+            "-c",
+            "${workspaceFolder}/src/deepstream-app/configs/yml/app_config.yml"
+        ],
+        "environment": [
+            {
+                "name": "GST_PLUGIN_PATH",
+                "value": "/opt/nvidia/deepstream/deepstream/lib/gst-plugins:${env:GST_PLUGIN_PATH}"
+            },
+            {
+                "name": "LD_LIBRARY_PATH",
+                "value": "/opt/nvidia/deepstream/deepstream/lib:${env:LD_LIBRARY_PATH}"
+            },
+            {
+                "name": "DISPLAY",
+                "value": "tl-Ai:10.0"
+            }
+        ]
+    },
     ...
 }
 ```
 # 3. 准备模型
 ## 目标检测模型
 把目标检测模型onnx文件放入src/deepstream-app/models目录下，根据实际的模型名称修改下面的参数：
-动态 batch: ./convert2trt.sh <ONNX_PATH> <ENGINE_PATH> dynamic [min_batch] [opt_batch] [max_batch] [fp16]
-```sh
-./convert2trt.sh yolov11m_detect_ir_640_v2.onnx yolov11m_detect_ir_640_b4_v2_fp16.engine fp16
-./convert2trt.sh yolov11m_detect_rgb_640_v7.onnx yolov11m_detect_rgb_640_v7_b5_fp16.engine fp16
-```
-然后根据实际的engine文件名修改src/deepstream-app/configs/config_infer_primary_yoloV11.txt中model-engine-file的值
+动态 batch: ./convert2trt.sh <ONNX_PATH> <ENGINE_PATH> [fp16]
+然后根据实际的engine文件名修改`src/deepstream-app/configs/yml/config_infer_primary_yoloV11_rgb.yml`中`model-engine-file`的值
 
 <!-- 参考https://github.com/laugh12321/TensorRT-YOLO/tree/main安装trtyolo cli
 转换为end2end.onnx模型
@@ -273,31 +280,18 @@ trtyolo export -w yolov11.pt -v ultralytics -o output --max_boxes 100 --iou_thre
 ```
  -->
 
-## 二次分类模型
-把分类模型比如yolov11m_classify_rgb_b4_v2.onnx放到src/deepstream-app/models目录下，根据实际的模型名称修改下面的参数：
-```bash
-./convert2trt.sh yolov11m_classify_rgb_b4_v2.onnx yolov11m_classify_rgb_b4_v2_fp16.engine fp16
-./convert2trt.sh yolov11m_classify_ir_b4_v2.onnx yolov11m_classify_ir_b4_v2_fp16.engine fp16
-```
-
 ## 单目标跟踪模型
-把模型sutrack.onnx文件放入src/sot_plugin/models目录下，
+把onnx模型文件放入`src/sot_plugin/models`目录下，
 
 ```sh
 # 用法: ./convert2trt.sh <ONNX_PATH> <ENGINE_PATH> [fp16]
 # 例如: 
-./convert2trt.sh ostrack-384-ep300-ce.onnx ostrack-384-ep300-ce_fp16.engine fp16
-./convert2trt.sh sutrack.onnx sutrack_fp32.engine
 ./convert2trt.sh mixformerv2_online_base.onnx mixformerv2_online_base_fp32.engine
 ./convert2trt.sh mixformerv2_online_small.onnx mixformerv2_online_base_fp16.engine fp16
-./convert2trt.sh mixformerv2_online_small.onnx mixformerv2_online_small_fp32.engine
 ```
 
 ## 多帧识别模型
-把onnx模型如model_simplified.onnx放到src/gst-videorecognition/models目录下，
-```sh
-./convert2trt.sh model_simplified.onnx x3d_fp32.engine
-```
+把onnx模型如放到`src/gst-videorecognition/models`目录下，使用`./convert2trt.sh`转换，类似前面的转换操作
 
 # 4.开机自启动
 
@@ -305,7 +299,7 @@ trtyolo export -w yolov11.pt -v ultralytics -o output --max_boxes 100 --iou_thre
 将如下命令作为 systemd 服务开机自启动：
 
 ```bash
-/opt/nvidia/deepstream/deepstream/bin/deepstream-app -c /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/rgb_app_config.txt
+/opt/nvidia/deepstream/deepstream/bin/deepstream-app -c /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/yml/app_config.yml
 ```
 
 步骤如下：
@@ -325,7 +319,7 @@ Type=simple
 User=tl
 Group=tl
 WorkingDirectory=/opt/nvidia/deepstream/deepstream
-ExecStart=/opt/nvidia/deepstream/deepstream/bin/deepstream-app -c /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/rgb_app_config.txt
+ExecStart=/opt/nvidia/deepstream/deepstream/bin/deepstream-app -c /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/yml/app_config.yml
 Restart=always
 RestartSec=30
 

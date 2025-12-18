@@ -1,0 +1,2 @@
+enable,type,uri,num-sources,gpu-id,cudadec-memtype,rtsp-reconnect-interval-sec,rtsp-reconnect-attempts,select-rtp-protocol,smart-record,smart-rec-dir-path,smart-rec-duration,smart-rec-start-time
+1,4,rtsp://192.168.1.80/live/rgb,1,0,0,3,-1,0,3,../../smart_rec_rgb,30,3
