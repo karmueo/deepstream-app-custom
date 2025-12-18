@@ -345,8 +345,8 @@ create_mynework_bin(NvDsMyNetworkConfig *config,
      * 在队列上设置阈值以避免在网络上时管道阻塞
      * leaky=1 队列满时丢弃最旧的数据
      */
-    g_object_set(G_OBJECT(bin->queue), "leaky", 1, NULL);
-    g_object_set(G_OBJECT(bin->queue), "max-size-buffers", 20, NULL);
+    g_object_set(G_OBJECT(bin->queue), "leaky", 1, "max-size-buffers", 20,
+                 "max-size-bytes", 0, "max-size-time", 0, NULL);
     g_signal_connect(G_OBJECT(bin->queue), "overrun",
                      G_CALLBACK(broker_queue_overrun), bin);
 
@@ -365,6 +365,14 @@ create_mynework_bin(NvDsMyNetworkConfig *config,
     {
         NVGSTDS_ERR_MSG_V("Failed to create '%s'", elem_name);
         goto done;
+    }
+
+    /* 避免组播网络异常时阻塞主干，转换队列也设为泄压模式 */
+    if (g_strcmp0(gst_element_get_name(bin->transform), "queue") == 0)
+    {
+        g_object_set(G_OBJECT(bin->transform), "leaky", 2,
+                     "max-size-buffers", 5, "max-size-bytes", 0,
+                     "max-size-time", 0, NULL);
     }
 
     // 如果启用消息转换器，则设置其属性
@@ -387,6 +395,9 @@ create_mynework_bin(NvDsMyNetworkConfig *config,
         NVGSTDS_ERR_MSG_V("Failed to create '%s'", elem_name);
         goto done;
     }
+    /* 组播 sink 不与时钟同步，避免阻塞 tee 分支 */
+    g_object_set(G_OBJECT(bin->sink), "sync", FALSE, "async", FALSE,
+                 "qos", FALSE, "enable-last-sample", FALSE, NULL);
     // 设置其属性
     // g_object_set(G_OBJECT(bin->sink), "proto-lib", config->proto_lib,
     //              "conn-str", config->conn_str,

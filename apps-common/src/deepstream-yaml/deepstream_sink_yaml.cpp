@@ -231,6 +231,32 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
             config->msg_conv_broker_config.new_api =
                 itr->second.as<gboolean>();
         }
+        else if (paramKey == "ip")
+        {
+            // 设置报文发送组播地址
+            std::string temp = itr->second.as<std::string>();
+            config->mynetwork_config.ip = (char *)malloc(sizeof(char) * 1024);
+            std::strncpy(config->mynetwork_config.ip, temp.c_str(), 1023);
+        }
+        else if (paramKey == "multicast-port")
+        {
+            // 设置报文发送组播端口
+            config->mynetwork_config.multicast_port =
+                itr->second.as<gint>();
+        }
+        else if (paramKey == "multicast-iface")
+        {
+            // 设置报文发送组播网卡
+            std::string temp = itr->second.as<std::string>();
+            config->mynetwork_config.iface = (char *)malloc(sizeof(char) * 1024);
+            std::strncpy(config->mynetwork_config.iface, temp.c_str(), 1023);
+        }
+        else if (paramKey == "fps")
+        {
+            // 设置帧率
+            config->mynetwork_config.fps =
+                itr->second.as<gint>();
+        }
         else
         {
             cout << "[WARNING] Unknown param found in sink: " << paramKey << endl;
