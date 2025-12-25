@@ -655,19 +655,8 @@ static GstFlowReturn gst_videorecognition_transform_ip(GstBaseTransform *btrans,
         NvDsObjectMeta *obj_meta = NULL;
         frame_meta = (NvDsFrameMeta *)(l_frame->data);
         
-        if (surface->surfaceList[frame_meta->batch_id].mappedAddr.addr[0] ==
-            NULL)
-        {
-            if (NvBufSurfaceMap(surface, frame_meta->batch_id, 0,
-                                NVBUF_MAP_READ_WRITE) != 0)
-            {
-                GST_ELEMENT_ERROR(
-                    self, STREAM, FAILED,
-                    ("%s:buffer map to be accessed by CPU failed", __func__),
-                    (NULL));
-                return GST_FLOW_ERROR;
-            }
-        }
+        /* 仅在确实需要 CPU 访问时才映射。当前路径不使用 CPU 直接访问，
+         * dGPU 上 NVBUF_MEM_CUDA_DEVICE 映射会失败。 */
 
         // 遍历检测到的目标
         for (l_obj = frame_meta->obj_meta_list; l_obj != NULL;
