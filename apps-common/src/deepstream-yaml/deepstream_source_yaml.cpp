@@ -16,6 +16,7 @@
 #include <cstring>
 #include <iostream>
 #include <unistd.h>
+#include <stdlib.h>
 
 using std::cout;
 using std::endl;
@@ -123,13 +124,29 @@ parse_source_yaml (NvDsSourceConfig *config, std::vector<std::string> headers,
       config->dir_path = (char*) malloc(sizeof(char) * 1024);
       std::strncpy (config->dir_path, temp.c_str(), 1023);
 
+      /* 打印 smart-rec-dir-path 的绝对路径 */
+      char *abs_path = realpath (config->dir_path, NULL);
+      if (abs_path) {
+        g_print ("smart-rec-dir-path: %s -> %s\n", config->dir_path, abs_path);
+        free (abs_path);
+      } else {
+        g_print ("smart-rec-dir-path: %s (path not exist, will be created)\n", config->dir_path);
+      }
+
       if (access (config->dir_path, 2)) {
         if (errno == ENOENT || errno == ENOTDIR) {
-          g_print ("ERROR: Directory (%s) doesn't exist.\n", config->dir_path);
+          /* 若目录不存在则尝试自动创建 */
+          if (g_mkdir_with_parents (config->dir_path, 0775) != 0) {
+            g_print ("ERROR: Failed to create directory %s (errno=%d)\n", config->dir_path, errno);
+            goto done;
+          }
         } else if (errno == EACCES) {
           g_print ("ERROR: No write permission in %s\n", config->dir_path);
+          goto done;
+        } else {
+          g_print ("ERROR: Directory %s not accessible (errno=%d)\n", config->dir_path, errno);
+          goto done;
         }
-        goto done;
       }
     } else if (paramKey == "smart-rec-file-prefix") {
       std::string temp = source_values[i];
