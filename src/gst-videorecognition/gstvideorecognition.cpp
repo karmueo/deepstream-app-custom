@@ -268,7 +268,12 @@ get_converted_mat(NvBufSurface *input_buf, Gstvideorecognition *self, gint idx,
     actual_src_height = GST_ROUND_DOWN_2((unsigned int)actual_src_height);
 
     /* 配置转换参数 */
-    transform_config_params.compute_mode = NvBufSurfTransformCompute_Default;
+    transform_config_params.compute_mode =
+#ifdef USE_NVBUF_MEM_SURFACE_ARRAY
+        NvBufSurfTransformCompute_GPU;
+#else
+        NvBufSurfTransformCompute_Default;
+#endif
     transform_config_params.gpu_id = self->gpu_id;
     transform_config_params.cuda_stream = self->cuda_stream;
 
@@ -294,7 +299,12 @@ get_converted_mat(NvBufSurface *input_buf, Gstvideorecognition *self, gint idx,
         create_params.size = 0;
         create_params.colorFormat = NVBUF_COLOR_FORMAT_RGB;
         create_params.layout = NVBUF_LAYOUT_PITCH;
-        create_params.memType = NVBUF_MEM_CUDA_PINNED;
+        create_params.memType =
+#ifdef USE_NVBUF_MEM_SURFACE_ARRAY
+            NVBUF_MEM_SURFACE_ARRAY;
+#else
+            NVBUF_MEM_CUDA_PINNED;
+#endif
         if (NvBufSurfaceCreate(&self->inter_buf, 1, &create_params) != 0)
         {
             GST_ELEMENT_ERROR(self, RESOURCE, FAILED,
@@ -321,6 +331,10 @@ get_converted_mat(NvBufSurface *input_buf, Gstvideorecognition *self, gint idx,
                 row[x * 3 + 1] = 128; // G
                 row[x * 3 + 2] = 128; // B
             }
+        }
+        if (self->inter_buf->memType == NVBUF_MEM_SURFACE_ARRAY)
+        {
+            NvBufSurfaceSyncForDevice(self->inter_buf, 0, 0);
         }
         NvBufSurfaceUnMap(self->inter_buf, 0, 0);
     }
@@ -821,7 +835,12 @@ static gboolean gst_videorecognition_start(GstBaseTransform *btrans)
     // 使用 RGB 三通道中间缓冲区
     create_params.colorFormat = NVBUF_COLOR_FORMAT_RGB;
     create_params.layout = NVBUF_LAYOUT_PITCH;
-    create_params.memType = NVBUF_MEM_CUDA_PINNED;
+    create_params.memType =
+#ifdef USE_NVBUF_MEM_SURFACE_ARRAY
+        NVBUF_MEM_SURFACE_ARRAY;
+#else
+        NVBUF_MEM_CUDA_PINNED;
+#endif
     if (NvBufSurfaceCreate(&self->inter_buf, 1, &create_params) != 0)
     {
         GST_ERROR("Error: Could not allocate internal buffer for dsexample");

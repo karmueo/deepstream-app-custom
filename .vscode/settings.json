@@ -20,7 +20,7 @@
             },
             {
                 "name": "DISPLAY",
-                "value": "tl-Ai:10.0"
+                // "value": "tl-Ai:10.0"
             }
         ]
     },
