@@ -15,6 +15,7 @@ pkg_check_modules(GST REQUIRED
     gstreamer-base-1.0 
     gstreamer-video-1.0)
 find_package(OpenCV)
+include(CheckCXXSourceCompiles)
 
 
 # 4. 包含目录
@@ -45,6 +46,18 @@ add_library(gst_videorecognition SHARED ${SRCS} ${INCS})
 
 target_compile_definitions(gst_videorecognition PRIVATE 
     DS_VERSION="7.1.0")
+
+# 通过 __aarch64__ 宏判断 Jetson，使用 NVBUF_MEM_SURFACE_ARRAY
+check_cxx_source_compiles("
+#ifdef __aarch64__
+int main() { return 0; }
+#else
+#error Not aarch64
+#endif
+" HAS_AARCH64)
+if(HAS_AARCH64)
+    target_compile_definitions(gst_videorecognition PRIVATE USE_NVBUF_MEM_SURFACE_ARRAY=1)
+endif()
 
 MESSAGE(STATUS ${OpenCV_LIBS})
 
