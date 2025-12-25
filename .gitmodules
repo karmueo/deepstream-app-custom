@@ -10,3 +10,7 @@
 	path = src/gst-udpmulticast_sink
 	url = git@github.com:karmueo/deepstream_udpmulticast_sink.git
 	ignore = dirty
+[submodule "src/gst-videorecognition"]
+	path = src/gst-videorecognition
+	url = git@github.com:karmueo/gstvideorecognition.git
+	ignore = dirty
