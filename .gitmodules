@@ -12,5 +12,4 @@
 	ignore = dirty
 [submodule "src/gst-videorecognition"]
 	path = src/gst-videorecognition
-	url = git@github.com:karmueo/gstvideorecognition.git
-	ignore = dirty
+	url = https://github.com/karmueo/gstvideorecognition.git
