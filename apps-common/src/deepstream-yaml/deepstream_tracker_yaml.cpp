@@ -33,6 +33,10 @@ parse_tracker_yaml (NvDsTrackerConfig *config, gchar *cfg_file_path)
   config->user_meta_pool_size = 32;
   config->sub_batches = {};
   config->sub_batch_err_recovery_trial_cnt = 0;
+  config->enable_static_target_filter = FALSE;
+  config->static_target_filter_frames = 30;
+  config->static_target_filter_center_thresh = 5.0f;
+  config->static_target_filter_size_thresh = 0.05f;
 
   for(YAML::const_iterator itr = configyml["tracker"].begin();
      itr != configyml["tracker"].end(); ++itr)
@@ -99,6 +103,14 @@ parse_tracker_yaml (NvDsTrackerConfig *config, gchar *cfg_file_path)
       std::strncpy (config->sub_batches, temp.c_str(), temp.size());
     } else if(paramKey == "sub-batch-err-recovery-trial-cnt"){
       config->sub_batch_err_recovery_trial_cnt =  itr->second.as<gint>();
+    } else if(paramKey == "static-target-filter"){
+      config->enable_static_target_filter = itr->second.as<gboolean>();
+    } else if(paramKey == "static-target-filter-frames"){
+      config->static_target_filter_frames = itr->second.as<guint>();
+    } else if(paramKey == "static-target-filter-center-threshold"){
+      config->static_target_filter_center_thresh = itr->second.as<gfloat>();
+    } else if(paramKey == "static-target-filter-size-threshold"){
+      config->static_target_filter_size_thresh = itr->second.as<gfloat>();
     } else {
       cout << "Unknown key " << paramKey << " for tracker" << endl;
     }

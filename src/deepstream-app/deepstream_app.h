@@ -175,6 +175,23 @@ extern "C"
         guint64 timestamp;
     } CustomMessageData;
 
+    typedef struct
+    {
+        gboolean active;
+        gboolean has_last;
+        guint64 last_object_id;
+        guint64 static_object_id;
+        guint   consecutive_count;
+        gfloat  last_cx;
+        gfloat  last_cy;
+        gfloat  last_w;
+        gfloat  last_h;
+        gfloat  static_cx;
+        gfloat  static_cy;
+        gfloat  static_w;
+        gfloat  static_h;
+    } StaticTargetFilterState;
+
     struct _AppCtx
     {
         gboolean version;
@@ -245,6 +262,9 @@ extern "C"
     GstClockTime tracking_start_time;        /* 当前目标开始连续跟踪的时间戳（纳秒） */
     guint64      last_tracked_object_id;     /* 上一次跟踪的目标ID */
     gboolean     is_tracking_continuous;     /* 是否正在连续跟踪同一目标 */
+
+    /* 静止目标误检过滤状态（按 source 维护） */
+    StaticTargetFilterState static_target_filter_states[MAX_SOURCE_BINS];
     };
 
     /**
