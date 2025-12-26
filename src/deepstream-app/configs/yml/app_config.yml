@@ -45,7 +45,7 @@ videorecognition:
   processing-height: 64
   model-clip-length: 32
   sampling-rate: 5
-  trt-engine-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/gst-videorecognition/models/x3d_v6_4cls_fp32.engine
+  trt-engine-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/gst-videorecognition/models/x3d_v7_4cls_fp32.engine
   labels-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/cls_labels.txt
 
 sink0:
