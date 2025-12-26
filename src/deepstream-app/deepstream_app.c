@@ -30,6 +30,72 @@ GQuark _dsmeta_quark;
 
 #define CEIL(a, b) ((a + b - 1) / b)
 
+static void
+get_obj_bbox_center(const NvDsObjectMeta *obj, gfloat *cx, gfloat *cy, gfloat *w, gfloat *h)
+{
+    gfloat left = obj->rect_params.left;
+    gfloat top = obj->rect_params.top;
+    gfloat width = obj->rect_params.width;
+    gfloat height = obj->rect_params.height;
+
+    *cx = left + width * 0.5f;
+    *cy = top + height * 0.5f;
+    *w = width;
+    *h = height;
+}
+
+static gboolean
+is_size_stable(gfloat last_size, gfloat curr_size, gfloat ratio_thresh)
+{
+    gfloat base = (last_size > 1.0f) ? last_size : 1.0f;
+    return (fabsf(curr_size - last_size) / base) <= ratio_thresh;
+}
+
+static gboolean
+is_center_stable(gfloat last_cx, gfloat last_cy, gfloat cx, gfloat cy, gfloat center_thresh)
+{
+    return (fabsf(cx - last_cx) <= center_thresh) &&
+           (fabsf(cy - last_cy) <= center_thresh);
+}
+
+static void
+reset_static_target_state(StaticTargetFilterState *state)
+{
+    state->active = FALSE;
+    state->has_last = FALSE;
+    state->last_object_id = 0;
+    state->static_object_id = 0;
+    state->consecutive_count = 0;
+}
+
+static gboolean
+is_obj_in_static_region(const NvDsObjectMeta *obj,
+                        const StaticTargetFilterState *state,
+                        gfloat center_thresh,
+                        gfloat size_thresh)
+{
+    if (state->static_w <= 0.0f || state->static_h <= 0.0f)
+    {
+        return FALSE;
+    }
+
+    gfloat cx = 0.0f, cy = 0.0f, w = 0.0f, h = 0.0f;
+    get_obj_bbox_center(obj, &cx, &cy, &w, &h);
+
+    if (!is_center_stable(state->static_cx, state->static_cy, cx, cy, center_thresh))
+    {
+        return FALSE;
+    }
+
+    if (!is_size_stable(state->static_w, w, size_thresh) ||
+        !is_size_stable(state->static_h, h, size_thresh))
+    {
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
 /* 调试: udpsrc probe 回调，统计 buffer */
 static GstPadProbeReturn udpsrc_probe_cb(GstPad *pad, GstPadProbeInfo *info, gpointer user_data)
 {
@@ -1603,6 +1669,120 @@ analytics_done_buf_prob(GstPad *pad, GstPadProbeInfo *info, gpointer u_data)
     {
         NVGSTDS_WARN_MSG_V("Batch meta not found for buffer %p", buf);
         return GST_PAD_PROBE_OK;
+    }
+
+    if (appCtx->config.tracker_config.enable &&
+        appCtx->config.tracker_config.enable_static_target_filter)
+    {
+        NvDsTrackerConfig *tracker_cfg = &appCtx->config.tracker_config;
+        guint frames_needed = tracker_cfg->static_target_filter_frames;
+        gfloat center_thresh = tracker_cfg->static_target_filter_center_thresh;
+        gfloat size_thresh = tracker_cfg->static_target_filter_size_thresh;
+
+        if (frames_needed == 0)
+        {
+            frames_needed = 1;
+        }
+        if (center_thresh < 0.0f)
+        {
+            center_thresh = 0.0f;
+        }
+        if (size_thresh < 0.0f)
+        {
+            size_thresh = 0.0f;
+        }
+
+        for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame != NULL;
+             l_frame = l_frame->next)
+        {
+            NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)l_frame->data;
+            if (frame_meta->source_id >= MAX_SOURCE_BINS)
+            {
+                continue;
+            }
+
+            StaticTargetFilterState *state =
+                &appCtx->static_target_filter_states[frame_meta->source_id];
+
+            NvDsObjectMeta *tracked_obj = NULL;
+            for (NvDsMetaList *l_obj = frame_meta->obj_meta_list; l_obj != NULL;
+                 l_obj = l_obj->next)
+            {
+                NvDsObjectMeta *obj = (NvDsObjectMeta *)l_obj->data;
+                if (obj->object_id != UNTRACKED_OBJECT_ID)
+                {
+                    tracked_obj = obj;
+                    break;
+                }
+            }
+
+            gboolean new_target_detected = FALSE;
+            if (state->active && tracked_obj &&
+                tracked_obj->object_id != state->static_object_id)
+            {
+                new_target_detected = TRUE;
+                reset_static_target_state(state);
+            }
+
+            if (!state->active)
+            {
+                if (tracked_obj)
+                {
+                    gfloat cx = 0.0f, cy = 0.0f, w = 0.0f, h = 0.0f;
+                    get_obj_bbox_center(tracked_obj, &cx, &cy, &w, &h);
+
+                    if (state->has_last &&
+                        tracked_obj->object_id == state->last_object_id &&
+                        is_center_stable(state->last_cx, state->last_cy, cx, cy, center_thresh) &&
+                        is_size_stable(state->last_w, w, size_thresh) &&
+                        is_size_stable(state->last_h, h, size_thresh))
+                    {
+                        state->consecutive_count++;
+                    }
+                    else
+                    {
+                        state->consecutive_count = 1;
+                    }
+
+                    state->has_last = TRUE;
+                    state->last_object_id = tracked_obj->object_id;
+                    state->last_cx = cx;
+                    state->last_cy = cy;
+                    state->last_w = w;
+                    state->last_h = h;
+
+                    if (state->consecutive_count >= frames_needed)
+                    {
+                        state->active = TRUE;
+                        state->static_object_id = tracked_obj->object_id;
+                        state->static_cx = cx;
+                        state->static_cy = cy;
+                        state->static_w = w;
+                        state->static_h = h;
+                    }
+                }
+                else
+                {
+                    state->has_last = FALSE;
+                    state->consecutive_count = 0;
+                    state->last_object_id = 0;
+                }
+            }
+
+            if (state->active && !new_target_detected)
+            {
+                for (NvDsMetaList *l_obj = frame_meta->obj_meta_list; l_obj != NULL;)
+                {
+                    NvDsMetaList *l_next = l_obj->next;
+                    NvDsObjectMeta *obj = (NvDsObjectMeta *)l_obj->data;
+                    if (is_obj_in_static_region(obj, state, center_thresh, size_thresh))
+                    {
+                        nvds_remove_obj_meta_from_frame(frame_meta, obj);
+                    }
+                    l_obj = l_next;
+                }
+            }
+        }
     }
 
     // 仅在启用了 tracker 时，过滤掉未被跟踪的检测目标

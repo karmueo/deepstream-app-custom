@@ -41,6 +41,10 @@ typedef struct
   gchar* sub_batches;
   gint sub_batch_err_recovery_trial_cnt;
   gboolean enable_class_count_update; /* 启用单目标跟踪类别计数更新，默认1 */
+  gboolean enable_static_target_filter; /* 启用静止目标误检过滤 */
+  guint static_target_filter_frames; /* 判定为静止目标的连续帧数 */
+  gfloat static_target_filter_center_thresh; /* 中心点偏移阈值（像素） */
+  gfloat static_target_filter_size_thresh; /* 框尺寸变化阈值（比例） */
 } NvDsTrackerConfig;
 
 typedef struct

@@ -143,6 +143,10 @@ GST_DEBUG_CATEGORY(APP_CFG_PARSER_CAT);
 #define CONFIG_GROUP_TRACKER_SUB_BATCHES "sub-batches"
 #define CONFIG_GROUP_TRACKER_SUB_BATCH_ERR_RECOVERY_TRIAL_CNT "sub-batch-err-recovery-trial-cnt"
 #define CONFIG_GROUP_TRACKER_ENABLE_CLASS_COUNT_UPDATE "enable-class-count-update"
+#define CONFIG_GROUP_TRACKER_STATIC_TARGET_FILTER "static-target-filter"
+#define CONFIG_GROUP_TRACKER_STATIC_TARGET_FILTER_FRAMES "static-target-filter-frames"
+#define CONFIG_GROUP_TRACKER_STATIC_TARGET_FILTER_CENTER_THRESH "static-target-filter-center-threshold"
+#define CONFIG_GROUP_TRACKER_STATIC_TARGET_FILTER_SIZE_THRESH "static-target-filter-size-threshold"
 
 #define CONFIG_GROUP_SINK_TYPE "type"
 #define CONFIG_GROUP_SINK_WIDTH "width"
@@ -2093,6 +2097,10 @@ parse_tracker(NvDsTrackerConfig *config, GKeyFile *key_file,
     config->sub_batches = NULL;
     config->sub_batch_err_recovery_trial_cnt = 0;
     config->enable_class_count_update = TRUE; /* 默认启用 */
+    config->enable_static_target_filter = FALSE;
+    config->static_target_filter_frames = 30;
+    config->static_target_filter_center_thresh = 5.0f;
+    config->static_target_filter_size_thresh = 0.05f;
 
     for (key = keys; *key; key++)
     {
@@ -2239,6 +2247,34 @@ parse_tracker(NvDsTrackerConfig *config, GKeyFile *key_file,
             config->enable_class_count_update =
                 g_key_file_get_integer(key_file, CONFIG_GROUP_TRACKER,
                                        CONFIG_GROUP_TRACKER_ENABLE_CLASS_COUNT_UPDATE, &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, CONFIG_GROUP_TRACKER_STATIC_TARGET_FILTER))
+        {
+            config->enable_static_target_filter =
+                g_key_file_get_integer(key_file, CONFIG_GROUP_TRACKER,
+                                       CONFIG_GROUP_TRACKER_STATIC_TARGET_FILTER, &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, CONFIG_GROUP_TRACKER_STATIC_TARGET_FILTER_FRAMES))
+        {
+            config->static_target_filter_frames =
+                g_key_file_get_integer(key_file, CONFIG_GROUP_TRACKER,
+                                       CONFIG_GROUP_TRACKER_STATIC_TARGET_FILTER_FRAMES, &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, CONFIG_GROUP_TRACKER_STATIC_TARGET_FILTER_CENTER_THRESH))
+        {
+            config->static_target_filter_center_thresh =
+                g_key_file_get_double(key_file, CONFIG_GROUP_TRACKER,
+                                      CONFIG_GROUP_TRACKER_STATIC_TARGET_FILTER_CENTER_THRESH, &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, CONFIG_GROUP_TRACKER_STATIC_TARGET_FILTER_SIZE_THRESH))
+        {
+            config->static_target_filter_size_thresh =
+                g_key_file_get_double(key_file, CONFIG_GROUP_TRACKER,
+                                      CONFIG_GROUP_TRACKER_STATIC_TARGET_FILTER_SIZE_THRESH, &error);
             CHECK_ERROR(error);
         }
         else

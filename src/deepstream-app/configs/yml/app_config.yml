@@ -35,6 +35,14 @@ tracker:
   ll-config-file: /opt/nvidia/deepstream/deepstream/sot_plugin/config/config_sot.yml
   gpu-id: 0
   display-tracking-id: 1
+  # TODO: 未测试。静止目标误检过滤开关（仅在 tracker 启用时生效）
+  static-target-filter: 0
+  # 连续帧数达到该值且目标稳定，则认为是静止误检目标
+  static-target-filter-frames: 30
+  # 目标中心点最大允许偏移（像素）
+  static-target-filter-center-threshold: 5.0
+  # 目标框尺寸变化阈值（比例，例如 0.05 表示 5%）
+  static-target-filter-size-threshold: 0.05
 
 videorecognition:
   enable: 1
@@ -45,7 +53,7 @@ videorecognition:
   processing-height: 64
   model-clip-length: 32
   sampling-rate: 5
-  trt-engine-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/gst-videorecognition/models/x3d_v7_4cls_fp32.engine
+  trt-engine-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/gst-videorecognition/models/x3d_v7_4cls_fp16.engine
   labels-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/cls_labels.txt
 
 sink0:
