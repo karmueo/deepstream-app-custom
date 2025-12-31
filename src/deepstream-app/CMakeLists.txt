@@ -11,7 +11,10 @@
 ################################################################################
 
 cmake_minimum_required(VERSION 3.16)
-project(deepstream-app LANGUAGES C CXX CUDA)
+# 设置 CUDA 编译器路径
+if(NOT DEFINED CMAKE_CUDA_COMPILER)
+    set(CMAKE_CUDA_COMPILER "/usr/local/cuda/bin/nvcc")
+endif()
 
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
