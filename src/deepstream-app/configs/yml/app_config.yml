@@ -75,22 +75,13 @@ sink0:
   udp-port: 5400
 
 sink1:
+  # window
   enable: 0
-  type: 4
-  sync: 1
-  source-id: 0
+  type: 2
+  sync: 0
+  qos: 0
   gpu-id: 0
   nvbuf-memory-type: 0
-  codec: 1
-  bitrate: 4000000
-  #bitrate=1800000
-  iframeinterval: 15
-  rtsp-port: 8556
-  udp-port: 5401
-  width: 1920
-  height: 1080
-  profile: 4
-  udp-buffer-size: 524288
 
 # 自定义的udp组播
 sink2:
