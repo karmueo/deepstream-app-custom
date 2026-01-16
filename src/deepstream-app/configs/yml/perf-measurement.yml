@@ -23,11 +23,11 @@ primary-gie:
   nvbuf-memory-type: 0
   input-tensor-meta: 1
   # input-tensor-meta=1
-  config-file: config_infer_primary_yoloV11_rgb.yml
+  config-file: config_infer_primary_yolo_rgb.yml
 
 # 自定义的单目标跟踪
 tracker:
-  enable: 1
+  enable: 0
   # For NvDCF and NvDeepSORT tracker, tracker-width and tracker-height must be a multiple of 32, respectively
   tracker-width: 1920
   tracker-height: 1080
@@ -45,7 +45,7 @@ tracker:
   static-target-filter-size-threshold: 0.05
 
 videorecognition:
-  enable: 1
+  enable: 0
   unique-id: 15
   gpu-id: 0
   nvbuf-memory-type: 0
@@ -56,10 +56,21 @@ videorecognition:
   trt-engine-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/gst-videorecognition/models/x3d_v8_4cls_fp16.engine
   labels-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/cls_labels.txt
 
+# FAKE SINK 输出
 sink0:
   enable: 1
   type: 1
   sync: 0
+
+# 文件输出
+sink3:
+  enable: 0
+  type: 3
+  sync: 0
+  container : 2  # 1=mp4, 2=mkv
+  codec : 1      # 1=h264, 2=h265
+  bitrate: 4000000
+  output-file: ./output.mkv
 
 # 自定义的udp组播
 sink2:
@@ -86,7 +97,7 @@ osd:
   clock-x-offset: 1700
   clock-y-offset: 15
   clock-text-size: 12
-  clock-color: 1;0;0;0
+  clock-color: 1;1;0;1
   nvbuf-memory-type: 0
 
 streammux:

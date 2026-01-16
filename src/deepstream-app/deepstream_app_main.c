@@ -2391,49 +2391,109 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
         }
     }
 
-    if (srcIndex == -1)
+    gboolean show_fps_for_single = FALSE; /* 单路场景是否显示FPS */
+    gint     fps_src_index = -1;          /* FPS使用的源索引 */
+    if (srcIndex == -1 && appCtx->config.enable_perf_measurement &&
+        appCtx->config.num_source_sub_bins == 1)
+    {
+        show_fps_for_single = TRUE;
+        fps_src_index = 0;
+    }
+
+    if (srcIndex == -1 && !show_fps_for_single)
         goto done;
 
     NvDsFrameLatencyInfo *latency_info = NULL;
     NvDsDisplayMeta      *display_meta =
         nvds_acquire_display_meta_from_pool(batch_meta);
 
-    display_meta->num_labels = 1;
-    display_meta->text_params[0].display_text = g_strdup_printf(
-        "Source: %s", appCtx->config.multi_source_config[srcIndex].uri);
+    guint label_index = 0; /* 文本标签索引 */
 
-    display_meta->text_params[0].y_offset = 20;
-    display_meta->text_params[0].x_offset = 20;
-    display_meta->text_params[0].font_params.font_color =
-        (NvOSD_ColorParams){0, 1, 0, 1};
-    display_meta->text_params[0].font_params.font_size =
-        appCtx->config.osd_config.text_size * 1.5;
-    display_meta->text_params[0].font_params.font_name = "Serif";
-    display_meta->text_params[0].set_bg_clr = 1;
-    display_meta->text_params[0].text_bg_clr =
-        (NvOSD_ColorParams){0, 0, 0, 1.0};
+    display_meta->num_labels = 0;
+    if (srcIndex != -1)
+    {
+        display_meta->text_params[label_index].display_text = g_strdup_printf(
+            "Source: %s", appCtx->config.multi_source_config[srcIndex].uri);
 
-    if (nvds_enable_latency_measurement)
+        display_meta->text_params[label_index].y_offset = 20;
+        display_meta->text_params[label_index].x_offset = 20;
+        display_meta->text_params[label_index].font_params.font_color =
+            (NvOSD_ColorParams){0, 1, 0, 1};
+        display_meta->text_params[label_index].font_params.font_size =
+            appCtx->config.osd_config.text_size * 1.5;
+        display_meta->text_params[label_index].font_params.font_name = "Serif";
+        display_meta->text_params[label_index].set_bg_clr = 1;
+        display_meta->text_params[label_index].text_bg_clr =
+            (NvOSD_ColorParams){0, 0, 0, 1.0};
+        label_index++;
+        display_meta->num_labels = label_index;
+    }
+
+    if (appCtx->config.enable_perf_measurement &&
+        (srcIndex != -1 || show_fps_for_single))
+    {
+        gdouble current_fps = 0.0; /* 当前FPS */
+        gdouble avg_fps = 0.0;     /* 平均FPS */
+        gint fps_font_size = 0;    /* FPS字体大小 */
+        gint fps_y_offset = 0;     /* FPS纵向偏移 */
+        gint use_src_index = srcIndex != -1 ? srcIndex : fps_src_index; /* FPS源索引 */
+
+        g_mutex_lock(&fps_lock);
+        if (use_src_index >= 0)
+        {
+            current_fps = fps[use_src_index];
+            avg_fps = fps_avg[use_src_index];
+        }
+        g_mutex_unlock(&fps_lock);
+
+        display_meta->text_params[label_index].display_text =
+            g_strdup_printf("FPS: %.2f (Avg %.2f)", current_fps, avg_fps);
+        display_meta->text_params[label_index].x_offset =
+            appCtx->config.osd_config.clock_x_offset;
+
+        fps_font_size = appCtx->config.osd_config.clock_text_size > 0
+                            ? appCtx->config.osd_config.clock_text_size
+                            : (appCtx->config.osd_config.text_size > 0
+                                   ? appCtx->config.osd_config.text_size
+                                   : 12);
+        fps_y_offset = appCtx->config.osd_config.clock_y_offset +
+                       fps_font_size + 5;
+        display_meta->text_params[label_index].y_offset = fps_y_offset;
+        display_meta->text_params[label_index].font_params.font_color =
+            appCtx->config.osd_config.clock_color;
+        display_meta->text_params[label_index].font_params.font_size =
+            fps_font_size;
+        display_meta->text_params[label_index].font_params.font_name =
+            appCtx->config.osd_config.font
+                ? appCtx->config.osd_config.font
+                : "Serif";
+        display_meta->text_params[label_index].set_bg_clr = 0;
+        label_index++;
+        display_meta->num_labels = label_index;
+    }
+
+    if (nvds_enable_latency_measurement && srcIndex != -1)
     {
         g_mutex_lock(&appCtx->latency_lock);
         latency_info = &appCtx->latency_info[index];
-        display_meta->num_labels++;
-        display_meta->text_params[1].display_text =
+        display_meta->text_params[label_index].display_text =
             g_strdup_printf("Latency: %lf", latency_info->latency);
         g_mutex_unlock(&appCtx->latency_lock);
 
-        display_meta->text_params[1].y_offset =
+        display_meta->text_params[label_index].y_offset =
             (display_meta->text_params[0].y_offset * 2) +
             display_meta->text_params[0].font_params.font_size;
-        display_meta->text_params[1].x_offset = 20;
-        display_meta->text_params[1].font_params.font_color =
+        display_meta->text_params[label_index].x_offset = 20;
+        display_meta->text_params[label_index].font_params.font_color =
             (NvOSD_ColorParams){0, 1, 0, 1};
-        display_meta->text_params[1].font_params.font_size =
+        display_meta->text_params[label_index].font_params.font_size =
             appCtx->config.osd_config.text_size * 1.5;
-        display_meta->text_params[1].font_params.font_name = "Arial";
-        display_meta->text_params[1].set_bg_clr = 1;
-        display_meta->text_params[1].text_bg_clr =
+        display_meta->text_params[label_index].font_params.font_name = "Arial";
+        display_meta->text_params[label_index].set_bg_clr = 1;
+        display_meta->text_params[label_index].text_bg_clr =
             (NvOSD_ColorParams){0, 0, 0, 1.0};
+        label_index++;
+        display_meta->num_labels = label_index;
     }
 
     nvds_add_display_meta_to_frame(
