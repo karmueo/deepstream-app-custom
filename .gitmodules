@@ -1,6 +1,7 @@
 [submodule "DeepStream-Yolo"]
 	path = DeepStream-Yolo
 	url = https://github.com/karmueo/DeepStream-Yolo.git
+	branch = feat/yolo26
 	ignore = dirty
 [submodule "sot_plugin"]
 	path = sot_plugin
