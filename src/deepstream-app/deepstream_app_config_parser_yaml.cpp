@@ -439,6 +439,10 @@ parse_config_file_yaml(NvDsConfig *config, gchar *cfg_file_path)
              * it will override the value set using global_gpu_id in parse_videorecognition_yaml function */
             parse_err = !parse_videorecognition_yaml(&config->videorecognition_config, cfg_file_path);
         }
+        else if (paramKey == "udpjsonmeta")
+        {
+            parse_err = !parse_udpjsonmeta_yaml(&config->udpjsonmeta_config, cfg_file_path);
+        }
         else if (paramKey == "message-converter")
         {
             parse_err = !parse_msgconv_yaml(&config->msg_conv_config, paramKey, cfg_file_path);
