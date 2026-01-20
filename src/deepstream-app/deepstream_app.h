@@ -37,6 +37,7 @@
 #include "deepstream_tiled_display.h"
 #include "deepstream_tracker.h"
 #include "deepstream_udpmulticast.h"
+#include "deepstream_udpjsonmeta.h"
 #include "deepstream_videorecognition.h"
 #include "gst-nvdscommonconfig.h"
 #include "gst-nvdscustommessage.h"
@@ -79,6 +80,7 @@ extern "C"
         NvDsDsAnalyticsBin         dsanalytics_bin;
         NvDsDsExampleBin           dsexample_bin;
         NvDsVideoRecognitionBin    videorecognition_bin;
+        GstElement                *udpjsonmeta; /* UDP JSON 元数据插件 */
         AppCtx                    *appCtx;
     } NvDsInstanceBin;
 
@@ -144,6 +146,8 @@ extern "C"
         NvDsVideoRecognitionConfig videorecognition_config;
         NvDsUdpMulticastConfig
             udpmulticast_config; /* new udp multicast source config */
+        NvDsUdpJsonMetaConfig
+            udpjsonmeta_config; /* UDP JSON 元数据配置 */
         NvDsSinkMsgConvBrokerConfig msg_conv_config;
         NvDsMyNetworkConfig         mynetwork_config;
         NvDsImageSave               image_save_config;

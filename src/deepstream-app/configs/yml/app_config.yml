@@ -7,7 +7,8 @@ application:
 
 source:
   # csv-file-path: sources.csv
-  csv-file-path: file_sources.csv
+  csv-file-path: debug_sources.csv
+  #file_sources.csv
   #debug_sources.csv
 
 pre-process:

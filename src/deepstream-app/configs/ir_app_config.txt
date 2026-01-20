@@ -254,6 +254,19 @@ port=8001
 interface=enp5s0
 # recv-buf-size=1048576
 
+# UDP JSON 元数据插件（在 tracker 之后注入到 obj_user_meta_list）
+[udpjsonmeta]
+enable=0
+multicast-ip=230.1.1.22
+port=6000
+interface=enp5s0
+# recv-buf-size=1048576
+json-key=value
+object-id-key=object_id
+source-id-key=source_id
+# cache-ttl-ms=1000
+# max-cache-size=2048
+
 # Configure this group to enable cloud message consumer.
 [message-consumer0]
 enable=0

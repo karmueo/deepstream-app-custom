@@ -2319,6 +2319,47 @@ create_common_elements(NvDsConfig *config, NvDsPipeline *pipeline,
         *sink_elem = pipeline->common_elements.videorecognition_bin.bin;
     }
 
+    if (config->udpjsonmeta_config.enable)
+    {
+        GstElement *udpjsonmeta = gst_element_factory_make(NVDS_ELEM_UDPJSONMETA_ELEMENT, "udpjsonmeta"); /* UDP JSON 元数据插件 */
+        if (!udpjsonmeta)
+        {
+            NVGSTDS_ERR_MSG_V("Failed to create element '%s'", NVDS_ELEM_UDPJSONMETA_ELEMENT);
+            goto done;
+        }
+
+        if (config->udpjsonmeta_config.multicast_ip)
+            g_object_set(G_OBJECT(udpjsonmeta), "multicast-ip", config->udpjsonmeta_config.multicast_ip, NULL);
+        if (config->udpjsonmeta_config.port)
+            g_object_set(G_OBJECT(udpjsonmeta), "port", config->udpjsonmeta_config.port, NULL);
+        if (config->udpjsonmeta_config.iface)
+            g_object_set(G_OBJECT(udpjsonmeta), "iface", config->udpjsonmeta_config.iface, NULL);
+        if (config->udpjsonmeta_config.recv_buf_size)
+            g_object_set(G_OBJECT(udpjsonmeta), "recv-buf-size", config->udpjsonmeta_config.recv_buf_size, NULL);
+        if (config->udpjsonmeta_config.json_key)
+            g_object_set(G_OBJECT(udpjsonmeta), "json-key", config->udpjsonmeta_config.json_key, NULL);
+        if (config->udpjsonmeta_config.object_id_key)
+            g_object_set(G_OBJECT(udpjsonmeta), "object-id-key", config->udpjsonmeta_config.object_id_key, NULL);
+        if (config->udpjsonmeta_config.source_id_key)
+            g_object_set(G_OBJECT(udpjsonmeta), "source-id-key", config->udpjsonmeta_config.source_id_key, NULL);
+        if (config->udpjsonmeta_config.cache_ttl_ms)
+            g_object_set(G_OBJECT(udpjsonmeta), "cache-ttl-ms", config->udpjsonmeta_config.cache_ttl_ms, NULL);
+        if (config->udpjsonmeta_config.max_cache_size)
+            g_object_set(G_OBJECT(udpjsonmeta), "max-cache-size", config->udpjsonmeta_config.max_cache_size, NULL);
+
+        gst_bin_add(GST_BIN(pipeline->pipeline), udpjsonmeta);
+        if (!*src_elem)
+        {
+            *src_elem = udpjsonmeta;
+        }
+        if (*sink_elem)
+        {
+            NVGSTDS_LINK_ELEMENT(udpjsonmeta, *sink_elem);
+        }
+        *sink_elem = udpjsonmeta;
+        pipeline->common_elements.udpjsonmeta = udpjsonmeta;
+    }
+
     if (config->tracker_config.enable)
     {
         if (!create_tracking_bin(&config->tracker_config,

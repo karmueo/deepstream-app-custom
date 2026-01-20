@@ -1351,6 +1351,98 @@ done:
     return ret;
 }
 
+/**
+ * @brief 解析 UDP JSON 元数据插件配置。
+ *
+ * @param config 配置结构体指针。
+ * @param key_file 配置文件句柄。
+ * @return 成功返回 TRUE。
+ */
+gboolean
+parse_udpjsonmeta(NvDsUdpJsonMetaConfig *config, GKeyFile *key_file)
+{
+    gboolean ret = FALSE; /* 返回值 */
+    gchar **keys = NULL; /* key 列表 */
+    gchar **key = NULL; /* 当前 key */
+    GError *error = NULL; /* 错误 */
+
+    keys = g_key_file_get_keys(key_file, CONFIG_GROUP_UDPJSONMETA, NULL, &error);
+    CHECK_ERROR(error);
+    for (key = keys; *key; key++)
+    {
+        if (!g_strcmp0(*key, CONFIG_GROUP_ENABLE))
+        {
+            config->enable = g_key_file_get_integer(key_file, CONFIG_GROUP_UDPJSONMETA, CONFIG_GROUP_ENABLE, &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "multicast-ip"))
+        {
+            config->multicast_ip = g_key_file_get_string(key_file, CONFIG_GROUP_UDPJSONMETA, "multicast-ip", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "port"))
+        {
+            config->port = g_key_file_get_integer(key_file, CONFIG_GROUP_UDPJSONMETA, "port", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "interface"))
+        {
+            config->iface = g_key_file_get_string(key_file, CONFIG_GROUP_UDPJSONMETA, "interface", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "recv-buf-size"))
+        {
+            config->recv_buf_size = g_key_file_get_integer(key_file, CONFIG_GROUP_UDPJSONMETA, "recv-buf-size", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "json-key"))
+        {
+            config->json_key = g_key_file_get_string(key_file, CONFIG_GROUP_UDPJSONMETA, "json-key", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "object-id-key"))
+        {
+            config->object_id_key = g_key_file_get_string(key_file, CONFIG_GROUP_UDPJSONMETA, "object-id-key", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "source-id-key"))
+        {
+            config->source_id_key = g_key_file_get_string(key_file, CONFIG_GROUP_UDPJSONMETA, "source-id-key", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "cache-ttl-ms"))
+        {
+            config->cache_ttl_ms = g_key_file_get_integer(key_file, CONFIG_GROUP_UDPJSONMETA, "cache-ttl-ms", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "max-cache-size"))
+        {
+            config->max_cache_size = g_key_file_get_integer(key_file, CONFIG_GROUP_UDPJSONMETA, "max-cache-size", &error);
+            CHECK_ERROR(error);
+        }
+        else
+        {
+            NVGSTDS_WARN_MSG_V("Unknown key '%s' for group [%s]", *key, CONFIG_GROUP_UDPJSONMETA);
+        }
+    }
+
+    ret = TRUE;
+done:
+    if (error)
+    {
+        g_error_free(error);
+    }
+    if (keys)
+    {
+        g_strfreev(keys);
+    }
+    if (!ret)
+    {
+        NVGSTDS_ERR_MSG_V("%s failed", __func__);
+    }
+    return ret;
+}
+
 gboolean
 parse_segvisual(NvDsSegVisualConfig *config, GKeyFile *key_file)
 {
