@@ -7,7 +7,7 @@ application:
 
 source:
   # csv-file-path: sources.csv
-  csv-file-path: debug_sources.csv
+  csv-file-path: file_sources.csv
   #file_sources.csv
   #debug_sources.csv
 
@@ -57,6 +57,19 @@ videorecognition:
   sampling-rate: 5
   trt-engine-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/gst-videorecognition/models/x3d_v8_4cls_fp16.engine
   labels-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/cls_labels.txt
+
+# UDP JSON 元数据插件配置
+udpjsonmeta:
+  enable: 1
+  multicast-ip: 230.1.1.22
+  port: 6000
+  interface: enp5s0
+  # recv-buf-size: 1048576
+  json-key: value
+  object-id-key: object_id
+  source-id-key: source_id
+  # cache-ttl-ms: 1000
+  # max-cache-size: 2048
 
 # rtsp输出
 sink0:
