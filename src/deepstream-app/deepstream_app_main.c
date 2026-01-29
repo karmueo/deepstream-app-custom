@@ -12,6 +12,7 @@
  */
 
 #include "deepstream_app.h"
+#include "deepstream_app_callbacks.h"
 #include "gst-nvdssr.h"
 #include "nvds_version.h"
 #include "nvdsmeta_schema.h"
@@ -49,11 +50,11 @@ static gboolean   show_bbox_text = FALSE;
 static gboolean   print_dependencies_version = FALSE;
 static gboolean   quit = FALSE;
 static gint       return_value = 0;
-static guint      num_instances;
+guint             num_instances; // 实例数量
 static guint      num_input_uris;
-static GMutex     fps_lock;
-static gdouble    fps[MAX_SOURCE_BINS];
-static gdouble    fps_avg[MAX_SOURCE_BINS];
+GMutex            fps_lock; // FPS 互斥锁
+gdouble           fps[MAX_SOURCE_BINS]; // FPS 当前值
+gdouble           fps_avg[MAX_SOURCE_BINS]; // FPS 平均值
 
 static Display *display = NULL;
 static Window   windows[MAX_INSTANCES] = {0};
@@ -355,7 +356,7 @@ static void meta_free_func(gpointer data, gpointer user_data)
  * @param data 消息数据
  * @param size 消息大小
  */
-static void parse_cloud_message(AppCtx *appCtx, gpointer data, guint size)
+void parse_cloud_message(AppCtx *appCtx, gpointer data, guint size)
 {
     JsonNode *rootNode = NULL;
     GError   *error = NULL;
@@ -1136,26 +1137,6 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
 }
 
 /**
- * Callback function to be called once all inferences (Primary + Secondary)
- * are done. This is opportunity to modify content of the metadata.
- * e.g. Here Person is being replaced with Man/Woman and corresponding counts
- * are being maintained. It should be modified according to network classes
- * or can be removed altogether if not required.
- * 所有推理（主要+次要）完成后调用的回调函数。
- * 在这是可以修改元数据内容。
- */
-static void all_bbox_generated(AppCtx *appCtx, GstBuffer *buf,
-                               NvDsBatchMeta *batch_meta, guint index)
-{
-    // guint num_male = 0;
-    // guint num_female = 0;
-    // guint num_objects[128];
-    // guint num_rects = 0; // 矩形数量
-
-    // memset(num_objects, 0, sizeof(num_objects));
-}
-
-/**
  * Function to handle program interrupt signal.
  * It installs default handler after handling the interrupt.
  */
@@ -1171,47 +1152,6 @@ static void _intr_handler(int signum)
     sigaction(SIGINT, &action, NULL);
 
     cintr = TRUE;
-}
-
-/**
- * callback function to print the performance numbers of each stream.
- */
-static void perf_cb(gpointer context, NvDsAppPerfStruct *str)
-{
-    static guint header_print_cnt = 0;
-    guint        i;
-    AppCtx      *appCtx = (AppCtx *)context;
-    guint        numf = str->num_instances;
-
-    g_mutex_lock(&fps_lock);
-    for (i = 0; i < numf; i++)
-    {
-        fps[i] = str->fps[i];
-        fps_avg[i] = str->fps_avg[i];
-    }
-
-    if (header_print_cnt % 20 == 0)
-    {
-        g_print("\n**PERF:  ");
-        for (i = 0; i < numf; i++)
-        {
-            g_print("FPS %d (Avg)\t", i);
-        }
-        g_print("\n");
-        header_print_cnt = 0;
-    }
-    header_print_cnt++;
-    if (num_instances > 1)
-        g_print("PERF(%d): ", appCtx->index);
-    else
-        g_print("**PERF:  ");
-
-    for (i = 0; i < numf; i++)
-    {
-        g_print("%.2f (%.2f)\t", fps[i], fps_avg[i]);
-    }
-    g_print("\n");
-    g_mutex_unlock(&fps_lock);
 }
 
 /**
@@ -1583,32 +1523,6 @@ static gpointer nvds_x_event_thread(gpointer data)
     g_mutex_unlock(&disp_lock);
     return NULL;
 }
-
-
-static void my_msg_broker_subscribe_cb(NvMsgBrokerErrorType status, void *msg,
-                                    int msglen, char *topic, void *user_ptr)
-{
-    // 判断topic是否为事件消息主题
-    if (strcmp(topic, "command") != 0)
-    {
-        status = NV_MSGBROKER_API_NOT_SUPPORTED;
-        return;
-    }
-
-    if (msg && msglen > 0)
-    {
-        NvDsEventMsgMeta *event_msg_meta = (NvDsEventMsgMeta *)msg;
-        AppCtx           *appCtx = (AppCtx *)user_ptr;
-
-        parse_cloud_message(appCtx, msg, msglen);
-        status = NV_MSGBROKER_API_OK;
-    }
-    else
-    {
-        status = NV_MSGBROKER_API_ERR;
-    }
-}
-
 /**
  * callback function to add application specific metadata.
  * Here it demonstrates how to display the URI of source in addition to

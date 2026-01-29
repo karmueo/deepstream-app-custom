@@ -4,8 +4,8 @@
     "cmake.debugConfig": {
         "args": [
             "-c",
-            // "${workspaceFolder}/src/deepstream-app/configs/yml/perf-measurement.yml"
-            "${workspaceFolder}/src/deepstream-app/configs/yml/app_config.yml"
+            "${workspaceFolder}/src/deepstream-app/configs/yml/perf-measurement.yml"
+            // "${workspaceFolder}/src/deepstream-app/configs/yml/app_config.yml"
         ],
         "environment": [
             {
@@ -16,10 +16,6 @@
                 "name": "LD_LIBRARY_PATH",
                 "value": "/opt/nvidia/deepstream/deepstream/lib:${env:LD_LIBRARY_PATH}"
             },
-            {
-                "name": "DISPLAY",
-                // "value": "tl-Ai:10.0"
-            }
         ]
     },
     "clangd.arguments": [

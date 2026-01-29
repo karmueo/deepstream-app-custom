@@ -29,3 +29,4 @@ smart_rec/*
 src/trt_classify
 *.out
 build
+*.bin
