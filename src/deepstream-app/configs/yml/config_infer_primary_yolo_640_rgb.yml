@@ -6,8 +6,8 @@ property:
   net-scale-factor: 0.0039215697906911373
   model-color-format: 0
   # onnx-file: ../models/yolov11m_detect_rgb_640_v4.onnx
-  model-engine-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/models/yolo26s_rgb_v2_fp16.engine
-  # model-engine-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/models/yolov11s_detect_rgb_640_v11_3classes_b1_fp16.engine
+  # model-engine-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/models/yolo26s_rgb_640_640_official_v2_fp16.engine
+  model-engine-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/models/yolov11s_detect_rgb_640_640_v11_fp16.engine
   # int8-calib-file: calib.table
   labelfile-path: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/labels.txt
   batch-size: 1
@@ -21,11 +21,9 @@ property:
   # 0: Detector 1: Classifier 2: Segmentation 3: Instance Segmentation
   network-type: 0
   # 0: OpenCV groupRectangles() 1: DBSCAN 2: NMS 3: DBSCAN + NMS Hybrid 4: No clustering
+  # NOTE: yolo26必须设置为4，yolo11设为2
   cluster-mode: 2
   scaling-filter: 1
-  maintain-aspect-ratio: 0
-  # 缩放输入时是否对称填充图像
-  symmetric-padding: 0
   # workspace-size: 2000
   parse-bbox-func-name: "NvDsInferParseYolo"
   # parse-bbox-func-name: NvDsInferParseYoloCuda

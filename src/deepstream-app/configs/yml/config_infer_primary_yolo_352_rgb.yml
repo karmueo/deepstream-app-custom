@@ -1,0 +1,85 @@
+# =============================================================================
+# YOLO 主检测器推理配置文件 (RGB 352x640 模型)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 推理引擎属性配置
+# -----------------------------------------------------------------------------
+property:
+  # 使用的 GPU 设备 ID
+  gpu-id: 0
+
+  # 网络输入缩放因子（将像素值归一化到 [0,1] 范围）
+  # 计算方式：1/255 ≈ 0.00392157
+  net-scale-factor: 0.0039215697906911373
+
+  # 模型输入颜色格式：0=RGB, 1=BGR, 2=GRAY
+  model-color-format: 0
+
+  # ONNX 模型文件路径（首次运行时会转换为 TensorRT 引擎）
+  # onnx-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/models/yolo26s_rgb_352_2c_v2.onnx
+
+  # TensorRT 引擎文件路径（序列化后的推理引擎，加载更快）
+  model-engine-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/models/yolo26s_rgb_352_2c_v2_fp16.engine
+
+  # INT8 量化校准表文件路径（仅 network-mode=1 时需要）
+  # int8-calib-file: calib.table
+
+  # 类别标签文件路径（每行一个类别名称）
+  labelfile-path: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/labels.txt
+
+  # 推理批处理大小（同时处理的图像数量）
+  batch-size: 1
+
+  # 网络精度模式：0=FP32（全精度），1=INT8（需校准表），2=FP16（半精度），3=BEST（自动选最优）
+  network-mode: 2
+
+  # 模型检测的类别数量
+  num-detected-classes: 2
+
+  # 推理间隔帧数（0=每帧推理，N=每隔N帧推理一次）
+  interval: 0
+
+  # GIE（GPU 推理引擎）唯一标识符，用于元数据关联
+  gie-unique-id: 1
+
+  # 处理模式：1=GPU（主推理），2=Secondary（二级推理）
+  process-mode: 1
+
+  # 网络类型：0=检测器, 1=分类器, 2=语义分割, 3=实例分割
+  network-type: 0
+
+  # 聚类/后处理模式：
+  # 0=OpenCV groupRectangles(), 1=DBSCAN, 2=NMS, 3=DBSCAN+NMS混合, 4=无聚类
+  # NOTE: YOLO26 必须设置为 4（模型内部已做 NMS），YOLO11 设为 2
+  cluster-mode: 4
+
+  # 图像缩放滤波器类型：0=NEAREST, 1=BILINEAR
+  scaling-filter: 1
+
+  # TensorRT 工作空间大小（MB），用于优化推理
+  # workspace-size: 2000
+
+  # 自定义边界框解析函数名称
+  parse-bbox-func-name: "NvDsInferParseYolo"
+  # 可选 CUDA 加速版本：parse-bbox-func-name: NvDsInferParseYoloCuda
+
+  # 自定义解析库路径（包含 NvDsInferParseYolo 等函数实现）
+  custom-lib-path: ../../../../DeepStream-Yolo/nvdsinfer_custom_impl_Yolo/libnvdsinfer_custom_impl_Yolo.so
+
+  # TensorRT 引擎创建函数名称
+  engine-create-func-name: "NvDsInferYoloCudaEngineGet"
+
+# -----------------------------------------------------------------------------
+# 所有类别的通用属性配置（检测后处理参数）
+# -----------------------------------------------------------------------------
+class-attrs-all:
+  # 聚类前置信度阈值（低于此值的检测框将被过滤）
+  # 注：此参数已替代旧版 threshold 参数
+  pre-cluster-threshold: 0.5
+
+  # 检测框最小宽度（像素），小于此值的框将被过滤
+  # detected-min-w: 32
+
+  # 检测框最小高度（像素），小于此值的框将被过滤
+  detected-min-h: 9

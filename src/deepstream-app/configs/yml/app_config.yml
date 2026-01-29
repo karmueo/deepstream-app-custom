@@ -1,157 +1,276 @@
+# -----------------------------------------------------------------------------
+# 应用程序全局配置
+# -----------------------------------------------------------------------------
 application:
+  # 是否启用性能测量（0=禁用，1=启用）
   enable-perf-measurement: 1
+  # 性能测量输出间隔（秒）
   perf-measurement-interval-sec: 5
-  ##gie-kitti-output-dir=streamscl
+  # 是否启用JPEG图像保存（0=禁用，1=启用）
   #enable-jpeg-save: 1
+  # 是否开启检测到目标后智能录制（0=禁用，1=启用）
   smart-rec-detect-default: 0
 
+# -----------------------------------------------------------------------------
+# 视频源配置
+# -----------------------------------------------------------------------------
 source:
+  # 视频源CSV配置文件路径（包含RTSP/文件流地址等）
   # csv-file-path: sources.csv
   csv-file-path: file_sources.csv
   #file_sources.csv
   #debug_sources.csv
 
+# -----------------------------------------------------------------------------
+# 预处理模块配置（用于推理前的图像预处理）
+# -----------------------------------------------------------------------------
 pre-process:
+  # 是否启用预处理（0=禁用，1=启用）
   enable: 1
-  config-file: ../config_preprocess_rgb_primary.txt
+  # 预处理配置文件路径
+  # NOTE: 根据模型640x640/640x352调整
+  config-file: ../config_preprocess_rgb_352_primary.txt
+  # config-file: ../config_preprocess_rgb_primary.txt
 
+# -----------------------------------------------------------------------------
+# 主检测器配置
+# -----------------------------------------------------------------------------
 primary-gie:
+  # 是否启用主检测器（0=禁用，1=启用）
   enable: 1
+  # 使用的GPU设备ID
   gpu-id: 0
+  # GIE唯一标识符（用于元数据关联）
   gie-unique-id: 1
-  #(0): nvinfer - Default inference plugin based on Tensorrt
-  #(1): nvinferserver - inference plugin based on Tensorrt-Inference-Server
+  # 推理插件类型：
+  # (0): nvinfer - 基于TensorRT的默认推理插件
+  # (1): nvinferserver - 基于Triton推理服务器的插件
   plugin-type: 0
+  # NvBuf内存类型（0=默认，1=CUDA设备内存，2=CUDA统一内存，3=CUDA固定内存）
   nvbuf-memory-type: 0
+  # 是否使用预处理输出的tensor元数据作为输入（0=禁用，1=启用）
   input-tensor-meta: 1
-  # input-tensor-meta=1
-  config-file: config_infer_primary_yolo_rgb.yml
+  # 推理配置文件路径
+  # NOTE: 根据模型640x640/640x352调整
+  config-file: config_infer_primary_yolo_352_rgb.yml
+  # config-file: config_infer_primary_yolo_640_rgb.yml
+  
 
-# 自定义的单目标跟踪
+# -----------------------------------------------------------------------------
+# 目标跟踪器配置（自定义单目标跟踪 SOT）
+# -----------------------------------------------------------------------------
 tracker:
+  # 是否启用跟踪器（0=禁用，1=启用）
   enable: 1
-  # For NvDCF and NvDeepSORT tracker, tracker-width and tracker-height must be a multiple of 32, respectively
+  # 跟踪器处理宽度（对于NvDCF和NvDeepSORT必须是32的倍数）
   tracker-width: 1920
+  # 跟踪器处理高度（对于NvDCF和NvDeepSORT必须是32的倍数）
   tracker-height: 1080
+  # 跟踪器底层库文件路径
   ll-lib-file: /opt/nvidia/deepstream/deepstream/lib/libsot.so
+  # 跟踪器配置文件路径
   ll-config-file: /opt/nvidia/deepstream/deepstream/sot_plugin/config/config_sot.yml
+  # 使用的GPU设备ID
   gpu-id: 0
+  # 是否在OSD上显示跟踪ID（0=禁用，1=启用）
   display-tracking-id: 1
-  # TODO: 未测试。静止目标误检过滤开关（仅在 tracker 启用时生效）
+  # TODO: 未测试。静止目标误检过滤开关（仅在tracker启用时生效，0=禁用，1=启用）
   static-target-filter: 0
   # 连续帧数达到该值且目标稳定，则认为是静止误检目标
   static-target-filter-frames: 30
   # 目标中心点最大允许偏移（像素）
   static-target-filter-center-threshold: 5.0
-  # 目标框尺寸变化阈值（比例，例如 0.05 表示 5%）
+  # 目标框尺寸变化阈值（比例，例如0.05表示5%）
   static-target-filter-size-threshold: 0.05
 
+# -----------------------------------------------------------------------------
+# 视频识别模块配置（多帧动作/行为识别）
+# -----------------------------------------------------------------------------
 videorecognition:
+  # 是否启用视频识别（0=禁用，1=启用）
   enable: 1
+  # 模块唯一标识符
   unique-id: 15
+  # 使用的GPU设备ID
   gpu-id: 0
+  # NvBuf内存类型（0=默认）
   nvbuf-memory-type: 0
+  # 模型输入处理宽度（像素）
   processing-width: 64
+  # 模型输入处理高度（像素）
   processing-height: 64
+  # 模型输入的视频片段长度（帧数）
   model-clip-length: 32
+  # 采样率（每隔多少帧采样一次）
   sampling-rate: 5
+  # TensorRT引擎文件路径
   trt-engine-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/gst-videorecognition/models/x3d_v8_4cls_fp16.engine
+  # 分类标签文件路径
   labels-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/cls_labels.txt
 
-# UDP JSON 元数据插件配置
+# -----------------------------------------------------------------------------
+# UDP JSON 元数据接收插件配置（用于接收外部JSON元数据）
+# -----------------------------------------------------------------------------
 udpjsonmeta:
-  enable: 1
+  # 是否启用UDP JSON元数据接收（0=禁用，1=启用）
+  enable: 0
+  # 组播IP地址
   multicast-ip: 230.1.1.22
+  # UDP端口号
   port: 6000
+  # 网络接口名称（如eth0, enp5s0等）
   interface: enp5s0
+  # 接收缓冲区大小（字节）
   # recv-buf-size: 1048576
+  # JSON数据中的值字段名
   json-key: value
+  # JSON数据中的目标ID字段名
   object-id-key: object_id
+  # JSON数据中的源ID字段名
   source-id-key: source_id
+  # 缓存过期时间（毫秒）
   # cache-ttl-ms: 1000
+  # 最大缓存条目数
   # max-cache-size: 2048
 
-# rtsp输出
+# -----------------------------------------------------------------------------
+# Sink0: RTSP流输出配置
+# -----------------------------------------------------------------------------
 sink0:
-  enable: 1
-  #Type - 1=FakeSink 2=EglSink 3=File 4=RTSPStreaming 5=nvdrmvideosink
+  # 是否启用此输出（0=禁用，1=启用）
+  enable: 0
+  # 输出类型：1=FakeSink 2=EglSink 3=File 4=RTSPStreaming 5=nvdrmvideosink
   type: 4
-  #1=h264 2=h265
+  # 编码格式：1=H264, 2=H265
   codec: 1
-  #encoder type 0=Hardware 1=Software
-  enc-type: 0
+  # 编码器类型：0=硬件编码, 1=软件编码
+  enc-type: 1
+  # 是否同步播放（0=异步，1=同步）
   sync: 1
+  # 编码比特率（bps）
   bitrate: 4000000
-  #H264 Profile - 0=Baseline 2=Main 4=High
-  #H265 Profile - 0=Main 1=Main10
-  # set profile only for hw encoder, sw encoder selects profile based on sw-preset
+  # 编码Profile：
+  # H264: 0=Baseline, 2=Main, 4=High
+  # H265: 0=Main, 1=Main10
+  # 注：仅对硬件编码器有效，软件编码器根据sw-preset自动选择
   profile: 0
-  # set below properties in case of RTSPStreaming
+  # RTSP服务端口号
   rtsp-port: 8555
+  # UDP传输端口号
   udp-port: 5400
 
-# 窗口显示
+# -----------------------------------------------------------------------------
+# Sink1: 本地窗口显示配置（EglSink）
+# -----------------------------------------------------------------------------
 sink1:
-  enable: 0
+  # 是否启用此输出（0=禁用，1=启用）
+  enable: 1
+  # 输出类型：2=EglSink（本地窗口显示）
   type: 2
+  # 是否同步播放（0=异步，1=同步）
   sync: 1
+  # QoS（服务质量）控制（0=禁用，1=启用）
   qos: 0
+  # 使用的GPU设备ID
   gpu-id: 0
+  # NvBuf内存类型
   nvbuf-memory-type: 0
 
-# 自定义的udp组播
+# -----------------------------------------------------------------------------
+# Sink2: 自定义UDP组播输出配置
+# -----------------------------------------------------------------------------
 sink2:
-  enable: 1
-  #Type - 1=FakeSink 2=EglSink 3=File 4=UDPSink 5=nvdrmvideosink 6=MsgConvBroker 7=MyNetwork
-  type: 7
-  ip: 230.1.8.31
-  multicast-port: 8128
-  # NOTE: 通过ip a 查看网卡，指定组播网卡名称，例如: eth0, enp5s0, ens33 等
-  # multicast-iface: eno1
-  # multicast-ttl=32
-  fps: 2  # 可选参数，不配置时默认为25
-
-sink3:
+  # 是否启用此输出（0=禁用，1=启用）
   enable: 0
+  # 输出类型：1=FakeSink 2=EglSink 3=File 4=UDPSink 5=nvdrmvideosink 6=MsgConvBroker 7=MyNetwork(自定义组播)
+  type: 7
+  # 组播目标IP地址
+  ip: 230.1.8.31
+  # 组播端口号
+  multicast-port: 8128
+  # 组播网卡接口名称（通过ip a命令查看，如eth0, enp5s0, ens33等）
+  # multicast-iface: eno1
+  # 组播TTL值（生存时间）
+  # multicast-ttl=32
+  # 输出帧率（可选参数，不配置时默认为25）
+  fps: 2
+
+# -----------------------------------------------------------------------------
+# Sink3: 本地文件录制配置
+# -----------------------------------------------------------------------------
+sink3:
+  # 是否启用此输出（0=禁用，1=启用）
+  enable: 0
+  # 输出类型：3=File（文件录制）
   type: 3
+  # 是否同步（0=异步，1=同步；录制建议用0）
   sync: 0
-  container : 2  # 1=mp4, 2=mkv
-  codec : 1      # 1=h264, 2=h265
+  # 容器格式：1=mp4, 2=mkv
+  container : 2
+  # 编码格式：1=H264, 2=H265
+  codec : 1
+  # 编码比特率（bps）
   bitrate: 4000000
+  # 输出文件路径
   output-file: ./deepstream_output.mkv
 
+# -----------------------------------------------------------------------------
+# OSD（On-Screen Display）屏幕叠加显示配置
+# -----------------------------------------------------------------------------
 osd:
+  # 是否启用OSD（0=禁用，1=启用）
   enable: 1
+  # 使用的GPU设备ID
   gpu-id: 0
+  # 检测框边框宽度（像素）
   border-width: 2
+  # 文字大小
   text-size: 15
-  #value changed
+  # 文字颜色（R;G;B;A，范围0-1）
   text-color: 1;1;1;1
+  # 文字背景颜色（R;G;B;A，范围0-1）
   text-bg-color: 0.3;0.3;0.3;1
+  # 字体名称
   font: Serif
+  # 是否显示时钟（0=禁用，1=启用）
   show-clock: 1
+  # 时钟X轴偏移量（像素）
   clock-x-offset: 1700
+  # 时钟Y轴偏移量（像素）
   clock-y-offset: 15
+  # 时钟文字大小
   clock-text-size: 12
+  # 时钟文字颜色（R;G;B;A，范围0-1）
   clock-color: 1;1;0;1
+  # NvBuf内存类型
   nvbuf-memory-type: 0
 
+# -----------------------------------------------------------------------------
+# StreamMux（流复用器）配置
+# -----------------------------------------------------------------------------
 streammux:
+  # 使用的GPU设备ID
   gpu-id: 0
-  ##Boolean property to inform muxer that sources are live
+  # 是否为实时源（0=文件/录像，1=实时流如RTSP/摄像头）
   live-source: 1
+  # 缓冲池大小（帧数）
   buffer-pool-size: 4
+  # 批处理大小（同时处理的帧数，通常等于输入源数量）
   batch-size: 1
-  ##time out in usec, to wait after the first buffer is available
-  ##to push the batch even if the complete batch is not formed
-  batched-push-timeout: 40000
-  ## Set muxer output width and height
+  # 批处理超时时间（微秒），等待第一个buffer后，即使batch未满也会推送
+  batched-push-timeout: 10000
+  # 复用器输出宽度（像素）
   width: 1920
+  # 复用器输出高度（像素）
   height: 1080
-  ##Enable to maintain aspect ratio wrt source, and allow black borders, works
-  ##along with width, height properties
+  # 是否启用padding保持宽高比（0=禁用，1=启用；启用后会添加黑边）
   enable-padding: 0
+  # NvBuf内存类型
   nvbuf-memory-type: 0
 
+# -----------------------------------------------------------------------------
+# 测试/调试配置
+# -----------------------------------------------------------------------------
 tests:
+  # 文件源循环播放（0=播放一次，1=循环播放）
   file-loop: 1
