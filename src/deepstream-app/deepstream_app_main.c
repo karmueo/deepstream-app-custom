@@ -2294,7 +2294,8 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
         }
         corner_writer_commit(&corner_writer);
 
-        if (batch_surf)
+        /* 鹰眼图功能开关 */
+        if (batch_surf && appCtx->config.osd_config.enable_thumbnail)
         {
             NvDsObjectMeta *thumb_obj = select_primary_object(frame_meta);
             if (thumb_obj)

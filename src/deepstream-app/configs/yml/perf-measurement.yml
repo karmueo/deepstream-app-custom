@@ -74,7 +74,7 @@ sink3:
   container : 2  # 1=mp4, 2=mkv
   codec : 1      # 1=h264, 2=h265
   bitrate: 4000000
-  output-file: /home/nvidia/work/deepstream-app-custom/build/output.mkv
+  output-file: output.mkv
 
 # 自定义的udp组播
 sink2:
@@ -102,6 +102,8 @@ osd:
   clock-y-offset: 15
   clock-text-size: 12
   clock-color: 1;1;0;1
+  # 是否启用右下角鹰眼图功能（0=禁用，1=启用）
+  enable-thumbnail: 0
   nvbuf-memory-type: 0
 
 streammux:
@@ -122,4 +124,4 @@ streammux:
   nvbuf-memory-type: 0
 
 tests:
-  file-loop: 1
+  file-loop: 0

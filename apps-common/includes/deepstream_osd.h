@@ -40,6 +40,7 @@ typedef struct
   gboolean draw_text;
   gboolean draw_bbox;
   gboolean draw_mask;
+  gboolean enable_thumbnail;   /**< 是否启用右下角鹰眼图功能（0=禁用，1=启用） */
   gint text_size;
   gint border_width;
   gint clock_text_size;

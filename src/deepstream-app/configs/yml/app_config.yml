@@ -17,7 +17,7 @@ application:
 source:
   # 视频源CSV配置文件路径（包含RTSP/文件流地址等）
   # csv-file-path: sources.csv
-  csv-file-path: file_sources.csv
+  csv-file-path: debug_sources.csv
   #file_sources.csv
   #debug_sources.csv
 
@@ -242,6 +242,8 @@ osd:
   clock-text-size: 12
   # 时钟文字颜色（R;G;B;A，范围0-1）
   clock-color: 1;1;0;1
+  # 是否启用右下角鹰眼图功能（0=禁用，1=启用）
+  enable-thumbnail: 1
   # NvBuf内存类型
   nvbuf-memory-type: 0
 

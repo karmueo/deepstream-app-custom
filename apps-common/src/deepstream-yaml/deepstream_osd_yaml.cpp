@@ -28,6 +28,7 @@ parse_osd_yaml (NvDsOSDConfig *config, gchar *cfg_file_path)
   config->draw_text = TRUE;
   config->draw_bbox = TRUE;
   config->draw_mask = FALSE;
+  config->enable_thumbnail = TRUE;  /**< 默认启用鹰眼图 */
 
   YAML::Node configyml = YAML::LoadFile(cfg_file_path);
   for(YAML::const_iterator itr = configyml["osd"].begin();
@@ -125,6 +126,8 @@ parse_osd_yaml (NvDsOSDConfig *config, gchar *cfg_file_path)
       config->draw_bbox = itr->second.as<gboolean>();
     } else if (paramKey == "display-mask") {
       config->draw_mask = itr->second.as<gboolean>();
+    } else if (paramKey == "enable-thumbnail") {
+      config->enable_thumbnail = itr->second.as<gboolean>();
     } else {
       cout << "[WARNING] Unknown param found in osd: " << paramKey << endl;
     }
