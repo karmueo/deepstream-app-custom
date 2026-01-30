@@ -74,7 +74,7 @@ sink3:
   container : 2  # 1=mp4, 2=mkv
   codec : 1      # 1=h264, 2=h265
   bitrate: 4000000
-  output-file: ./output.mkv
+  output-file: /home/nvidia/work/deepstream-app-custom/build/output.mkv
 
 # 自定义的udp组播
 sink2:
