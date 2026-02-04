@@ -39,14 +39,14 @@ parse_udpjsonmeta_yaml (NvDsUdpJsonMetaConfig *config, gchar *cfg_file_path)
 
   config->enable = FALSE;
   config->multicast_ip = NULL;
-  config->port = 0;
   config->iface = NULL;
   config->recv_buf_size = 0;
-  config->json_key = NULL;
-  config->object_id_key = NULL;
-  config->source_id_key = NULL;
   config->cache_ttl_ms = 0;
   config->max_cache_size = 0;
+  /* C-UAV 协议配置默认值 */
+  config->enable_cuav_parser = FALSE;
+  config->cuav_port = 8013;
+  config->enable_cuav_debug = FALSE;
 
   for (YAML::const_iterator itr = configyml["udpjsonmeta"].begin();
        itr != configyml["udpjsonmeta"].end(); ++itr)
@@ -58,30 +58,22 @@ parse_udpjsonmeta_yaml (NvDsUdpJsonMetaConfig *config, gchar *cfg_file_path)
       std::string temp = itr->second.as<std::string>(); /* 组播地址 */
       config->multicast_ip = (char *)malloc(sizeof(char) * 1024);
       std::strncpy(config->multicast_ip, temp.c_str(), 1023);
-    } else if (paramKey == "port") {
-      config->port = itr->second.as<guint>();
     } else if (paramKey == "interface") {
       std::string temp = itr->second.as<std::string>(); /* 网卡名 */
       config->iface = (char *)malloc(sizeof(char) * 1024);
       std::strncpy(config->iface, temp.c_str(), 1023);
     } else if (paramKey == "recv-buf-size") {
       config->recv_buf_size = itr->second.as<guint>();
-    } else if (paramKey == "json-key") {
-      std::string temp = itr->second.as<std::string>(); /* JSON 值键 */
-      config->json_key = (char *)malloc(sizeof(char) * 1024);
-      std::strncpy(config->json_key, temp.c_str(), 1023);
-    } else if (paramKey == "object-id-key") {
-      std::string temp = itr->second.as<std::string>(); /* 目标ID键 */
-      config->object_id_key = (char *)malloc(sizeof(char) * 1024);
-      std::strncpy(config->object_id_key, temp.c_str(), 1023);
-    } else if (paramKey == "source-id-key") {
-      std::string temp = itr->second.as<std::string>(); /* 源ID键 */
-      config->source_id_key = (char *)malloc(sizeof(char) * 1024);
-      std::strncpy(config->source_id_key, temp.c_str(), 1023);
     } else if (paramKey == "cache-ttl-ms") {
       config->cache_ttl_ms = itr->second.as<guint>();
     } else if (paramKey == "max-cache-size") {
       config->max_cache_size = itr->second.as<guint>();
+    } else if (paramKey == "enable-cuav-parser") {
+      config->enable_cuav_parser = itr->second.as<gboolean>();
+    } else if (paramKey == "cuav-port") {
+      config->cuav_port = itr->second.as<guint>();
+    } else if (paramKey == "cuav-debug") {
+      config->enable_cuav_debug = itr->second.as<gboolean>();
     } else {
       cout << "Unknown key " << paramKey << " for udpjsonmeta" << endl;
     }

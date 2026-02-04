@@ -1380,11 +1380,6 @@ parse_udpjsonmeta(NvDsUdpJsonMetaConfig *config, GKeyFile *key_file)
             config->multicast_ip = g_key_file_get_string(key_file, CONFIG_GROUP_UDPJSONMETA, "multicast-ip", &error);
             CHECK_ERROR(error);
         }
-        else if (!g_strcmp0(*key, "port"))
-        {
-            config->port = g_key_file_get_integer(key_file, CONFIG_GROUP_UDPJSONMETA, "port", &error);
-            CHECK_ERROR(error);
-        }
         else if (!g_strcmp0(*key, "interface"))
         {
             config->iface = g_key_file_get_string(key_file, CONFIG_GROUP_UDPJSONMETA, "interface", &error);
@@ -1393,21 +1388,6 @@ parse_udpjsonmeta(NvDsUdpJsonMetaConfig *config, GKeyFile *key_file)
         else if (!g_strcmp0(*key, "recv-buf-size"))
         {
             config->recv_buf_size = g_key_file_get_integer(key_file, CONFIG_GROUP_UDPJSONMETA, "recv-buf-size", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "json-key"))
-        {
-            config->json_key = g_key_file_get_string(key_file, CONFIG_GROUP_UDPJSONMETA, "json-key", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "object-id-key"))
-        {
-            config->object_id_key = g_key_file_get_string(key_file, CONFIG_GROUP_UDPJSONMETA, "object-id-key", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "source-id-key"))
-        {
-            config->source_id_key = g_key_file_get_string(key_file, CONFIG_GROUP_UDPJSONMETA, "source-id-key", &error);
             CHECK_ERROR(error);
         }
         else if (!g_strcmp0(*key, "cache-ttl-ms"))

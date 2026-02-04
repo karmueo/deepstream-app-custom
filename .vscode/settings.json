@@ -16,6 +16,10 @@
                 "name": "LD_LIBRARY_PATH",
                 "value": "/opt/nvidia/deepstream/deepstream/lib:${env:LD_LIBRARY_PATH}"
             },
+            {
+                "name": "GST_DEBUG",
+                "value": "2"
+            }
         ]
     },
     "clangd.arguments": [

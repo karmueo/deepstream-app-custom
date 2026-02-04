@@ -750,22 +750,25 @@ create_common_elements(NvDsConfig *config, NvDsPipeline *pipeline,
 
         if (config->udpjsonmeta_config.multicast_ip)
             g_object_set(G_OBJECT(udpjsonmeta), "multicast-ip", config->udpjsonmeta_config.multicast_ip, NULL);
-        if (config->udpjsonmeta_config.port)
-            g_object_set(G_OBJECT(udpjsonmeta), "port", config->udpjsonmeta_config.port, NULL);
         if (config->udpjsonmeta_config.iface)
             g_object_set(G_OBJECT(udpjsonmeta), "iface", config->udpjsonmeta_config.iface, NULL);
         if (config->udpjsonmeta_config.recv_buf_size)
             g_object_set(G_OBJECT(udpjsonmeta), "recv-buf-size", config->udpjsonmeta_config.recv_buf_size, NULL);
-        if (config->udpjsonmeta_config.json_key)
-            g_object_set(G_OBJECT(udpjsonmeta), "json-key", config->udpjsonmeta_config.json_key, NULL);
-        if (config->udpjsonmeta_config.object_id_key)
-            g_object_set(G_OBJECT(udpjsonmeta), "object-id-key", config->udpjsonmeta_config.object_id_key, NULL);
-        if (config->udpjsonmeta_config.source_id_key)
-            g_object_set(G_OBJECT(udpjsonmeta), "source-id-key", config->udpjsonmeta_config.source_id_key, NULL);
         if (config->udpjsonmeta_config.cache_ttl_ms)
             g_object_set(G_OBJECT(udpjsonmeta), "cache-ttl-ms", config->udpjsonmeta_config.cache_ttl_ms, NULL);
         if (config->udpjsonmeta_config.max_cache_size)
             g_object_set(G_OBJECT(udpjsonmeta), "max-cache-size", config->udpjsonmeta_config.max_cache_size, NULL);
+
+        /* C-UAV 协议配置 */
+        if (config->udpjsonmeta_config.enable_cuav_parser)
+        {
+            g_object_set(G_OBJECT(udpjsonmeta), "enable-cuav-parser", TRUE, NULL);
+            g_object_set(G_OBJECT(udpjsonmeta), "cuav-port", config->udpjsonmeta_config.cuav_port, NULL);
+            if (config->udpjsonmeta_config.enable_cuav_debug)
+            {
+                g_object_set(G_OBJECT(udpjsonmeta), "cuav-debug", TRUE, NULL);
+            }
+        }
 
         gst_bin_add(GST_BIN(pipeline->pipeline), udpjsonmeta);
         if (!*src_elem)

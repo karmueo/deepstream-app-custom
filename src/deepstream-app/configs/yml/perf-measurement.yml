@@ -60,15 +60,36 @@ videorecognition:
   trt-engine-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/gst-videorecognition/models/x3d_v8_4cls_fp16.engine
   labels-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/cls_labels.txt
 
+udpjsonmeta:
+  # 是否启用UDP JSON元数据接收（0=禁用，1=启用）
+  enable: 1
+  # 组播IP地址
+  multicast-ip: 230.1.88.51
+  # 网络接口名称（如eth0, enp5s0等）
+  interface: eno1
+  # 接收缓冲区大小（字节）
+  # recv-buf-size: 1048576
+  # 缓存过期时间（毫秒）
+  # cache-ttl-ms: 1000
+  # 最大缓存条目数
+  # max-cache-size: 2048
+  # C-UAV 协议配置
+  # 是否启用C-UAV协议解析（0=禁用，1=启用）
+  enable-cuav-parser: 1
+  # C-UAV组播端口（默认8013）
+  cuav-port: 8013
+  # 是否打印C-UAV调试信息（0=禁用，1=启用）
+  cuav-debug: 1
+
 # FAKE SINK 输出
 sink0:
-  enable: 0
+  enable: 1
   type: 1
   sync: 0
 
 # 文件输出
 sink3:
-  enable: 1
+  enable: 0
   type: 3
   sync: 0
   container : 2  # 1=mp4, 2=mkv
@@ -89,7 +110,7 @@ sink2:
   fps: 2  # 可选参数，不配置时默认为25
 
 osd:
-  enable: 1
+  enable: 0
   gpu-id: 0
   border-width: 2
   text-size: 15
@@ -124,4 +145,4 @@ streammux:
   nvbuf-memory-type: 0
 
 tests:
-  file-loop: 0
+  file-loop: 1

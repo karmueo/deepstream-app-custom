@@ -116,18 +116,10 @@ udpjsonmeta:
   enable: 0
   # 组播IP地址
   multicast-ip: 230.1.1.22
-  # UDP端口号
-  port: 6000
   # 网络接口名称（如eth0, enp5s0等）
   interface: enp5s0
   # 接收缓冲区大小（字节）
   # recv-buf-size: 1048576
-  # JSON数据中的值字段名
-  json-key: value
-  # JSON数据中的目标ID字段名
-  object-id-key: object_id
-  # JSON数据中的源ID字段名
-  source-id-key: source_id
   # 缓存过期时间（毫秒）
   # cache-ttl-ms: 1000
   # 最大缓存条目数
