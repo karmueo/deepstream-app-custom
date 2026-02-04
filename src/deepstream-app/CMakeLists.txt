@@ -90,6 +90,7 @@ set(ALL_SOURCES
 set(INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../../apps-common/includes
+    ${CMAKE_CURRENT_SOURCE_DIR}/../gst-udpjson_meta
     /opt/nvidia/deepstream/deepstream/sources/includes
     ${CUDAToolkit_INCLUDE_DIRS}
 )
@@ -168,6 +169,22 @@ target_link_libraries(deepstream-app PRIVATE
     ${JSON_GLIB_LIBRARIES}
     ${GSTAPP_LIBRARIES}
 )
+
+# Link udpjsonmeta plugin library if available (for callback symbols)
+find_library(UDPJSONMETA_LIB
+    NAMES udpjsonmeta
+    PATHS
+        ${CMAKE_CURRENT_SOURCE_DIR}/../gst-udpjson_meta/build
+        /opt/nvidia/deepstream/deepstream/lib/gst-plugins
+        /opt/nvidia/deepstream/deepstream/lib
+    NO_DEFAULT_PATH
+)
+if(UDPJSONMETA_LIB)
+    target_link_libraries(deepstream-app PRIVATE ${UDPJSONMETA_LIB})
+    message(STATUS "Linking udpjsonmeta: ${UDPJSONMETA_LIB}")
+else()
+    message(WARNING "udpjsonmeta library not found; deepstream-app may fail to link if callbacks are used")
+endif()
 
 # Set RPATH for runtime library loading
 set_target_properties(deepstream-app PROPERTIES

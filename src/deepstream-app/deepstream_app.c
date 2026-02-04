@@ -18,6 +18,7 @@
 #include "deepstream_app_callbacks.h"
 #include "deepstream_app_probes.h"
 #include "nvds_obj_encode.h"
+#include "gstudpjsonmeta.h"
 
 GST_DEBUG_CATEGORY_EXTERN(NVDS_APP);
 
@@ -57,6 +58,23 @@ NvDsSensorInfo *get_sensor_info(AppCtx *appCtx, guint source_id)
     NvDsSensorInfo *sensorInfo = (NvDsSensorInfo *)g_hash_table_lookup(appCtx->sensorInfoHash,
                                                                        source_id + (gchar *)NULL);
     return sensorInfo;
+}
+
+static void on_cuav_guidance(const CUAVCommonHeader *header,
+                             const CUAVGuidanceInfo *guidance,
+                             gpointer user_data)
+{
+    (void)user_data;
+    if (!header || !guidance)
+        return;
+
+    g_print("[cuav][guidance] msg_sn=%u time=%u-%02u-%02u %02u:%02u:%02u.%.0f "
+            "tar_id=%u cat=%u stat=%u enu_a=%.2f enu_e=%.2f lon=%.6f lat=%.6f alt=%.2f\n",
+            header->msg_sn,
+            guidance->yr, guidance->mo, guidance->dy,
+            guidance->h, guidance->min, guidance->sec, guidance->msec,
+            guidance->tar_id, guidance->tar_category, guidance->guid_stat,
+            guidance->enu_a, guidance->enu_e, guidance->lon, guidance->lat, guidance->alt);
 }
 
 /**
@@ -764,10 +782,18 @@ create_common_elements(NvDsConfig *config, NvDsPipeline *pipeline,
         {
             g_object_set(G_OBJECT(udpjsonmeta), "enable-cuav-parser", TRUE, NULL);
             g_object_set(G_OBJECT(udpjsonmeta), "cuav-port", config->udpjsonmeta_config.cuav_port, NULL);
+            if (config->udpjsonmeta_config.cuav_ctrl_port)
+            {
+                g_object_set(G_OBJECT(udpjsonmeta), "cuav-ctrl-port",
+                             config->udpjsonmeta_config.cuav_ctrl_port, NULL);
+            }
             if (config->udpjsonmeta_config.enable_cuav_debug)
             {
                 g_object_set(G_OBJECT(udpjsonmeta), "cuav-debug", TRUE, NULL);
             }
+            gst_udpjson_meta_set_guidance_callback(GST_UDPJSON_META(udpjsonmeta),
+                                                   on_cuav_guidance,
+                                                   pipeline->common_elements.appCtx);
         }
 
         gst_bin_add(GST_BIN(pipeline->pipeline), udpjsonmeta);

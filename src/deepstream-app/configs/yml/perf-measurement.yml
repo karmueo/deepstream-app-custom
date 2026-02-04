@@ -78,6 +78,8 @@ udpjsonmeta:
   enable-cuav-parser: 1
   # C-UAV组播端口（默认8013）
   cuav-port: 8013
+  # C-UAV控制/引导端口（默认8003）
+  cuav-ctrl-port: 8003
   # 是否打印C-UAV调试信息（0=禁用，1=启用）
   cuav-debug: 1
 

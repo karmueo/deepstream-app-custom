@@ -1400,6 +1400,11 @@ parse_udpjsonmeta(NvDsUdpJsonMetaConfig *config, GKeyFile *key_file)
             config->max_cache_size = g_key_file_get_integer(key_file, CONFIG_GROUP_UDPJSONMETA, "max-cache-size", &error);
             CHECK_ERROR(error);
         }
+        else if (!g_strcmp0(*key, "cuav-ctrl-port"))
+        {
+            config->cuav_ctrl_port = g_key_file_get_integer(key_file, CONFIG_GROUP_UDPJSONMETA, "cuav-ctrl-port", &error);
+            CHECK_ERROR(error);
+        }
         else
         {
             NVGSTDS_WARN_MSG_V("Unknown key '%s' for group [%s]", *key, CONFIG_GROUP_UDPJSONMETA);

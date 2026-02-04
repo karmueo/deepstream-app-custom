@@ -46,6 +46,7 @@ parse_udpjsonmeta_yaml (NvDsUdpJsonMetaConfig *config, gchar *cfg_file_path)
   /* C-UAV 协议配置默认值 */
   config->enable_cuav_parser = FALSE;
   config->cuav_port = 8013;
+  config->cuav_ctrl_port = 8003;
   config->enable_cuav_debug = FALSE;
 
   for (YAML::const_iterator itr = configyml["udpjsonmeta"].begin();
@@ -72,6 +73,8 @@ parse_udpjsonmeta_yaml (NvDsUdpJsonMetaConfig *config, gchar *cfg_file_path)
       config->enable_cuav_parser = itr->second.as<gboolean>();
     } else if (paramKey == "cuav-port") {
       config->cuav_port = itr->second.as<guint>();
+    } else if (paramKey == "cuav-ctrl-port") {
+      config->cuav_ctrl_port = itr->second.as<guint>();
     } else if (paramKey == "cuav-debug") {
       config->enable_cuav_debug = itr->second.as<gboolean>();
     } else {

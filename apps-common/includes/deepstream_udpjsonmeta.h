@@ -21,6 +21,7 @@ typedef struct
     /* C-UAV 协议配置 */
     gboolean enable_cuav_parser; /* 是否启用 C-UAV 协议解析 */
     guint cuav_port; /* C-UAV 组播端口 */
+    guint cuav_ctrl_port; /* C-UAV 控制/引导端口 */
     gboolean enable_cuav_debug; /* 是否启用 C-UAV 调试打印 */
 } NvDsUdpJsonMetaConfig;
 
