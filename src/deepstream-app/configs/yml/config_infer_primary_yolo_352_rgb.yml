@@ -20,7 +20,7 @@ property:
   # onnx-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/models/yolo26s_rgb_352_2c_v2.onnx
 
   # TensorRT 引擎文件路径（序列化后的推理引擎，加载更快）
-  model-engine-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/models/yolo26s_rgb_352_2c_v2_fp16.engine
+  model-engine-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/models/yolo26s_rgb_352_2c.engine
 
   # INT8 量化校准表文件路径（仅 network-mode=1 时需要）
   # int8-calib-file: calib.table

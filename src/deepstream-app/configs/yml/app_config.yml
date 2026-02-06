@@ -17,7 +17,7 @@ application:
 source:
   # 视频源CSV配置文件路径（包含RTSP/文件流地址等）
   # csv-file-path: sources.csv
-  csv-file-path: debug_sources.csv
+  csv-file-path: file_sources.csv
   #file_sources.csv
   #debug_sources.csv
 
@@ -104,7 +104,7 @@ videorecognition:
   # 采样率（每隔多少帧采样一次）
   sampling-rate: 5
   # TensorRT引擎文件路径
-  trt-engine-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/gst-videorecognition/models/x3d_v8_4cls_fp16.engine
+  trt-engine-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/gst-videorecognition/models/x3d_v9_3cls_fp16.engine
   # 分类标签文件路径
   labels-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/cls_labels.txt
 

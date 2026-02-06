@@ -57,7 +57,7 @@ videorecognition:
   processing-height: 64
   model-clip-length: 32
   sampling-rate: 5
-  trt-engine-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/gst-videorecognition/models/x3d_v8_4cls_fp16.engine
+  trt-engine-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/gst-videorecognition/models/x3d.engine
   labels-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/cls_labels.txt
 
 udpjsonmeta:
@@ -85,13 +85,13 @@ udpjsonmeta:
 
 # FAKE SINK 输出
 sink0:
-  enable: 1
+  enable: 0
   type: 1
   sync: 0
 
 # 文件输出
 sink3:
-  enable: 0
+  enable: 1
   type: 3
   sync: 0
   container : 2  # 1=mp4, 2=mkv
@@ -112,7 +112,7 @@ sink2:
   fps: 2  # 可选参数，不配置时默认为25
 
 osd:
-  enable: 0
+  enable: 1
   gpu-id: 0
   border-width: 2
   text-size: 15
@@ -147,4 +147,4 @@ streammux:
   nvbuf-memory-type: 0
 
 tests:
-  file-loop: 1
+  file-loop: 0
