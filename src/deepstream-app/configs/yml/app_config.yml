@@ -11,13 +11,27 @@ application:
   # 是否开启检测到目标后智能录制（0=禁用，1=启用）
   smart-rec-detect-default: 0
 
+tiled-display:
+  enable: 1
+  rows: 2
+  columns: 2
+  width: 1920
+  height: 1080
+  gpu-id: 0
+  #(0): nvbuf-mem-default - Default memory allocated, specific to particular platform
+  #(1): nvbuf-mem-cuda-pinned - Allocate Pinned/Host cuda memory, applicable for Tesla
+  #(2): nvbuf-mem-cuda-device - Allocate Device cuda memory, applicable for Tesla
+  #(3): nvbuf-mem-cuda-unified - Allocate Unified cuda memory, applicable for Tesla
+  #(4): nvbuf-mem-surface-array - Allocate Surface Array memory, applicable for Jetson
+  nvbuf-memory-type: 0
+
 # -----------------------------------------------------------------------------
 # 视频源配置
 # -----------------------------------------------------------------------------
 source:
   # 视频源CSV配置文件路径（包含RTSP/文件流地址等）
-  # csv-file-path: sources.csv
-  csv-file-path: file_sources.csv
+  csv-file-path: sources.csv
+  # csv-file-path: file_sources.csv
   #file_sources.csv
   #debug_sources.csv
 
@@ -59,29 +73,47 @@ primary-gie:
 # -----------------------------------------------------------------------------
 # 目标跟踪器配置（自定义单目标跟踪 SOT）
 # -----------------------------------------------------------------------------
+# tracker:
+#   # 是否启用跟踪器（0=禁用，1=启用）
+#   enable: 1
+#   # 跟踪器处理宽度（对于NvDCF和NvDeepSORT必须是32的倍数）
+#   tracker-width: 1920
+#   # 跟踪器处理高度（对于NvDCF和NvDeepSORT必须是32的倍数）
+#   tracker-height: 1080
+#   # 跟踪器底层库文件路径
+#   ll-lib-file: /opt/nvidia/deepstream/deepstream/lib/libsot.so
+#   # 跟踪器配置文件路径
+#   ll-config-file: /opt/nvidia/deepstream/deepstream/sot_plugin/config/config_sot.yml
+#   # 使用的GPU设备ID
+#   gpu-id: 0
+#   # 是否在OSD上显示跟踪ID（0=禁用，1=启用）
+#   display-tracking-id: 1
+#   # TODO: 未测试。静止目标误检过滤开关（仅在tracker启用时生效，0=禁用，1=启用）
+#   static-target-filter: 0
+#   # 连续帧数达到该值且目标稳定，则认为是静止误检目标
+#   static-target-filter-frames: 30
+#   # 目标中心点最大允许偏移（像素）
+#   static-target-filter-center-threshold: 5.0
+#   # 目标框尺寸变化阈值（比例，例如0.05表示5%）
+#   static-target-filter-size-threshold: 0.05
+
+# -----------------------------------------------------------------------------
+# 目标跟踪器配置（自定义多目标跟踪 MOT）
+# -----------------------------------------------------------------------------
 tracker:
-  # 是否启用跟踪器（0=禁用，1=启用）
   enable: 1
-  # 跟踪器处理宽度（对于NvDCF和NvDeepSORT必须是32的倍数）
-  tracker-width: 1920
-  # 跟踪器处理高度（对于NvDCF和NvDeepSORT必须是32的倍数）
-  tracker-height: 1080
-  # 跟踪器底层库文件路径
-  ll-lib-file: /opt/nvidia/deepstream/deepstream/lib/libsot.so
-  # 跟踪器配置文件路径
-  ll-config-file: /opt/nvidia/deepstream/deepstream/sot_plugin/config/config_sot.yml
-  # 使用的GPU设备ID
+  # For NvDCF and NvDeepSORT tracker, tracker-width and tracker-height must be a multiple of 32, respectively
+  tracker-width: 960
+  tracker-height: 544
+  ll-lib-file: /opt/nvidia/deepstream/deepstream/lib/libnvds_nvmultiobjecttracker.so
+  # ll-config-file required to set different tracker types
+  # ll-config-file: config_tracker_IOU.yml
+  # ll-config-file: config_tracker_NvSORT.yml
+  ll-config-file: /home/nvidia/work/deepstream-app-custom/src/deepstream-app/configs/yml/config_tracker_NvDCF_perf.yml
+  # ll-config-file: config_tracker_NvDCF_accuracy.yml
+  # ll-config-file: config_tracker_NvDeepSORT.yml
   gpu-id: 0
-  # 是否在OSD上显示跟踪ID（0=禁用，1=启用）
   display-tracking-id: 1
-  # TODO: 未测试。静止目标误检过滤开关（仅在tracker启用时生效，0=禁用，1=启用）
-  static-target-filter: 0
-  # 连续帧数达到该值且目标稳定，则认为是静止误检目标
-  static-target-filter-frames: 30
-  # 目标中心点最大允许偏移（像素）
-  static-target-filter-center-threshold: 5.0
-  # 目标框尺寸变化阈值（比例，例如0.05表示5%）
-  static-target-filter-size-threshold: 0.05
 
 # -----------------------------------------------------------------------------
 # 视频识别模块配置（多帧动作/行为识别）
@@ -244,7 +276,7 @@ osd:
   # 时钟文字颜色（R;G;B;A，范围0-1）
   clock-color: 1;1;0;1
   # 是否启用右下角鹰眼图功能（0=禁用，1=启用）
-  enable-thumbnail: 1
+  enable-thumbnail: 0
   # NvBuf内存类型
   nvbuf-memory-type: 0
 
@@ -258,8 +290,8 @@ streammux:
   live-source: 1
   # 缓冲池大小（帧数）
   buffer-pool-size: 4
-  # 批处理大小（同时处理的帧数，通常等于输入源数量）
-  batch-size: 1
+  # 批处理大小（同时处理的帧数，需与主检测 batch 能力匹配）
+  batch-size: 4
   # 批处理超时时间（微秒），等待第一个buffer后，即使batch未满也会推送
   batched-push-timeout: 10000
   # 复用器输出宽度（像素）

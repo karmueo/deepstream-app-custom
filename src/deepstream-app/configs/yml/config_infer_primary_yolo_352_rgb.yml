@@ -20,7 +20,7 @@ property:
   # onnx-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/models/yolo26s_rgb_352_2c_v2.onnx
 
   # TensorRT 引擎文件路径（序列化后的推理引擎，加载更快）
-  model-engine-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/models/yolo26s_rgb_352_2c.engine
+  model-engine-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/models/yolo26n_rgb_352_uav_no-p2_b4_fp16.engine
 
   # INT8 量化校准表文件路径（仅 network-mode=1 时需要）
   # int8-calib-file: calib.table
@@ -29,13 +29,13 @@ property:
   labelfile-path: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/labels.txt
 
   # 推理批处理大小（同时处理的图像数量）
-  batch-size: 1
+  batch-size: 4
 
   # 网络精度模式：0=FP32（全精度），1=INT8（需校准表），2=FP16（半精度），3=BEST（自动选最优）
   network-mode: 2
 
   # 模型检测的类别数量
-  num-detected-classes: 2
+  num-detected-classes: 1
 
   # 推理间隔帧数（0=每帧推理，N=每隔N帧推理一次）
   interval: 0

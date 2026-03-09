@@ -113,6 +113,66 @@ has_detection_target(const NvDsObjectMeta *obj_meta)
     return FALSE;
 }
 
+typedef struct
+{
+    gchar *label;
+    gfloat confidence;
+} DetectionRecord;
+
+static void
+free_detection_record(DetectionRecord *record)
+{
+    if (!record)
+        return;
+    g_free(record->label);
+    g_free(record);
+}
+
+static void
+clear_tracker_label_history(AppCtx *appCtx)
+{
+    if (!appCtx || !appCtx->tracker_label_history)
+        return;
+
+    while (!g_queue_is_empty(appCtx->tracker_label_history))
+    {
+        DetectionRecord *record =
+            (DetectionRecord *)g_queue_pop_head(appCtx->tracker_label_history);
+        free_detection_record(record);
+    }
+}
+
+static void
+destroy_tracker_label_history(AppCtx *appCtx)
+{
+    if (!appCtx || !appCtx->tracker_label_history)
+        return;
+
+    clear_tracker_label_history(appCtx);
+    g_queue_free(appCtx->tracker_label_history);
+    appCtx->tracker_label_history = NULL;
+}
+
+static gboolean
+get_recent_valid_detection_confidence(const AppCtx *appCtx, gfloat *confidence)
+{
+    if (!appCtx || !appCtx->tracker_label_history || !confidence)
+        return FALSE;
+
+    for (GList *iter = appCtx->tracker_label_history->tail; iter != NULL;
+         iter = iter->prev)
+    {
+        DetectionRecord *record = (DetectionRecord *)iter->data;
+        if (record && record->confidence >= 0.0f)
+        {
+            *confidence = record->confidence;
+            return TRUE;
+        }
+    }
+
+    return FALSE;
+}
+
 // NTP时间戳转Unix时间戳（秒.小数）
 static double ntp_to_unix(uint64_t ntp_timestamp)
 {
@@ -863,12 +923,6 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                 !obj_meta->classifier_meta_list)
             {
                 const guint MAX_HISTORY = 50; // 最多保留最近次历史记录
-
-                /* 定义历史记录结构 */
-                typedef struct {
-                    gchar *label;
-                    gfloat confidence;
-                } DetectionRecord;
                 
                 /* 初始化历史队列（使用GQueue存储DetectionRecord指针） */
                 if (!appCtx->tracker_label_history)
@@ -887,17 +941,7 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                     }
                     if (appCtx->tracker_label_history)
                     {
-                        /* 释放DetectionRecord结构 */
-                        for (GList *iter = appCtx->tracker_label_history->head;
-                             iter != NULL; iter = iter->next)
-                        {
-                            DetectionRecord *record = (DetectionRecord *)iter->data;
-                            if (record) {
-                                g_free(record->label);
-                                g_free(record);
-                            }
-                        }
-                        g_queue_clear(appCtx->tracker_label_history);
+                        clear_tracker_label_history(appCtx);
                     }
                 }
                 else
@@ -915,17 +959,7 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                         }
                         if (appCtx->tracker_label_history)
                         {
-                            /* 释放DetectionRecord结构 */
-                            for (GList *iter = appCtx->tracker_label_history->head;
-                                 iter != NULL; iter = iter->next)
-                            {
-                                DetectionRecord *record = (DetectionRecord *)iter->data;
-                                if (record) {
-                                    g_free(record->label);
-                                    g_free(record);
-                                }
-                            }
-                            g_queue_clear(appCtx->tracker_label_history);
+                            clear_tracker_label_history(appCtx);
                         }
                         appCtx->tracker_stats_current_id = current_tracker_id;
                         appCtx->tracker_stats_valid = TRUE;
@@ -947,8 +981,8 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                         label = label_buf;
                     }
 
-                    /* 将当前标签和置信度添加到历史队列 */
-                    if (appCtx->tracker_label_history)
+                    /* 仅记录有效检测置信度，避免 tracker-only 帧的 -0.1 污染历史。 */
+                    if (appCtx->tracker_label_history && confidence >= 0.0f)
                     {
                         DetectionRecord *record = g_new0(DetectionRecord, 1);
                         record->label = g_strdup(label);
@@ -2040,16 +2074,33 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
             /* 适度膨胀框，便于角标留出空间 */
             inflate_rect(&obj_meta->rect_params, 1.25f, frame_w, frame_h);
 
-            /* 构建完整标签：优先显示分类结果，否则显示检测类别 */
-            GString *gstr = g_string_new(NULL);
-            gboolean has_classification = FALSE;
+            guint videorecognition_uid =
+                appCtx->config.videorecognition_config.unique_id;
+            gboolean videorecognition_enabled =
+                appCtx->config.videorecognition_config.enable;
 
-            /* 检查是否有分类结果 */
+            /* 构建完整标签：显式区分检测输出、videorecognition 输出与其他分类输出 */
+            GString *gstr = g_string_new(NULL);
+
+            gboolean show_tracking_id =
+                tracker_enabled &&
+                appCtx->config.tracker_config.display_tracking_id &&
+                (obj_meta->object_id != UNTRACKED_OBJECT_ID);
+            gfloat   det_confidence = obj_meta->confidence;
+            gboolean has_det_confidence = (det_confidence >= 0.0f);
+            GString *vr_str = g_string_new(NULL);
+            GString *other_cls_str = g_string_new(NULL);
+            gboolean has_vr_result = FALSE;
+
+            if (!has_det_confidence && single_object_tracker)
+            {
+                has_det_confidence =
+                    get_recent_valid_detection_confidence(appCtx, &det_confidence);
+            }
+
             if (obj_meta->classifier_meta_list)
             {
-                guint cls_count = 0;
-                for (NvDsClassifierMetaList *cl =
-                         obj_meta->classifier_meta_list;
+                for (NvDsClassifierMetaList *cl = obj_meta->classifier_meta_list;
                      cl; cl = cl->next)
                 {
                     NvDsClassifierMeta *cl_meta =
@@ -2062,45 +2113,91 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
                         {
                             continue;
                         }
-                        if (cls_count > 0)
+
+                        if (videorecognition_enabled &&
+                            cl_meta->unique_component_id == videorecognition_uid)
                         {
-                            g_string_append_printf(gstr, " ");
+                            has_vr_result = TRUE;
+                            if (vr_str->len > 0)
+                            {
+                                g_string_append_c(vr_str, ' ');
+                            }
+                            g_string_append_printf(vr_str, "VR:%s(%.2f)",
+                                                   li->result_label,
+                                                   li->result_prob);
                         }
-                        g_string_append_printf(gstr, "%s(%.2f)",
-                                               li->result_label,
-                                               li->result_prob);
-                        cls_count++;
+                        else
+                        {
+                            if (other_cls_str->len > 0)
+                            {
+                                g_string_append_c(other_cls_str, ' ');
+                            }
+                            g_string_append_printf(
+                                other_cls_str, "CLS%d:%s(%.2f)",
+                                cl_meta->unique_component_id,
+                                li->result_label, li->result_prob);
+                        }
+                        has_any_classification = TRUE;
                     }
-                }
-                if (cls_count > 0)
-                {
-                    has_classification = TRUE;
-                    has_any_classification = TRUE; /* 标记批次中有分类结果 */
                 }
             }
 
-            /* 如果没有分类结果，显示检测结果和跟踪信息 */
-            if (!has_classification)
+            if (has_vr_result)
             {
-                /* 添加检测结果 */
+                g_string_append(gstr, vr_str->str);
+            }
+            else
+            {
                 if (obj_meta->obj_label[0] != '\0')
                 {
-                    g_string_append_printf(gstr, "%s(%.2f)", obj_meta->obj_label,
-                                           obj_meta->confidence);
+                    if (has_det_confidence)
+                    {
+                        g_string_append_printf(gstr, "DET:%s(%.2f)",
+                                               obj_meta->obj_label,
+                                               det_confidence);
+                    }
+                    else
+                    {
+                        g_string_append_printf(gstr, "DET:%s",
+                                               obj_meta->obj_label);
+                    }
                 }
                 else
                 {
-                    /* 如果没有标签，使用类别ID */
-                    g_string_append_printf(gstr, "Class_%d(%.2f)",
-                                           obj_meta->class_id,
-                                           obj_meta->confidence);
+                    if (has_det_confidence)
+                    {
+                        g_string_append_printf(gstr, "DET:Class_%d(%.2f)",
+                                               obj_meta->class_id,
+                                               det_confidence);
+                    }
+                    else
+                    {
+                        g_string_append_printf(gstr, "DET:Class_%d",
+                                               obj_meta->class_id);
+                    }
                 }
 
-                /* 添加跟踪信息 */
+                if (other_cls_str->len > 0)
+                {
+                    g_string_append_printf(gstr, " %s", other_cls_str->str);
+                }
+            }
+
+            g_string_free(vr_str, TRUE);
+            g_string_free(other_cls_str, TRUE);
+
+            /* 最终显示文本统一在覆盖层追加跟踪信息，避免前面 probe 的文本被覆盖。 */
+            if (show_tracking_id)
+            {
                 if (single_object_tracker)
                 {
                     g_string_append_printf(gstr, " 跟踪(%.2f) ID:%" G_GUINT64_FORMAT,
                                            obj_meta->tracker_confidence,
+                                           (guint64)obj_meta->object_id);
+                }
+                else
+                {
+                    g_string_append_printf(gstr, " ID:%" G_GUINT64_FORMAT,
                                            (guint64)obj_meta->object_id);
                 }
             }
@@ -2811,9 +2908,7 @@ done:
 
         if (appCtx[i]->tracker_label_history)
         {
-            g_queue_foreach(appCtx[i]->tracker_label_history, (GFunc)g_free, NULL);
-            g_queue_free(appCtx[i]->tracker_label_history);
-            appCtx[i]->tracker_label_history = NULL;
+            destroy_tracker_label_history(appCtx[i]);
         }
 
         if (appCtx[i]->label_anchor_map)
