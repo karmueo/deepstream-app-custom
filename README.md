@@ -200,66 +200,105 @@ export GST_PLUGIN_PATH=/opt/nvidia/deepstream/deepstream/lib/gst-plugins:$GST_PL
 # 4.开机自启动
 
 ## 程序开机自启动
-将如下命令作为 systemd 服务开机自启动：
+当前 `sink1.type: 2` 使用的是 `EglSink`，推荐通过用户级 `systemd` 服务在桌面会话中自动启动：
 
 ```bash
-/opt/nvidia/deepstream/deepstream/bin/deepstream-app -c /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/yml/app_config.yml
+/opt/nvidia/deepstream/deepstream/deepstream-app-custom/start_rgb_app.sh
 ```
 
 ## 步骤如下：
 
-1) 创建服务文件 `/etc/systemd/system/deepstream-app-rgb.service`
-
-```ini
-[Unit]
-Description=DeepStream RGB App
-# 网络就绪后再启动，如依赖 MQTT，请追加 mosquitto.service
-After=network-online.target mosquitto.service
-Wants=network-online.target mosquitto.service
-
-[Service]
-Type=simple
-# 指定运行用户和组
-User=tl
-Group=tl
-WorkingDirectory=/opt/nvidia/deepstream/deepstream
-ExecStart=/opt/nvidia/deepstream/deepstream/bin/deepstream-app -c /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/yml/app_config.yml
-Restart=always
-RestartSec=30
-
-[Install]
-WantedBy=multi-user.target
-```
-
-2) 重新加载并启用/启动服务
+1) 确保系统进入图形目标，并为桌面用户开启自动登录。
 
 ```bash
+systemctl get-default
+systemctl status gdm --no-pager
+```
+
+2) 安装 GUI 启动脚本与用户级 service
+
+```bash
+sudo install -m 755 ./start_rgb_app.sh \
+  /opt/nvidia/deepstream/deepstream/deepstream-app-custom/start_rgb_app.sh
+mkdir -p ~/.config/systemd/user
+install -m 644 ./systemd/user/deepstream-app-rgb.service \
+  ~/.config/systemd/user/deepstream-app-rgb.service
+```
+
+3) 若之前启用过旧的系统级服务，先停掉它
+
+```bash
+sudo systemctl disable --now deepstream-app-rgb.service 2>/dev/null || true
+sudo systemctl disable --now deepstream-app-rgb-drm.service 2>/dev/null || true
+```
+
+4) 重新加载并启用 GUI 用户服务
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable deepstream-app-rgb.service
+systemctl --user start deepstream-app-rgb.service
+```
+
+5) 查看状态与日志
+
+```bash
+systemctl --user status deepstream-app-rgb.service
+journalctl --user -u deepstream-app-rgb.service -f
+```
+
+6) 停止和取消自启动
+
+```bash
+systemctl --user stop deepstream-app-rgb.service
+systemctl --user disable deepstream-app-rgb.service
+```
+
+说明：
+- `start_rgb_app.sh` 会保留图形会话环境，并在缺失时兜底设置 `DISPLAY`、`XDG_RUNTIME_DIR`、`XAUTHORITY`。
+- GUI 模式依赖桌面会话；如果系统没有自动登录，用户级服务不会真正启动窗口。
+- 如果你的应用依赖其他服务（如 MQTT），可在 `systemd/user/deepstream-app-rgb.service` 里继续追加 `After=`/`Wants=`。
+- 如果 `/opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs` 还没建立，请先按主程序编译步骤执行一次 `cmake --install build`。
+- Jetson 桌面环境默认会启动 `nvpmodel_indicator`。如果启动后持续弹出 `System throttled due to over-current`，通常不是 DeepStream 本身报错，而是设备处于高功耗模式时触发了过流保护。
+- 当前设备建议优先使用 `25W` 模式，不建议长期使用 `MAXN_SUPER` 跑 GUI 推理：
+
+```bash
+sudo nvpmodel -m 1
+sudo reboot
+```
+
+- 如果只是想关闭过流弹窗提示，而不改功耗模式，可以禁用桌面自启动的 `nvpmodel_indicator`：
+
+```bash
+mkdir -p ~/.config/autostart
+cp /etc/xdg/autostart/nvpmodel_indicator.desktop ~/.config/autostart/
+printf '\nHidden=true\n' >> ~/.config/autostart/nvpmodel_indicator.desktop
+pkill -f nvpmodel_indicator.py
+```
+
+## 旧版 DRM 兼容方式
+
+如果你要回到无桌面本地显示的 `nvdrmvideosink` 模式，需要先把 `sink1.type`
+改回 `5`，然后使用系统级 DRM 服务：
+
+```bash
+sudo install -m 755 ./start_rgb_drm_app.sh \
+  /opt/nvidia/deepstream/deepstream/deepstream-app-custom/start_rgb_drm_app.sh
+sudo install -m 644 ./systemd/deepstream-app-rgb-drm.service \
+  /etc/systemd/system/deepstream-app-rgb-drm.service
 sudo systemctl daemon-reload
-sudo systemctl enable deepstream-app-rgb.service
-sudo systemctl start deepstream-app-rgb.service
-```
-
-3) 查看状态与日志
-
-```bash
-sudo systemctl status deepstream-app-rgb.service
-sudo journalctl -u deepstream-app-rgb.service -f
-```
-
-4) 停止和取消自启动
-
-```bash
-sudo systemctl stop deepstream-app-rgb.service
-sudo systemctl disable deepstream-app-rgb.service
+sudo systemctl enable deepstream-app-rgb-drm.service
+sudo systemctl start deepstream-app-rgb-drm.service
 ```
 
 注意：
-- 如果你的应用依赖其他服务（如 MQTT），可在 `[Unit]` 中追加：`After=mosquitto.service` 与/或 `Wants=mosquitto.service`。
-- 若启用 `User=...` 以非 root 运行，请确保该用户有 GPU 与摄像头、模型及日志目录等资源的访问权限。
+- `deepstream-app-rgb-drm.service` 只适合 Jetson 本地屏直出，不适合桌面 GUI 窗口。
+- DRM 模式通常要求系统运行在 `multi-user.target`，并停用桌面显示管理器，否则 DRM 设备可能被占用。
+- 调试时不要从 SSH/X11 转发会话直接运行，否则会混入 `DISPLAY/XAUTHORITY` 导致额外的 EGL/X11 报错。
 
 ## (可选)定时关闭、启动服务（由此可以定时切换模型，比如夜间和白天用不同的模型）
 
-> 注意: 先停止前面的服务：`sudo systemctl stop deepstream-app-rgb.service`
+> 注意: 先停止前面的服务：`systemctl --user stop deepstream-app-rgb.service` 或 `sudo systemctl stop deepstream-app-rgb-drm.service`
 
 1) 创建白天服务文件 `/etc/systemd/system/deepstream-day.service`
 

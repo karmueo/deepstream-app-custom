@@ -1,0 +1,21 @@
+[Unit]
+Description=DeepStream RGB App (DRM Legacy)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/nvidia/deepstream/deepstream
+Environment=DISPLAY=
+Environment=XAUTHORITY=
+Environment=WAYLAND_DISPLAY=
+StandardInput=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+ExecStart=/opt/nvidia/deepstream/deepstream/deepstream-app-custom/start_rgb_drm_app.sh
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
