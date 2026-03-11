@@ -1450,16 +1450,7 @@ static gboolean create_rtsp_src_bin(NvDsSourceConfig *config, NvDsSrcBin *bin)
 
     g_timeout_add(1000, watch_source_status, bin);
 
-    // Enable local start / stop events in addition to the one
-    // received from the server.
-    if (config->smart_record == 2)
-    {
-        if (bin->config->smart_rec_interval)
-            g_timeout_add(bin->config->smart_rec_interval * 1000,
-                          smart_record_event_generator, bin);
-        else
-            g_timeout_add(10000, smart_record_event_generator, bin);
-    }
+    /* smart_record == 2 的定时器逻辑已移除，改为在检测到目标时触发录像（见 deepstream_app_main.c） */
 
     GST_CAT_DEBUG(
         NVDS_APP,

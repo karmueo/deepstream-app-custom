@@ -746,7 +746,7 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
         {
             obj_meta = (NvDsObjectMeta *)(l->data);
 
-            if (src_bin->config->smart_record == 3 &&
+            if ((src_bin->config->smart_record == 2 || src_bin->config->smart_record == 3) &&
                 is_detect_record_enabled(appCtx) &&
                 has_detection_target(obj_meta))
             {
