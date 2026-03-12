@@ -1,5 +1,5 @@
-enable,type,uri,num-sources,gpu-id,cudadec-memtype,rtsp-reconnect-interval-sec,rtsp-reconnect-attempts,select-rtp-protocol,smart-record,smart-rec-dir-path,smart-rec-duration,smart-rec-start-time
-1,4,rtsp://192.168.1.80/live/test,1,0,0,3,-1,4,1,/home/nvidia/Downloads/1,30,3
-0,4,rtsp://192.168.1.80/live/test1,1,0,0,3,-1,0,1,/home/nvidia/Downloads/2,30,3
-0,4,rtsp://192.168.1.80/live/test2,1,0,0,3,-1,0,1,/home/nvidia/Downloads/3,30,3
-0,4,rtsp://192.168.1.80/live/test3,1,0,0,3,-1,0,1,/home/nvidia/Downloads/4,30,3
+enable,type,uri,num-sources,gpu-id,cudadec-memtype,rtsp-reconnect-interval-sec,rtsp-reconnect-attempts,select-rtp-protocol,smart-record,smart-rec-dir-path,smart-rec-duration,smart-rec-start-time,smart-rec-window-size,smart-rec-trigger-ratio
+1,4,rtsp://192.168.1.80/live/test,1,0,0,3,-1,4,2,/home/nvidia/Downloads/1,30,3,30,0.8
+0,4,rtsp://192.168.1.80/live/test1,1,0,0,3,-1,0,2,/home/nvidia/Downloads/2,30,3,0,0.8
+0,4,rtsp://192.168.1.80/live/test2,1,0,0,3,-1,0,2,/home/nvidia/Downloads/3,30,3,0,0.8
+0,4,rtsp://192.168.1.80/live/test3,1,0,0,3,-1,0,2,/home/nvidia/Downloads/4,30,3,0,0.8
