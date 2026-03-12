@@ -907,8 +907,8 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                 }
                 else
                 {
-                    /* 未启用单目标跟踪，保持原有逻辑：直接触发 */
-                    should_trigger_recording = TRUE;
+                    /* 未启用单目标跟踪：滑动窗口逻辑在帧级别处理（见下方） */
+                    /* 此处不设置 should_trigger_recording，避免重复触发 */
                 }
 
                 /* 检测到符合条件的目标才触发智能录像，g_pending_request 防抖 */
@@ -1262,6 +1262,54 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
             else
             {
                 g_print("Error in attaching event meta to buffer\n");
+            }
+        }
+
+        /* ===== 滑动窗口检测状态更新（无跟踪/MOT 模式） ===== */
+        /* SOT 模式使用原有的 3 秒连续跟踪确认机制，不走滑动窗口 */
+        if (!single_object_tracker &&
+            (src_bin->config->smart_record == 2 || src_bin->config->smart_record == 3) &&
+            is_detect_record_enabled(appCtx) &&
+            src_bin->config->smart_rec_window_size > 0)
+        {
+            /* 判断当前帧是否有检测目标 */
+            gboolean frame_has_target = FALSE;
+            for (GList *l = frame_meta->obj_meta_list; l != NULL; l = l->next)
+            {
+                NvDsObjectMeta *obj = (NvDsObjectMeta *)l->data;
+                if (has_detection_target(obj))
+                {
+                    frame_has_target = TRUE;
+                    break;
+                }
+            }
+
+            /* 更新滑动窗口并检查是否触发 */
+            gboolean should_trigger = update_sliding_window_and_check_trigger(
+                appCtx, stream_id, src_bin->config, frame_has_target);
+
+            /* 触发录像（带防抖） */
+            if (should_trigger && !g_pending_request)
+            {
+                /* 获取目标标签用于录像文件命名 */
+                const gchar *class_label = "unknown";
+                for (GList *l = frame_meta->obj_meta_list; l != NULL; l = l->next)
+                {
+                    NvDsObjectMeta *obj = (NvDsObjectMeta *)l->data;
+                    if (has_detection_target(obj))
+                    {
+                        if (obj->obj_label[0] != '\0')
+                        {
+                            class_label = obj->obj_label;
+                        }
+                        break;
+                    }
+                }
+
+                g_pending_request = TRUE;
+                smart_record_event_generator(src_bin, class_label);
+                GST_INFO("Source %u: Sliding window triggered recording, label=%s",
+                         stream_id, class_label);
             }
         }
 
