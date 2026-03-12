@@ -171,6 +171,10 @@ parse_source_yaml (NvDsSourceConfig *config, std::vector<std::string> headers,
       config->smart_rec_interval = std::stoul(source_values[i]);
     } else if (paramKey == "smart-rec-retention-days") {
       config->smart_rec_retention_days = std::stoul(source_values[i]);
+    } else if (paramKey == "smart-rec-window-size") {
+      config->smart_rec_window_size = std::stoul(source_values[i]);
+    } else if (paramKey == "smart-rec-trigger-ratio") {
+      config->smart_rec_trigger_ratio = std::stof(source_values[i]);
     }
 #if defined(__aarch64__) && !defined(AARCH64_IS_SBSA)
     else if (paramKey == "copy-hw") {
