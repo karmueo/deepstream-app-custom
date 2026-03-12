@@ -366,9 +366,6 @@ add_and_link_broker_sink(AppCtx *appCtx)
         }
     }
 
-    /* 初始化滑动窗口检测状态 */
-    init_source_detection_states(appCtx, config->num_source_sub_bins);
-
     return TRUE;
 }
 
@@ -1550,6 +1547,9 @@ create_pipeline(AppCtx *appCtx,
     g_mutex_init(&appCtx->app_lock);
     g_cond_init(&appCtx->app_cond);
     g_mutex_init(&appCtx->latency_lock);
+
+    /* 初始化滑动窗口检测状态 */
+    init_source_detection_states(appCtx, config->num_source_sub_bins);
 
     ret = TRUE;
 done:
