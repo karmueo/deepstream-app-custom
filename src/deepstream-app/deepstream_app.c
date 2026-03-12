@@ -365,6 +365,10 @@ add_and_link_broker_sink(AppCtx *appCtx)
             }
         }
     }
+
+    /* 初始化滑动窗口检测状态 */
+    init_source_detection_states(appCtx, config->num_source_bins);
+
     return TRUE;
 }
 
@@ -1573,6 +1577,9 @@ void destroy_pipeline(AppCtx *appCtx)
 
     if (!appCtx)
         return;
+
+    /* 清理滑动窗口检测状态 */
+    cleanup_source_detection_states(appCtx);
 
     gst_element_send_event(appCtx->pipeline.pipeline, gst_event_new_eos());
     sleep(1);
