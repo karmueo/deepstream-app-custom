@@ -89,6 +89,9 @@ typedef struct
   gchar* alsa_device;
   /** Video format to be applied at nvvideoconvert source pad. */
   gchar* video_format;
+  /** 滑动窗口配置（用于智能录像触发确认） */
+  guint smart_rec_window_size;      /**< 滑动窗口大小（帧数），0=禁用直接触发 */
+  gfloat smart_rec_trigger_ratio;   /**< 触发阈值比例 [0.0, 1.0] */
 } NvDsSourceConfig;
 
 typedef struct NvDsSrcParentBin NvDsSrcParentBin;
