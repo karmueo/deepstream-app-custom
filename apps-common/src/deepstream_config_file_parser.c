@@ -53,6 +53,8 @@ GST_DEBUG_CATEGORY(APP_CFG_PARSER_CAT);
 #define CONFIG_GROUP_SOURCE_SMART_RECORD_DURATION "smart-rec-duration"
 #define CONFIG_GROUP_SOURCE_SMART_RECORD_INTERVAL "smart-rec-interval"
 #define CONFIG_GROUP_SOURCE_SMART_RECORD_RETENTION_DAYS "smart-rec-retention-days"
+#define CONFIG_GROUP_SOURCE_SMART_RECORD_WINDOW_SIZE "smart-rec-window-size"
+#define CONFIG_GROUP_SOURCE_SMART_RECORD_TRIGGER_RATIO "smart-rec-trigger-ratio"
 #define CONFIG_GROUP_SOURCE_ALSA_DEVICE "alsa-device"
 #define CONFIG_GROUP_SOURCE_UDP_BUFFER_SIZE "udp-buffer-size"
 #define CONFIG_GROUP_SOURCE_VIDEO_FORMAT "video-format"
@@ -781,6 +783,28 @@ parse_source(NvDsSourceConfig *config, GKeyFile *key_file, gchar *group,
                 g_key_file_get_integer(key_file, group,
                                        CONFIG_GROUP_SOURCE_SMART_RECORD_RETENTION_DAYS, &error);
             CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, CONFIG_GROUP_SOURCE_SMART_RECORD_WINDOW_SIZE))
+        {
+            config->smart_rec_window_size =
+                g_key_file_get_integer(key_file, group,
+                                       CONFIG_GROUP_SOURCE_SMART_RECORD_WINDOW_SIZE, &error);
+            if (error)
+            {
+                config->smart_rec_window_size = 0;  // 默认禁用
+                g_clear_error(&error);
+            }
+        }
+        else if (!g_strcmp0(*key, CONFIG_GROUP_SOURCE_SMART_RECORD_TRIGGER_RATIO))
+        {
+            config->smart_rec_trigger_ratio =
+                g_key_file_get_double(key_file, group,
+                                      CONFIG_GROUP_SOURCE_SMART_RECORD_TRIGGER_RATIO, &error);
+            if (error)
+            {
+                config->smart_rec_trigger_ratio = 0.8f;  // 默认 80%
+                g_clear_error(&error);
+            }
         }
         else if (!g_strcmp0(*key, CONFIG_GROUP_SOURCE_EXTRACT_SEI_TYPE5_DATA))
         {
