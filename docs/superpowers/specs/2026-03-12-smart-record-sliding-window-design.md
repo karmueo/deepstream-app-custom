@@ -99,9 +99,12 @@ typedef struct {
 ```c
 typedef struct _AppCtx {
     // ... 现有字段 ...
-    SourceDetectionState *source_states;  // 按源索引的状态数组
+    guint num_source_states;               // 源状态数组长度，来自 config->num_source_bins
+    SourceDetectionState *source_states;   // 按源索引的状态数组
 } AppCtx;
 ```
+
+> **注：** `num_source_states` 的值来自配置文件解析结果 `config->num_source_bins`，即 `sources.csv` 中启用的源数量。
 
 ## 核心逻辑
 
@@ -167,11 +170,24 @@ if (window_size > 0) {
     should_trigger = current_has_target;
 }
 
-// 5. 触发录像（带防抖）
+// 5. 触发录像（复用现有 g_pending_request 防抖机制）
 if (should_trigger && !g_pending_request) {
     // 调用 smart_record_event_generator 触发录像
     // ...
 }
+```
+
+> **防抖机制说明：** 复用现有的 `g_pending_request` 全局变量，录像触发后该变量设为 TRUE，录像完成后回调中重置为 FALSE，避免重复触发。
+
+### 录像触发后的状态重置策略
+
+```c
+// 录像触发后不清空滑动窗口，保持检测状态连续性
+// 原因：
+// 1. 目标可能持续存在，需要继续记录后续检测
+// 2. 由 g_pending_request 防抖机制防止录像期间重复触发
+// 3. 录像完成后若命中率仍超阈值，允许再次触发（符合业务需求）
+```
 ```
 
 ### 清理
@@ -244,6 +260,12 @@ window_size > 0?
 
 4. **向后兼容**
    - 不配置新参数，确认行为与修改前一致
+
+5. **边界条件**
+   - `window-size=1, ratio=1.0`：等效于单帧确认，任何一帧检测到目标即触发
+   - `window-size=1, ratio=0.0`：每帧都触发（无意义配置，但不应崩溃）
+   - `window-size=30, ratio=1.0`：需 30 帧全部检测到目标才触发
+   - `window-size=0`：禁用滑动窗口，保持原有直接触发行为
 
 ## 风险评估
 
