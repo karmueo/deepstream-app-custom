@@ -1095,6 +1095,11 @@ create_pipeline(AppCtx *appCtx,
             config->multi_source_config[i].loop = TRUE;
     }
 
+    /* 初始化滑动窗口检测状态（必须在添加探针之前完成） */
+    g_print("[SLIDING-WINDOW] About to call init_source_detection_states with num_source_sub_bins=%u, appCtx=%p\n",
+            config->num_source_sub_bins, (void*)appCtx);
+    init_source_detection_states(appCtx, config->num_source_sub_bins);
+
     /* --- BEGIN: UDP JSON 控制报文接收分支 --- */
     // {
     //     GstElement *udp_ctrl_src =
@@ -1547,9 +1552,6 @@ create_pipeline(AppCtx *appCtx,
     g_mutex_init(&appCtx->app_lock);
     g_cond_init(&appCtx->app_cond);
     g_mutex_init(&appCtx->latency_lock);
-
-    /* 初始化滑动窗口检测状态 */
-    init_source_detection_states(appCtx, config->num_source_sub_bins);
 
     ret = TRUE;
 done:

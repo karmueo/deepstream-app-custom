@@ -22,6 +22,7 @@
 #include <cuda_runtime_api.h>
 #include <json-glib/json-glib.h>
 #include <math.h>
+#include <stddef.h>
 #include <string.h>
 #include <termios.h>
 #include <time.h>
@@ -122,6 +123,10 @@ has_detection_target(const NvDsObjectMeta *obj_meta)
 void
 init_source_detection_states(AppCtx *appCtx, guint num_sources)
 {
+    g_print("[SLIDING-WINDOW] init_source_detection_states called with num_sources=%u, appCtx=%p\n", num_sources, (void*)appCtx);
+    g_print("[SLIDING-WINDOW] AppCtx field offsets: num_source_states@%zu, source_states@%zu, sizeof(AppCtx)=%zu\n",
+            offsetof(AppCtx, num_source_states), offsetof(AppCtx, source_states), sizeof(AppCtx));
+
     if (appCtx->source_states != NULL)
     {
         // 已初始化，先清理
@@ -137,7 +142,10 @@ init_source_detection_states(AppCtx *appCtx, guint num_sources)
         appCtx->source_states[i].detection_hit_count = 0;
     }
 
-    GST_INFO("Initialized sliding window detection states for %u sources", num_sources);
+    g_print("[SLIDING-WINDOW] Initialized sliding window detection states for %u sources, source_states=%p, num_source_states=%u\n",
+             num_sources, (void*)appCtx->source_states, appCtx->num_source_states);
+    g_print("[SLIDING-WINDOW] Verification: &appCtx->num_source_states=%p, &appCtx->source_states=%p\n",
+            (void*)&appCtx->num_source_states, (void*)&appCtx->source_states);
 }
 
 /**
@@ -148,6 +156,9 @@ init_source_detection_states(AppCtx *appCtx, guint num_sources)
 void
 cleanup_source_detection_states(AppCtx *appCtx)
 {
+    g_print("[SLIDING-WINDOW] cleanup_source_detection_states called, appCtx=%p, source_states=%p, num_source_states=%u\n",
+            (void*)appCtx, (void*)appCtx->source_states, appCtx->num_source_states);
+
     if (appCtx->source_states == NULL)
         return;
 
@@ -193,7 +204,8 @@ update_sliding_window_and_check_trigger(AppCtx *appCtx,
     if (source_id >= appCtx->num_source_states ||
         appCtx->source_states == NULL)
     {
-        GST_WARNING("Invalid source_id %u or states not initialized", source_id);
+        g_print("[SLIDING-WINDOW] WARN: Invalid source_id %u or states not initialized (num_source_states=%u, source_states=%p)\n",
+                source_id, appCtx->num_source_states, (void*)appCtx->source_states);
         return FALSE;
     }
 
@@ -311,19 +323,22 @@ static double ntp_to_unix(uint64_t ntp_timestamp)
     return unix_seconds;
 }
 
-// 冷却结束回调
-static gboolean on_cooldown_end()
+// 冷却结束回调 - 每源独立冷却
+static gboolean on_cooldown_end(gpointer data)
 {
-    if (g_pending_request)
+    NvDsSrcBin *src_bin = (NvDsSrcBin *)data;
+    if (src_bin)
     {
-        g_pending_request = FALSE;
+        src_bin->pending_request = FALSE;
+        g_print("[SmartRecord] Source %u: Cooldown ended, pending_request reset\n",
+                src_bin->config->camera_id);
     }
     return G_SOURCE_REMOVE;
 }
 
 static gboolean smart_record_event_generator(NvDsSrcBin *src_bin, const gchar *class_label)
 {
-    if (g_pending_request)
+    if (src_bin->pending_request)
     {
         return FALSE;
     }
@@ -338,7 +353,13 @@ static gboolean smart_record_event_generator(NvDsSrcBin *src_bin, const gchar *c
     if (src_bin->config->smart_rec_start_time >= 0)
         startTime = src_bin->config->smart_rec_start_time;
 
-    if (src_bin->recordCtx && !src_bin->reconfiguring)
+    if (!src_bin->recordCtx)
+    {
+        g_print("ERROR: Smart record not initialized for source (recordCtx is NULL)\n");
+        return FALSE;
+    }
+
+    if (!src_bin->reconfiguring)
     {
         NvDsSRContext *ctx = (NvDsSRContext *)src_bin->recordCtx;
 
@@ -384,8 +405,11 @@ static gboolean smart_record_event_generator(NvDsSrcBin *src_bin, const gchar *c
         }
         NvDsSRStart(ctx, &sessId, startTime, duration, NULL);
 
-        g_pending_request = TRUE;
-        g_timeout_add(30000, on_cooldown_end, NULL);
+        /* 设置当前源的 pending 状态，并使用 30 秒冷却 */
+        src_bin->pending_request = TRUE;
+        g_timeout_add(30000, on_cooldown_end, src_bin);
+        g_print("[SmartRecord] Source %u: Recording started, pending_request set for 30s cooldown\n",
+                src_bin->config->camera_id);
     }
 
     return TRUE;
@@ -809,7 +833,6 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
     guint32           stream_id = 0;
     NvDsSRSessionId   sessId = 0;
     NvDsSrcParentBin *bin = &appCtx->pipeline.multi_src_bin;
-    NvDsSrcBin       *src_bin = &bin->sub_bins[index];
 
     NvBufSurface *ip_surf = NULL;
     if (appCtx->config.enable_jpeg_save) {
@@ -821,6 +844,9 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
         ip_surf = (NvBufSurface *)inmap.data;
         gst_buffer_unmap(buf, &inmap);
     }
+
+    /* 注意：src_bin 必须在遍历帧时根据 frame_meta->source_id 动态获取，
+     * 不能使用函数参数的 index，因为 index 可能与帧的 source_id 不一致 */
 
     /* 判断是否为单目标跟踪器 */
     gboolean tracker_enabled = appCtx->config.tracker_config.enable;
@@ -859,6 +885,9 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
     {
         NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)l_frame->data;
         stream_id = frame_meta->source_id;
+
+        /* 根据 stream_id 获取正确的 src_bin，而不是使用函数参数的 index */
+        NvDsSrcBin *src_bin = &bin->sub_bins[stream_id];
 
         /* 用于单目标跟踪连续性检测：标记当前帧是否有有效跟踪目标 */
         gboolean has_valid_tracking_target = FALSE;
@@ -955,8 +984,12 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                             class_label = class_buf;
                         }
                     }
-                    
-                    smart_record_event_generator(src_bin, class_label);
+
+                    /* 每源独立防抖 */
+                    if (!src_bin->pending_request)
+                    {
+                        smart_record_event_generator(src_bin, class_label);
+                    }
                 }
 
                 if (appCtx->config.enable_jpeg_save && ip_surf)
@@ -1267,6 +1300,13 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
 
         /* ===== 滑动窗口检测状态更新（无跟踪/MOT 模式） ===== */
         /* SOT 模式使用原有的 3 秒连续跟踪确认机制，不走滑动窗口 */
+        static gboolean sliding_window_debug_printed = FALSE;
+        if (!sliding_window_debug_printed) {
+            g_print("[SLIDING-WINDOW] Check: single_object_tracker=%d, smart_record=%d, detect_record_enabled=%d, window_size=%u, appCtx=%p\n",
+                    single_object_tracker, src_bin->config->smart_record, is_detect_record_enabled(appCtx),
+                    src_bin->config->smart_rec_window_size, (void*)appCtx);
+            sliding_window_debug_printed = TRUE;
+        }
         if (!single_object_tracker &&
             (src_bin->config->smart_record == 2 || src_bin->config->smart_record == 3) &&
             is_detect_record_enabled(appCtx) &&
@@ -1274,9 +1314,11 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
         {
             /* 判断当前帧是否有检测目标 */
             gboolean frame_has_target = FALSE;
+            guint obj_count = 0;
             for (GList *l = frame_meta->obj_meta_list; l != NULL; l = l->next)
             {
                 NvDsObjectMeta *obj = (NvDsObjectMeta *)l->data;
+                obj_count++;
                 if (has_detection_target(obj))
                 {
                     frame_has_target = TRUE;
@@ -1284,12 +1326,24 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                 }
             }
 
+            /* 调试：每 30 帧打印一次检测状态 */
+            static guint frame_count = 0;
+            frame_count++;
+            if (frame_count % 30 == 0)
+            {
+                g_print("[DEBUG] Source stream_id=%u, camera_id=%u: frame_has_target=%d, obj_count=%u, window_size=%u, trigger_ratio=%.2f, dir_path=%s\n",
+                        stream_id, src_bin->config->camera_id, frame_has_target, obj_count,
+                        src_bin->config->smart_rec_window_size,
+                        src_bin->config->smart_rec_trigger_ratio,
+                        src_bin->config->dir_path ? src_bin->config->dir_path : "(null)");
+            }
+
             /* 更新滑动窗口并检查是否触发 */
             gboolean should_trigger = update_sliding_window_and_check_trigger(
                 appCtx, stream_id, src_bin->config, frame_has_target);
 
-            /* 触发录像（带防抖） */
-            if (should_trigger && !g_pending_request)
+            /* 触发录像（每源独立防抖） */
+            if (should_trigger && !src_bin->pending_request)
             {
                 /* 获取目标标签用于录像文件命名 */
                 const gchar *class_label = "unknown";
@@ -1306,10 +1360,19 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                     }
                 }
 
-                g_pending_request = TRUE;
-                smart_record_event_generator(src_bin, class_label);
-                GST_INFO("Source %u: Sliding window triggered recording, label=%s",
-                         stream_id, class_label);
+                /* 先调用函数，根据返回值决定是否设置 pending 状态 */
+                gboolean sr_started = smart_record_event_generator(src_bin, class_label);
+                if (sr_started)
+                {
+                    /* pending 状态在 smart_record_event_generator 中设置 */
+                    GST_INFO("Source %u: Sliding window triggered recording, label=%s",
+                             stream_id, class_label);
+                }
+                else
+                {
+                    g_print("WARNING: Source %u: Smart record trigger failed (recordCtx may be NULL)\n",
+                            stream_id);
+                }
             }
         }
 
@@ -2749,6 +2812,11 @@ int main(int argc, char *argv[])
     GError         *error = NULL;
     guint           i;
 
+    /* 抑制 GStreamer videodecoder decreasing timestamp 警告
+     * 级别说明: 0=NONE, 1=ERROR, 2=WARN, 3=INFO, 4=DEBUG
+     * 设置为只显示 ERROR 级别 */
+    g_setenv("GST_DEBUG", "1", FALSE);
+
     ctx = g_option_context_new("Nvidia DeepStream Demo");
     group = g_option_group_new("abc", NULL, NULL, NULL, NULL);
     g_option_group_add_entries(group, entries);
@@ -2852,6 +2920,8 @@ int main(int argc, char *argv[])
 
     for (i = 0; i < num_instances; i++)
     {
+        g_print("[SLIDING-WINDOW] main: calling create_pipeline for instance %u, appCtx[%u]=%p\n",
+                i, i, (void*)appCtx[i]);
         if (!create_pipeline(appCtx[i], bbox_generated_probe_after_analytics,
                              all_bbox_generated, perf_cb, overlay_graphics,
                              my_msg_broker_subscribe_cb))

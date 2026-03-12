@@ -152,6 +152,7 @@ typedef struct
   NvDsSrcParentBin *parent_bin;
   gpointer recordCtx;
   guint cleanup_timeout_id; /* g_timeout source id for retention cleanup */
+  gboolean pending_request;  /**< 每个源的独立冷却状态，防止阻塞其他源 */
 } NvDsSrcBin;
 
 struct NvDsSrcParentBin
