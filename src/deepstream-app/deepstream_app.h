@@ -346,6 +346,21 @@ struct _AppCtx
 };
 
 /**
+ * @brief 初始化所有视频源的滑动窗口检测状态
+ *
+ * @param appCtx 应用上下文
+ * @param num_sources 视频源数量
+ */
+void init_source_detection_states(AppCtx *appCtx, guint num_sources);
+
+/**
+ * @brief 清理所有视频源的滑动窗口检测状态
+ *
+ * @param appCtx 应用上下文
+ */
+void cleanup_source_detection_states(AppCtx *appCtx);
+
+/**
  * @brief 根据应用上下文配置创建 DeepStream 分析流水线。
  *
  * @param appCtx [IN/OUT] 应用程序上下文，提供配置信息并维护流水线资源。
