@@ -113,6 +113,128 @@ has_detection_target(const NvDsObjectMeta *obj_meta)
     return FALSE;
 }
 
+/**
+ * @brief 初始化所有视频源的滑动窗口状态
+ *
+ * @param appCtx 应用上下文
+ * @param num_sources 视频源数量
+ */
+void
+init_source_detection_states(AppCtx *appCtx, guint num_sources)
+{
+    if (appCtx->source_states != NULL)
+    {
+        // 已初始化，先清理
+        cleanup_source_detection_states(appCtx);
+    }
+
+    appCtx->num_source_states = num_sources;
+    appCtx->source_states = g_new0(SourceDetectionState, num_sources);
+
+    for (guint i = 0; i < num_sources; i++)
+    {
+        appCtx->source_states[i].detection_window = g_queue_new();
+        appCtx->source_states[i].detection_hit_count = 0;
+    }
+
+    GST_INFO("Initialized sliding window detection states for %u sources", num_sources);
+}
+
+/**
+ * @brief 清理所有视频源的滑动窗口状态
+ *
+ * @param appCtx 应用上下文
+ */
+void
+cleanup_source_detection_states(AppCtx *appCtx)
+{
+    if (appCtx->source_states == NULL)
+        return;
+
+    for (guint i = 0; i < appCtx->num_source_states; i++)
+    {
+        if (appCtx->source_states[i].detection_window != NULL)
+        {
+            g_queue_free(appCtx->source_states[i].detection_window);
+            appCtx->source_states[i].detection_window = NULL;
+        }
+    }
+
+    g_free(appCtx->source_states);
+    appCtx->source_states = NULL;
+    appCtx->num_source_states = 0;
+
+    GST_INFO("Cleaned up sliding window detection states");
+}
+
+/**
+ * @brief 更新滑动窗口并判断是否应触发录像
+ *
+ * @param appCtx 应用上下文
+ * @param source_id 视频源 ID
+ * @param config 源配置
+ * @param current_has_target 当前帧是否有检测目标
+ * @return gboolean 是否应触发录像
+ */
+static gboolean
+update_sliding_window_and_check_trigger(AppCtx *appCtx,
+                                         guint source_id,
+                                         NvDsSourceConfig *config,
+                                         gboolean current_has_target)
+{
+    // 如果未配置滑动窗口，直接返回当前检测结果
+    guint window_size = config->smart_rec_window_size;
+    if (window_size == 0)
+    {
+        return current_has_target;
+    }
+
+    // 边界检查
+    if (source_id >= appCtx->num_source_states ||
+        appCtx->source_states == NULL)
+    {
+        GST_WARNING("Invalid source_id %u or states not initialized", source_id);
+        return FALSE;
+    }
+
+    SourceDetectionState *state = &appCtx->source_states[source_id];
+
+    // 更新滑动窗口
+    // 如果队列已满，移除最旧元素
+    if (g_queue_get_length(state->detection_window) >= window_size)
+    {
+        gboolean oldest = GPOINTER_TO_INT(g_queue_pop_head(state->detection_window));
+        if (oldest)
+        {
+            state->detection_hit_count--;
+        }
+    }
+
+    // 入队新结果
+    g_queue_push_tail(state->detection_window,
+                      GINT_TO_POINTER(current_has_target));
+    if (current_has_target)
+    {
+        state->detection_hit_count++;
+    }
+
+    // 判断是否满足触发条件
+    if (g_queue_get_length(state->detection_window) >= window_size)
+    {
+        gfloat hit_ratio = (gfloat)state->detection_hit_count / (gfloat)window_size;
+        gfloat trigger_ratio = config->smart_rec_trigger_ratio;
+
+        if (hit_ratio >= trigger_ratio)
+        {
+            GST_DEBUG("Source %u: hit_ratio=%.2f >= trigger_ratio=%.2f, triggering recording",
+                      source_id, hit_ratio, trigger_ratio);
+            return TRUE;
+        }
+    }
+
+    return FALSE;
+}
+
 typedef struct
 {
     gchar *label;
