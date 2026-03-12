@@ -246,6 +246,16 @@ typedef struct
 } StaticTargetFilterState;
 
 /**
+ * @brief 单个视频源的滑动窗口检测状态
+ *
+ * 用于智能录像触发条件的滑动窗口确认机制。
+ */
+typedef struct {
+    GQueue *detection_window;    /**< 滑动窗口队列，存储 gboolean 值 */
+    guint detection_hit_count;   /**< 窗口内检测到目标的帧数 */
+} SourceDetectionState;
+
+/**
  * @brief 应用程序上下文结构体，存储整个应用的核心状态与资源。
  *
  * 应用程序的核心数据结构，包含流水线、配置、回调函数、运行时状态等。
@@ -329,6 +339,10 @@ struct _AppCtx
 
     /** 静止目标误检过滤状态 */
     StaticTargetFilterState static_target_filter_states[MAX_SOURCE_BINS]; /**< 各源静止目标过滤状态 */
+
+    /** 滑动窗口检测状态（用于智能录像触发） */
+    guint num_source_states;               /**< 源状态数组长度，来自 config.num_source_bins */
+    SourceDetectionState *source_states;   /**< 按源索引的滑动窗口状态数组 */
 };
 
 /**
