@@ -367,7 +367,7 @@ add_and_link_broker_sink(AppCtx *appCtx)
     }
 
     /* 初始化滑动窗口检测状态 */
-    init_source_detection_states(appCtx, config->num_source_bins);
+    init_source_detection_states(appCtx, config->num_source_sub_bins);
 
     return TRUE;
 }
