@@ -1,5 +1,5 @@
 enable,type,uri,num-sources,gpu-id,cudadec-memtype,rtsp-reconnect-interval-sec,rtsp-reconnect-attempts,select-rtp-protocol,smart-record,smart-rec-dir-path,smart-rec-duration,smart-rec-start-time,smart-rec-window-size,smart-rec-trigger-ratio
-1,4,rtsp://admin:Admin12345@192.168.1.113:554/cam/realmonitor?channel=1&subtype=0,1,0,0,3,-1,4,3,/home/nvidia/Downloads/1,30,3,50,0.8
-1,4,rtsp://admin:Admin12345@192.168.1.115:554/cam/realmonitor?channel=1&subtype=0,1,0,0,3,-1,0,3,/home/nvidia/Downloads/2,30,3,50,0.8
+1,4,rtsp://192.168.1.80/live/test,1,0,0,3,-1,4,3,/home/nvidia/Downloads/1,30,3,50,0.8
+1,4,rtsp://192.168.1.80/live/test1,1,0,0,3,-1,0,3,/home/nvidia/Downloads/2,30,3,50,0.8
 0,4,rtsp://admin:asdf2025@172.16.46.205:554/cam/realmonitor?channel=1&subtype=0,1,0,0,3,-1,0,3,/home/nvidia/Downloads/3,30,3,50,0.8
 0,4,rtsp://admin:asdf2025@172.16.46.206:554/cam/realmonitor?channel=1&subtype=0,1,0,0,3,-1,0,3,/home/nvidia/Downloads/4,30,3,50,0.8
