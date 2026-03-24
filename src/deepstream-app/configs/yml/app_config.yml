@@ -9,7 +9,7 @@ application:
   # 是否启用JPEG图像保存（0=禁用，1=启用）
   #enable-jpeg-save: 1
   # 是否开启检测到目标后智能录制（0=禁用，1=启用）
-  smart-rec-detect-default: 0
+  smart-rec-detect-default: 1
 
 tiled-display:
   enable: 1
