@@ -82,6 +82,10 @@ udpjsonmeta:
   cuav-ctrl-port: 8003
   # 是否打印C-UAV调试信息（0=禁用，1=启用）
   cuav-debug: 1
+  # 是否将解析后的C-UAV报文记录为CSV（0=禁用，1=启用）
+  record-parsed-csv: 0
+  # 解析后报文CSV输出目录；开启 record-parsed-csv 后生效
+  parsed-csv-output-dir: /tmp/deepstream_cuav_csv
 
 # FAKE SINK 输出
 sink0:

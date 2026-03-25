@@ -23,6 +23,8 @@ typedef struct
     guint cuav_port; /* C-UAV 组播端口 */
     guint cuav_ctrl_port; /* C-UAV 控制/引导端口 */
     gboolean enable_cuav_debug; /* 是否启用 C-UAV 调试打印 */
+    gboolean record_parsed_csv; /* 是否记录解析后的 C-UAV 报文 */
+    gchar *parsed_csv_output_dir; /* 解析后报文 CSV 输出目录 */
 } NvDsUdpJsonMetaConfig;
 
 #ifdef __cplusplus

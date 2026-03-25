@@ -48,6 +48,8 @@ parse_udpjsonmeta_yaml (NvDsUdpJsonMetaConfig *config, gchar *cfg_file_path)
   config->cuav_port = 8013;
   config->cuav_ctrl_port = 8003;
   config->enable_cuav_debug = FALSE;
+  config->record_parsed_csv = FALSE;
+  config->parsed_csv_output_dir = NULL;
 
   for (YAML::const_iterator itr = configyml["udpjsonmeta"].begin();
        itr != configyml["udpjsonmeta"].end(); ++itr)
@@ -77,6 +79,13 @@ parse_udpjsonmeta_yaml (NvDsUdpJsonMetaConfig *config, gchar *cfg_file_path)
       config->cuav_ctrl_port = itr->second.as<guint>();
     } else if (paramKey == "cuav-debug") {
       config->enable_cuav_debug = itr->second.as<gboolean>();
+    } else if (paramKey == "record-parsed-csv") {
+      config->record_parsed_csv = itr->second.as<gboolean>();
+    } else if (paramKey == "parsed-csv-output-dir") {
+      std::string temp = itr->second.as<std::string>(); /* CSV 输出目录 */
+      config->parsed_csv_output_dir = (char *)malloc(sizeof(char) * 1024);
+      std::strncpy(config->parsed_csv_output_dir, temp.c_str(), 1023);
+      config->parsed_csv_output_dir[1023] = '\0';
     } else {
       cout << "Unknown key " << paramKey << " for udpjsonmeta" << endl;
     }

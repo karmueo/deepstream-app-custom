@@ -11,9 +11,11 @@
  */
 
 #include <gst/gst.h>
+#include <math.h>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <glib/gstdio.h>
 #include "deepstream_app.h"
 #include "deepstream_app_callbacks.h"
 #include "deepstream_app_probes.h"
@@ -25,6 +27,9 @@ GST_DEBUG_CATEGORY_EXTERN(NVDS_APP);
 GQuark _dsmeta_quark;
 
 #define CEIL(a, b) ((a + b - 1) / b)
+#define DEFAULT_CUAV_LOG_PATH "/tmp/deepstream_cuav_packets.log"
+
+static GMutex s_cuav_csv_lock;
 
 /**
  * @brief  Add the (nvmsgconv->nvmsgbroker) sink-bin to the
@@ -60,10 +65,96 @@ NvDsSensorInfo *get_sensor_info(AppCtx *appCtx, guint source_id)
     return sensorInfo;
 }
 
+static const gchar *
+get_cuav_log_path(void)
+{
+    const gchar *path = g_getenv("DEEPSTREAM_CUAV_LOG_PATH");
+    return (path && *path) ? path : DEFAULT_CUAV_LOG_PATH;
+}
+
+static void
+append_cuav_log_line(const gchar *line)
+{
+    FILE *fp = NULL;
+
+    if (!line)
+        return;
+
+    fp = fopen(get_cuav_log_path(), "a");
+    if (!fp)
+    {
+        g_printerr("[cuav][log] failed to open %s\n", get_cuav_log_path());
+        return;
+    }
+
+    fprintf(fp, "%s\n", line);
+    fclose(fp);
+}
+
+static gboolean
+get_cuav_csv_path(AppCtx *appCtx, const gchar *filename, gchar *path, gsize path_size)
+{
+    const gchar *dir = NULL;
+
+    if (!appCtx || !filename || !path || path_size == 0)
+        return FALSE;
+
+    if (!appCtx->config.udpjsonmeta_config.record_parsed_csv)
+        return FALSE;
+
+    dir = appCtx->config.udpjsonmeta_config.parsed_csv_output_dir;
+    if (!dir || !*dir)
+        return FALSE;
+
+    if (g_mkdir_with_parents(dir, 0755) != 0)
+    {
+        g_printerr("[cuav][csv] failed to create dir %s\n", dir);
+        return FALSE;
+    }
+
+    g_snprintf(path, path_size, "%s/%s", dir, filename);
+    return TRUE;
+}
+
+static void
+append_cuav_csv_row(const gchar *path, const gchar *header, const gchar *row)
+{
+    GStatBuf st;
+    gboolean need_header = FALSE;
+    FILE *fp = NULL;
+
+    if (!path || !header || !row)
+        return;
+
+    g_mutex_lock(&s_cuav_csv_lock);
+
+    need_header = (g_stat(path, &st) != 0) || (st.st_size == 0);
+    fp = fopen(path, "a");
+    if (!fp)
+    {
+        g_printerr("[cuav][csv] failed to open %s\n", path);
+        g_mutex_unlock(&s_cuav_csv_lock);
+        return;
+    }
+
+    if (need_header)
+    {
+        fprintf(fp, "%s\n", header);
+    }
+    fprintf(fp, "%s\n", row);
+    fclose(fp);
+    g_mutex_unlock(&s_cuav_csv_lock);
+}
+
 static void on_cuav_guidance(const CUAVCommonHeader *header,
                              const CUAVGuidanceInfo *guidance,
                              gpointer user_data)
 {
+    AppCtx *appCtx = (AppCtx *)user_data;
+    gchar line[1024] = {0};
+    gchar csv_path[1024] = {0};
+    gchar csv_row[1024] = {0};
+
     (void)user_data;
     if (!header || !guidance)
         return;
@@ -75,6 +166,113 @@ static void on_cuav_guidance(const CUAVCommonHeader *header,
             guidance->h, guidance->min, guidance->sec, guidance->msec,
             guidance->tar_id, guidance->tar_category, guidance->guid_stat,
             guidance->enu_a, guidance->enu_e, guidance->lon, guidance->lat, guidance->alt);
+
+    g_snprintf(line, sizeof(line),
+               "[cuav][guidance] msg_id=0x%04X msg_sn=%u msg_type=%u tar_id=%u cat=%u stat=%u "
+               "enu_a=%.2f enu_e=%.2f lon=%.6f lat=%.6f alt=%.2f",
+               header->msg_id, header->msg_sn, header->msg_type,
+               guidance->tar_id, guidance->tar_category, guidance->guid_stat,
+               guidance->enu_a, guidance->enu_e, guidance->lon, guidance->lat, guidance->alt);
+    append_cuav_log_line(line);
+
+    if (get_cuav_csv_path(appCtx, "cuav_guidance.csv", csv_path, sizeof(csv_path)))
+    {
+        g_snprintf(csv_row, sizeof(csv_row),
+                   "%u,%u,%u,%u,%u,%u,%.2f,%.2f,%.6f,%.6f,%.2f",
+                   header->msg_id, header->msg_sn, header->msg_type,
+                   guidance->tar_id, guidance->tar_category, guidance->guid_stat,
+                   guidance->enu_a, guidance->enu_e,
+                   guidance->lon, guidance->lat, guidance->alt);
+        append_cuav_csv_row(csv_path,
+                            "msg_id,msg_sn,msg_type,tar_id,tar_category,guid_stat,enu_a,enu_e,lon,lat,alt",
+                            csv_row);
+    }
+}
+
+static void on_cuav_eo_system(const CUAVCommonHeader *header,
+                              const CUAVEOSystemParam *eo_param,
+                              gpointer user_data)
+{
+    AppCtx *appCtx = (AppCtx *)user_data;
+    gchar line[1024] = {0};
+    gchar csv_path[1024] = {0};
+    gchar csv_row[1024] = {0};
+
+    (void)user_data;
+    if (!header || !eo_param)
+        return;
+
+    g_print("[cuav][eo-system] msg_sn=%u sv_stat=%u st_loc_h=%.2f st_loc_v=%.2f "
+            "pt_focal=%.1f ir_focal=%.1f trk_dev=%u trk_stat=%u\n",
+            header->msg_sn,
+            eo_param->sv_stat, eo_param->st_loc_h, eo_param->st_loc_v,
+            eo_param->pt_focal, eo_param->ir_focal,
+            eo_param->trk_dev, eo_param->trk_stat);
+
+    g_snprintf(line, sizeof(line),
+               "[cuav][eo-system] msg_id=0x%04X msg_sn=%u msg_type=%u "
+               "sv_stat=%u st_loc_h=%.2f st_loc_v=%.2f pt_focal=%.1f ir_focal=%.1f "
+               "trk_dev=%u pt_link=%u ir_link=%u trk_stat=%u",
+               header->msg_id, header->msg_sn, header->msg_type,
+               eo_param->sv_stat, eo_param->st_loc_h, eo_param->st_loc_v,
+               eo_param->pt_focal, eo_param->ir_focal,
+               eo_param->trk_dev, eo_param->pt_trk_link,
+               eo_param->ir_trk_link, eo_param->trk_stat);
+    append_cuav_log_line(line);
+
+    if (get_cuav_csv_path(appCtx, "cuav_eo_system.csv", csv_path, sizeof(csv_path)))
+    {
+        g_snprintf(csv_row, sizeof(csv_row),
+                   "%u,%u,%u,%u,%.2f,%.2f,%.1f,%.1f,%u,%u,%u,%u",
+                   header->msg_id, header->msg_sn, header->msg_type,
+                   eo_param->sv_stat, eo_param->st_loc_h, eo_param->st_loc_v,
+                   eo_param->pt_focal, eo_param->ir_focal,
+                   eo_param->trk_dev, eo_param->pt_trk_link,
+                   eo_param->ir_trk_link, eo_param->trk_stat);
+        append_cuav_csv_row(csv_path,
+                            "msg_id,msg_sn,msg_type,sv_stat,st_loc_h,st_loc_v,pt_focal,ir_focal,trk_dev,pt_trk_link,ir_trk_link,trk_stat",
+                            csv_row);
+    }
+}
+
+static void on_cuav_servo_control(const CUAVCommonHeader *header,
+                                  const CUAVServoControl *servo,
+                                  gpointer user_data)
+{
+    AppCtx *appCtx = (AppCtx *)user_data;
+    gchar line[1024] = {0};
+    gchar csv_path[1024] = {0};
+    gchar csv_row[1024] = {0};
+
+    (void)user_data;
+    if (!header || !servo)
+        return;
+
+    g_print("[cuav][servo] msg_sn=%u dev_id=%u ctrl_en=%u mode_h=%u mode_v=%u "
+            "loc_h=%.2f loc_v=%.2f speed_h=%u speed_v=%u\n",
+            header->msg_sn, servo->dev_id, servo->ctrl_en,
+            servo->mode_h, servo->mode_v,
+            servo->loc_h, servo->loc_v, servo->speed_h, servo->speed_v);
+
+    g_snprintf(line, sizeof(line),
+               "[cuav][servo] msg_id=0x%04X msg_sn=%u msg_type=%u "
+               "dev_id=%u ctrl_en=%u mode_h=%u mode_v=%u loc_h=%.2f loc_v=%.2f speed_h=%u speed_v=%u",
+               header->msg_id, header->msg_sn, header->msg_type,
+               servo->dev_id, servo->ctrl_en, servo->mode_h, servo->mode_v,
+               servo->loc_h, servo->loc_v, servo->speed_h, servo->speed_v);
+    append_cuav_log_line(line);
+
+    if (get_cuav_csv_path(appCtx, "cuav_servo.csv", csv_path, sizeof(csv_path)))
+    {
+        g_snprintf(csv_row, sizeof(csv_row),
+                   "%u,%u,%u,%u,%u,%u,%u,%.2f,%.2f,%u,%u",
+                   header->msg_id, header->msg_sn, header->msg_type,
+                   servo->dev_id, servo->ctrl_en, servo->mode_h, servo->mode_v,
+                   servo->loc_h, servo->loc_v, servo->speed_h, servo->speed_v);
+        append_cuav_csv_row(csv_path,
+                            "msg_id,msg_sn,msg_type,dev_id,ctrl_en,mode_h,mode_v,loc_h,loc_v,speed_h,speed_v",
+                            csv_row);
+    }
 }
 
 /**
@@ -794,6 +992,12 @@ create_common_elements(NvDsConfig *config, NvDsPipeline *pipeline,
             gst_udpjson_meta_set_guidance_callback(GST_UDPJSON_META(udpjsonmeta),
                                                    on_cuav_guidance,
                                                    pipeline->common_elements.appCtx);
+            gst_udpjson_meta_set_eo_system_callback(GST_UDPJSON_META(udpjsonmeta),
+                                                    on_cuav_eo_system,
+                                                    pipeline->common_elements.appCtx);
+            gst_udpjson_meta_set_servo_control_callback(GST_UDPJSON_META(udpjsonmeta),
+                                                        on_cuav_servo_control,
+                                                        pipeline->common_elements.appCtx);
         }
 
         gst_bin_add(GST_BIN(pipeline->pipeline), udpjsonmeta);

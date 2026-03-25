@@ -1405,6 +1405,16 @@ parse_udpjsonmeta(NvDsUdpJsonMetaConfig *config, GKeyFile *key_file)
             config->cuav_ctrl_port = g_key_file_get_integer(key_file, CONFIG_GROUP_UDPJSONMETA, "cuav-ctrl-port", &error);
             CHECK_ERROR(error);
         }
+        else if (!g_strcmp0(*key, "record-parsed-csv"))
+        {
+            config->record_parsed_csv = g_key_file_get_integer(key_file, CONFIG_GROUP_UDPJSONMETA, "record-parsed-csv", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "parsed-csv-output-dir"))
+        {
+            config->parsed_csv_output_dir = g_key_file_get_string(key_file, CONFIG_GROUP_UDPJSONMETA, "parsed-csv-output-dir", &error);
+            CHECK_ERROR(error);
+        }
         else
         {
             NVGSTDS_WARN_MSG_V("Unknown key '%s' for group [%s]", *key, CONFIG_GROUP_UDPJSONMETA);
