@@ -17,7 +17,7 @@ application:
 source:
   # 视频源CSV配置文件路径（包含RTSP/文件流地址等）
   # csv-file-path: sources.csv
-  csv-file-path: file_sources.csv
+  csv-file-path: sources.csv
   #file_sources.csv
   #debug_sources.csv
 
@@ -113,11 +113,11 @@ videorecognition:
 # -----------------------------------------------------------------------------
 udpjsonmeta:
   # 是否启用UDP JSON元数据接收（0=禁用，1=启用）
-  enable: 0
+  enable: 1
   # 组播IP地址
-  multicast-ip: 230.1.1.22
+  multicast-ip: 230.1.88.51
   # 网络接口名称（如eth0, enp5s0等）
-  interface: enp5s0
+  interface: eno1
   # 接收缓冲区大小（字节）
   # recv-buf-size: 1048576
   # 缓存过期时间（毫秒）
@@ -126,13 +126,17 @@ udpjsonmeta:
   # max-cache-size: 2048
   # C-UAV 协议配置
   # 是否启用C-UAV协议解析（0=禁用，1=启用）
-  enable-cuav-parser: 0
+  enable-cuav-parser: 1
   # C-UAV组播端口（默认8013）
   cuav-port: 8013
   # C-UAV控制/引导端口（默认8003）
   cuav-ctrl-port: 8003
   # 是否打印C-UAV调试信息（0=禁用，1=启用）
   cuav-debug: 0
+  # 是否将解析后的C-UAV报文记录为CSV（0=禁用，1=启用）
+  record-parsed-csv: 0
+  # 解析后报文CSV输出目录；开启 record-parsed-csv 后生效
+  parsed-csv-output-dir: /tmp/deepstream_cuav_csv
 
 # -----------------------------------------------------------------------------
 # Sink0: RTSP流输出配置
@@ -165,7 +169,7 @@ sink0:
 # -----------------------------------------------------------------------------
 sink1:
   # 是否启用此输出（0=禁用，1=启用）
-  enable: 1
+  enable: 0
   # 输出类型：2=EglSink（本地窗口显示）
   type: 2
   # 是否同步播放（0=异步，1=同步）
@@ -214,6 +218,12 @@ sink3:
   bitrate: 4000000
   # 输出文件路径
   output-file: ./deepstream_output.mkv
+
+# FAKE SINK 输出
+sink4:
+  enable: 1
+  type: 1
+  sync: 1
 
 # -----------------------------------------------------------------------------
 # OSD（On-Screen Display）屏幕叠加显示配置
