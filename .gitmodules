@@ -17,3 +17,7 @@
 [submodule "src/gst-udpjson_meta"]
 	path = src/gst-udpjson_meta
 	url = https://github.com/karmueo/gst-udpjson_meta.git
+[submodule "src/gst-cuavcontrolsink"]
+	path = src/gst-cuavcontrolsink
+	url = git@github.com:karmueo/gst-cuavcontrolsink.git
+	branch = master
