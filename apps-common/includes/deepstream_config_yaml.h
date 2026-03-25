@@ -41,6 +41,7 @@ extern "C"
 #include "deepstream_dsanalytics.h"
 #include "deepstream_dsexample.h"
 #include "deepstream_videorecognition.h"
+#include "deepstream_cuav_control.h"
 #include "deepstream_udpjsonmeta.h"
 
 #define _MAX_STR_LENGTH 1024
@@ -103,6 +104,9 @@ parse_videorecognition_yaml (NvDsVideoRecognitionConfig *config, gchar *cfg_file
 
 gboolean
 parse_udpjsonmeta_yaml (NvDsUdpJsonMetaConfig *config, gchar *cfg_file_path);
+
+gboolean
+parse_cuav_control_yaml (NvDsCuavControlConfig *config, gchar *cfg_file_path);
 
 #ifdef __cplusplus
 }

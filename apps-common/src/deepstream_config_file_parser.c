@@ -1439,6 +1439,138 @@ done:
 }
 
 gboolean
+parse_cuav_control(NvDsCuavControlConfig *config, GKeyFile *key_file)
+{
+    gboolean ret = FALSE;
+    gchar **keys = NULL;
+    gchar **key = NULL;
+    GError *error = NULL;
+
+    config->enable = FALSE;
+    config->multicast_ip = NULL;
+    config->port = 18003;
+    config->iface = NULL;
+    config->ttl = 1;
+    config->compat_cmd_wrapper = FALSE;
+    config->debug = FALSE;
+    config->tx_sys_id = 999;
+    config->tx_dev_type = 1;
+    config->tx_dev_id = 999;
+    config->tx_subdev_id = 999;
+    config->rx_sys_id = 999;
+    config->rx_dev_type = 1;
+    config->rx_dev_id = 999;
+    config->rx_subdev_id = 999;
+    config->send_test_on_startup = FALSE;
+
+    keys = g_key_file_get_keys(key_file, CONFIG_GROUP_CUAV_CONTROL, NULL, &error);
+    CHECK_ERROR(error);
+    for (key = keys; *key; key++)
+    {
+        if (!g_strcmp0(*key, CONFIG_GROUP_ENABLE))
+        {
+            config->enable = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, CONFIG_GROUP_ENABLE, &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "multicast-ip"))
+        {
+            config->multicast_ip = g_key_file_get_string(key_file, CONFIG_GROUP_CUAV_CONTROL, "multicast-ip", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "port"))
+        {
+            config->port = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "port", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "interface"))
+        {
+            config->iface = g_key_file_get_string(key_file, CONFIG_GROUP_CUAV_CONTROL, "interface", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "ttl"))
+        {
+            config->ttl = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "ttl", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "compat-cmd-wrapper"))
+        {
+            config->compat_cmd_wrapper = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "compat-cmd-wrapper", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "debug"))
+        {
+            config->debug = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "debug", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "tx-sys-id"))
+        {
+            config->tx_sys_id = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "tx-sys-id", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "tx-dev-type"))
+        {
+            config->tx_dev_type = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "tx-dev-type", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "tx-dev-id"))
+        {
+            config->tx_dev_id = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "tx-dev-id", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "tx-subdev-id"))
+        {
+            config->tx_subdev_id = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "tx-subdev-id", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "rx-sys-id"))
+        {
+            config->rx_sys_id = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "rx-sys-id", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "rx-dev-type"))
+        {
+            config->rx_dev_type = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "rx-dev-type", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "rx-dev-id"))
+        {
+            config->rx_dev_id = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "rx-dev-id", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "rx-subdev-id"))
+        {
+            config->rx_subdev_id = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "rx-subdev-id", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "send-test-on-startup"))
+        {
+            config->send_test_on_startup = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "send-test-on-startup", &error);
+            CHECK_ERROR(error);
+        }
+        else
+        {
+            NVGSTDS_WARN_MSG_V("Unknown key '%s' for group [%s]", *key, CONFIG_GROUP_CUAV_CONTROL);
+        }
+    }
+
+    ret = TRUE;
+done:
+    if (error)
+    {
+        g_error_free(error);
+    }
+    if (keys)
+    {
+        g_strfreev(keys);
+    }
+    if (!ret)
+    {
+        NVGSTDS_ERR_MSG_V("%s failed", __func__);
+    }
+    return ret;
+}
+
+gboolean
 parse_segvisual(NvDsSegVisualConfig *config, GKeyFile *key_file)
 {
     gboolean ret = FALSE;
@@ -2409,6 +2541,22 @@ parse_sink(NvDsSinkSubBinConfig *config, GKeyFile *key_file, gchar *group,
     config->msg_conv_broker_config.new_api = FALSE;
     config->msg_conv_broker_config.conv_msg2p_new_api = FALSE;
     config->msg_conv_broker_config.conv_frame_interval = 30;
+    config->cuav_control_config.enable = FALSE;
+    config->cuav_control_config.multicast_ip = NULL;
+    config->cuav_control_config.port = 18003;
+    config->cuav_control_config.iface = NULL;
+    config->cuav_control_config.ttl = 1;
+    config->cuav_control_config.compat_cmd_wrapper = FALSE;
+    config->cuav_control_config.debug = FALSE;
+    config->cuav_control_config.tx_sys_id = 999;
+    config->cuav_control_config.tx_dev_type = 1;
+    config->cuav_control_config.tx_dev_id = 999;
+    config->cuav_control_config.tx_subdev_id = 999;
+    config->cuav_control_config.rx_sys_id = 999;
+    config->cuav_control_config.rx_dev_type = 1;
+    config->cuav_control_config.rx_dev_id = 999;
+    config->cuav_control_config.rx_subdev_id = 999;
+    config->cuav_control_config.send_test_on_startup = FALSE;
 
     if (g_key_file_get_integer(key_file, group,
                                CONFIG_GROUP_ENABLE, &error) == FALSE ||
@@ -2713,6 +2861,96 @@ parse_sink(NvDsSinkSubBinConfig *config, GKeyFile *key_file, gchar *group,
             // 设置帧率
             config->mynetwork_config.fps =
                 g_key_file_get_integer(key_file, group, "fps", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "multicast-ip"))
+        {
+            config->cuav_control_config.multicast_ip =
+                g_key_file_get_string(key_file, group, "multicast-ip", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "port"))
+        {
+            config->cuav_control_config.port =
+                g_key_file_get_integer(key_file, group, "port", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "interface"))
+        {
+            config->cuav_control_config.iface =
+                g_key_file_get_string(key_file, group, "interface", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "ttl"))
+        {
+            config->cuav_control_config.ttl =
+                g_key_file_get_integer(key_file, group, "ttl", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "compat-cmd-wrapper"))
+        {
+            config->cuav_control_config.compat_cmd_wrapper =
+                g_key_file_get_integer(key_file, group, "compat-cmd-wrapper", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "debug"))
+        {
+            config->cuav_control_config.debug =
+                g_key_file_get_integer(key_file, group, "debug", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "tx-sys-id"))
+        {
+            config->cuav_control_config.tx_sys_id =
+                g_key_file_get_integer(key_file, group, "tx-sys-id", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "tx-dev-type"))
+        {
+            config->cuav_control_config.tx_dev_type =
+                g_key_file_get_integer(key_file, group, "tx-dev-type", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "tx-dev-id"))
+        {
+            config->cuav_control_config.tx_dev_id =
+                g_key_file_get_integer(key_file, group, "tx-dev-id", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "tx-subdev-id"))
+        {
+            config->cuav_control_config.tx_subdev_id =
+                g_key_file_get_integer(key_file, group, "tx-subdev-id", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "rx-sys-id"))
+        {
+            config->cuav_control_config.rx_sys_id =
+                g_key_file_get_integer(key_file, group, "rx-sys-id", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "rx-dev-type"))
+        {
+            config->cuav_control_config.rx_dev_type =
+                g_key_file_get_integer(key_file, group, "rx-dev-type", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "rx-dev-id"))
+        {
+            config->cuav_control_config.rx_dev_id =
+                g_key_file_get_integer(key_file, group, "rx-dev-id", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "rx-subdev-id"))
+        {
+            config->cuav_control_config.rx_subdev_id =
+                g_key_file_get_integer(key_file, group, "rx-subdev-id", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "send-test-on-startup"))
+        {
+            config->cuav_control_config.send_test_on_startup =
+                g_key_file_get_integer(key_file, group, "send-test-on-startup", &error);
             CHECK_ERROR(error);
         }
         else

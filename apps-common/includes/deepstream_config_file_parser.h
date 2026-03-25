@@ -39,6 +39,7 @@ extern "C"
 #include "deepstream_dewarper.h"
 #include "deepstream_c2d_msg.h"
 #include "deepstream_image_save.h"
+#include "deepstream_cuav_control.h"
 #include "deepstream_udpmulticast.h"
 #include "deepstream_udpjsonmeta.h"
 
@@ -76,6 +77,7 @@ extern "C"
 #define CONFIG_GROUP_VIDEORECOGNITION "videorecognition"
 #define CONFIG_GROUP_UDPMULTICAST "udpmulticast"
 #define CONFIG_GROUP_UDPJSONMETA "udpjsonmeta"
+#define CONFIG_GROUP_CUAV_CONTROL "cuav-control"
 #define CONFIG_GROUP_STREAMMUX "streammux"
 #define CONFIG_GROUP_DEWARPER "dewarper"
 #define CONFIG_GROUP_MSG_CONVERTER "message-converter"
@@ -273,6 +275,9 @@ extern "C"
 
     gboolean
     parse_udpjsonmeta(NvDsUdpJsonMetaConfig *config, GKeyFile *key_file);
+
+    gboolean
+    parse_cuav_control(NvDsCuavControlConfig *config, GKeyFile *key_file);
 
     /**
      * Function to read properties of streammux element from configuration file.

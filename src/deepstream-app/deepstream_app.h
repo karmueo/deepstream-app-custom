@@ -23,6 +23,7 @@
 #include "deepstream_config.h"
 #include "deepstream_dsanalytics.h"
 #include "deepstream_dsexample.h"
+#include "deepstream_cuav_control.h"
 #include "deepstream_image_save.h"
 #include "deepstream_osd.h"
 #include "deepstream_perf.h"
@@ -107,6 +108,7 @@ typedef struct
     NvDsDsExampleBin           dsexample_bin;                   /**< Dsexample bin */
     NvDsVideoRecognitionBin    videorecognition_bin;            /**< 视频识别 bin (X3D 动作识别) */
     GstElement                *udpjsonmeta;                    /**< UDP JSON 元数据插件 */
+    GstElement                *cuav_control;                   /**< C-UAV 控制发送插件 */
     AppCtx                    *appCtx;                          /**< 指向应用程序上下文的指针 */
 } NvDsInstanceBin;
 
@@ -186,6 +188,7 @@ typedef struct
     NvDsVideoRecognitionConfig videorecognition_config;        /**< 视频识别配置 (X3D) */
     NvDsUdpMulticastConfig udpmulticast_config;               /**< UDP 多播配置 */
     NvDsUdpJsonMetaConfig  udpjsonmeta_config;                /**< UDP JSON 元数据配置 */
+    NvDsCuavControlConfig  cuav_control_config;               /**< C-UAV 控制发送配置 */
     NvDsSinkMsgConvBrokerConfig msg_conv_config;              /**< 消息转换 broker 配置 */
     NvDsMyNetworkConfig         mynetwork_config;             /**< 自定义网络配置 */
     NvDsImageSave               image_save_config;            /**< 图像保存配置 */
@@ -418,6 +421,8 @@ gboolean parse_config_file(NvDsConfig *config, gchar *cfg_file_path);
  * @return gboolean 解析成功返回 TRUE，否则返回 FALSE。
  */
 gboolean parse_config_file_yaml(NvDsConfig *config, gchar *cfg_file_path);
+
+gboolean send_cuav_test_messages(AppCtx *appCtx);
 
 /**
  * @brief 获取指定源 ID 对应的传感器信息。

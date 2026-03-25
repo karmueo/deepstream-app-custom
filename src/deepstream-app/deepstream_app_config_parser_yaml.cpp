@@ -443,6 +443,10 @@ parse_config_file_yaml(NvDsConfig *config, gchar *cfg_file_path)
         {
             parse_err = !parse_udpjsonmeta_yaml(&config->udpjsonmeta_config, cfg_file_path);
         }
+        else if (paramKey == "cuav-control")
+        {
+            parse_err = !parse_cuav_control_yaml(&config->cuav_control_config, cfg_file_path);
+        }
         else if (paramKey == "message-converter")
         {
             parse_err = !parse_msgconv_yaml(&config->msg_conv_config, paramKey, cfg_file_path);

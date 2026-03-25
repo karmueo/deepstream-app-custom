@@ -35,6 +35,22 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
     config->msg_conv_broker_config.new_api = FALSE;
     config->msg_conv_broker_config.conv_msg2p_new_api = FALSE;
     config->msg_conv_broker_config.conv_frame_interval = 30;
+    config->cuav_control_config.enable = FALSE;
+    config->cuav_control_config.multicast_ip = NULL;
+    config->cuav_control_config.port = 18003;
+    config->cuav_control_config.iface = NULL;
+    config->cuav_control_config.ttl = 1;
+    config->cuav_control_config.compat_cmd_wrapper = FALSE;
+    config->cuav_control_config.debug = FALSE;
+    config->cuav_control_config.tx_sys_id = 999;
+    config->cuav_control_config.tx_dev_type = 1;
+    config->cuav_control_config.tx_dev_id = 999;
+    config->cuav_control_config.tx_subdev_id = 999;
+    config->cuav_control_config.rx_sys_id = 999;
+    config->cuav_control_config.rx_dev_type = 1;
+    config->cuav_control_config.rx_dev_id = 999;
+    config->cuav_control_config.rx_subdev_id = 999;
+    config->cuav_control_config.send_test_on_startup = FALSE;
 
     if (configyml[group_str]["enable"])
     {
@@ -256,6 +272,72 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
             // 设置帧率
             config->mynetwork_config.fps =
                 itr->second.as<gint>();
+        }
+        else if (paramKey == "multicast-ip")
+        {
+            std::string temp = itr->second.as<std::string>();
+            config->cuav_control_config.multicast_ip = (char *)malloc(sizeof(char) * 1024);
+            std::strncpy(config->cuav_control_config.multicast_ip, temp.c_str(), 1023);
+            config->cuav_control_config.multicast_ip[1023] = '\0';
+        }
+        else if (paramKey == "port")
+        {
+            config->cuav_control_config.port = itr->second.as<gint>();
+        }
+        else if (paramKey == "interface")
+        {
+            std::string temp = itr->second.as<std::string>();
+            config->cuav_control_config.iface = (char *)malloc(sizeof(char) * 1024);
+            std::strncpy(config->cuav_control_config.iface, temp.c_str(), 1023);
+            config->cuav_control_config.iface[1023] = '\0';
+        }
+        else if (paramKey == "ttl")
+        {
+            config->cuav_control_config.ttl = itr->second.as<guint>();
+        }
+        else if (paramKey == "compat-cmd-wrapper")
+        {
+            config->cuav_control_config.compat_cmd_wrapper = itr->second.as<gboolean>();
+        }
+        else if (paramKey == "debug")
+        {
+            config->cuav_control_config.debug = itr->second.as<gboolean>();
+        }
+        else if (paramKey == "tx-sys-id")
+        {
+            config->cuav_control_config.tx_sys_id = itr->second.as<guint>();
+        }
+        else if (paramKey == "tx-dev-type")
+        {
+            config->cuav_control_config.tx_dev_type = itr->second.as<guint>();
+        }
+        else if (paramKey == "tx-dev-id")
+        {
+            config->cuav_control_config.tx_dev_id = itr->second.as<guint>();
+        }
+        else if (paramKey == "tx-subdev-id")
+        {
+            config->cuav_control_config.tx_subdev_id = itr->second.as<guint>();
+        }
+        else if (paramKey == "rx-sys-id")
+        {
+            config->cuav_control_config.rx_sys_id = itr->second.as<guint>();
+        }
+        else if (paramKey == "rx-dev-type")
+        {
+            config->cuav_control_config.rx_dev_type = itr->second.as<guint>();
+        }
+        else if (paramKey == "rx-dev-id")
+        {
+            config->cuav_control_config.rx_dev_id = itr->second.as<guint>();
+        }
+        else if (paramKey == "rx-subdev-id")
+        {
+            config->cuav_control_config.rx_subdev_id = itr->second.as<guint>();
+        }
+        else if (paramKey == "send-test-on-startup")
+        {
+            config->cuav_control_config.send_test_on_startup = itr->second.as<gboolean>();
         }
         else
         {

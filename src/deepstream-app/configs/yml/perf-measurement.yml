@@ -106,7 +106,7 @@ sink3:
 # 自定义的udp组播
 sink2:
   enable: 0
-  #Type - 1=FakeSink 2=EglSink 3=File 4=UDPSink 5=nvdrmvideosink 6=MsgConvBroker 7=MyNetwork
+  #Type - 1=FakeSink 2=EglSink 3=File 4=UDPSink 5=nvdrmvideosink 6=MsgConvBroker 7=MyNetwork 8=CuavControl
   type: 7
   ip: 230.1.8.31
   multicast-port: 8128
@@ -114,6 +114,26 @@ sink2:
   # multicast-iface: eno1
   # multicast-ttl=32
   fps: 2  # 可选参数，不配置时默认为25
+
+# C-UAV 控制发送测试 sink
+sink4:
+  enable: 0
+  type: 8
+  multicast-ip: 239.255.88.51
+  port: 18003
+  interface: eno1
+  ttl: 1
+  compat-cmd-wrapper: 0
+  debug: 1
+  send-test-on-startup: 1
+  tx-sys-id: 999
+  tx-dev-type: 1
+  tx-dev-id: 999
+  tx-subdev-id: 999
+  rx-sys-id: 999
+  rx-dev-type: 1
+  rx-dev-id: 999
+  rx-subdev-id: 999
 
 osd:
   enable: 1

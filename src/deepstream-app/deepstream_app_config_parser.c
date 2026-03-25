@@ -828,6 +828,11 @@ parse_config_file(NvDsConfig *config, gchar *cfg_file_path)
             parse_err = !parse_udpjsonmeta(&config->udpjsonmeta_config, cfg_file);
         }
 
+        if (!g_strcmp0(*group, CONFIG_GROUP_CUAV_CONTROL))
+        {
+            parse_err = !parse_cuav_control(&config->cuav_control_config, cfg_file);
+        }
+
         if (!g_strcmp0(*group, CONFIG_GROUP_MSG_CONVERTER))
         {
             parse_err =

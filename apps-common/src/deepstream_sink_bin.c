@@ -1071,6 +1071,8 @@ create_sink_bin(guint num_sub_bins, NvDsSinkSubBinConfig *config_array,
             if (!create_mynework_bin(&config_array[i].mynetwork_config, &bin->sub_bins[i]))
                 goto done;
             break;
+        case NV_DS_SINK_CUAVCONTROL:
+            continue;
         default:
             goto done;
         }

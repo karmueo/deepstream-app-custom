@@ -57,6 +57,11 @@ static gboolean add_and_link_broker_sink(AppCtx *appCtx);
  */
 static gboolean is_sink_available_for_source_id(NvDsConfig *config,
                                                 guint source_id);
+static gboolean create_cuav_control_element(NvDsConfig *config,
+                                            NvDsPipeline *pipeline);
+static NvDsSinkSubBinConfig *find_cuav_control_sink_config(NvDsConfig *config);
+static gboolean send_cuav_servo_test_message(AppCtx *appCtx);
+static gboolean send_cuav_visible_light_test_message(AppCtx *appCtx);
 
 NvDsSensorInfo *get_sensor_info(AppCtx *appCtx, guint source_id)
 {
@@ -144,6 +149,186 @@ append_cuav_csv_row(const gchar *path, const gchar *header, const gchar *row)
     fprintf(fp, "%s\n", row);
     fclose(fp);
     g_mutex_unlock(&s_cuav_csv_lock);
+}
+
+static NvDsSinkSubBinConfig *
+find_cuav_control_sink_config(NvDsConfig *config)
+{
+    guint i = 0;
+
+    if (!config)
+        return NULL;
+
+    for (i = 0; i < config->num_sink_sub_bins; i++)
+    {
+        NvDsSinkSubBinConfig *sink_config = &config->sink_bin_sub_bin_config[i];
+        if (sink_config->enable && sink_config->type == NV_DS_SINK_CUAVCONTROL)
+            return sink_config;
+    }
+
+    return NULL;
+}
+
+static gboolean
+create_cuav_control_element(NvDsConfig *config, NvDsPipeline *pipeline)
+{
+    GstElement *cuav_control = NULL;
+    NvDsSinkSubBinConfig *sink_config = NULL;
+    NvDsCuavControlConfig *control_config = NULL;
+
+    sink_config = find_cuav_control_sink_config(config);
+    if (!sink_config)
+        return TRUE;
+
+    control_config = &sink_config->cuav_control_config;
+
+    cuav_control = gst_element_factory_make(NVDS_ELEM_CUAVCONTROL_ELEMENT,
+                                            "cuav_control");
+    if (!cuav_control)
+    {
+        NVGSTDS_ERR_MSG_V("Failed to create element '%s'. Build/install the plugin in src/gst-cuavcontrolsink first.",
+                          NVDS_ELEM_CUAVCONTROL_ELEMENT);
+        return FALSE;
+    }
+
+    if (control_config->multicast_ip)
+        g_object_set(G_OBJECT(cuav_control), "multicast-ip",
+                     control_config->multicast_ip, NULL);
+    if (control_config->port)
+        g_object_set(G_OBJECT(cuav_control), "port",
+                     control_config->port, NULL);
+    if (control_config->iface)
+        g_object_set(G_OBJECT(cuav_control), "iface",
+                     control_config->iface, NULL);
+    g_object_set(G_OBJECT(cuav_control),
+                 "ttl", control_config->ttl,
+                 "compat-cmd-wrapper", control_config->compat_cmd_wrapper,
+                 "debug", control_config->debug,
+                 "tx-sys-id", control_config->tx_sys_id,
+                 "tx-dev-type", control_config->tx_dev_type,
+                 "tx-dev-id", control_config->tx_dev_id,
+                 "tx-subdev-id", control_config->tx_subdev_id,
+                 "rx-sys-id", control_config->rx_sys_id,
+                 "rx-dev-type", control_config->rx_dev_type,
+                 "rx-dev-id", control_config->rx_dev_id,
+                 "rx-subdev-id", control_config->rx_subdev_id,
+                 NULL);
+
+    gst_bin_add(GST_BIN(pipeline->pipeline), cuav_control);
+    pipeline->common_elements.cuav_control = cuav_control;
+
+    g_print("[cuav][control] enabled via sink type=8 target=%s:%u iface=%s compat=%d startup-test=%d\n",
+            control_config->multicast_ip ?
+                control_config->multicast_ip : "(default)",
+            control_config->port,
+            control_config->iface ?
+                control_config->iface : "(default)",
+            control_config->compat_cmd_wrapper,
+            control_config->send_test_on_startup);
+    return TRUE;
+}
+
+static gboolean
+send_cuav_servo_test_message(AppCtx *appCtx)
+{
+    GstStructure *payload = NULL;
+    gboolean result = FALSE;
+    GstElement *element = NULL;
+
+    if (!appCtx)
+        return FALSE;
+
+    element = appCtx->pipeline.common_elements.cuav_control;
+    if (!element)
+        return FALSE;
+
+    payload = gst_structure_new("cuav-servo-control",
+                                "dev-id", G_TYPE_INT, 2,
+                                "dev-en", G_TYPE_INT, 1,
+                                "ctrl-en", G_TYPE_INT, 1,
+                                "mode-h", G_TYPE_INT, 0,
+                                "mode-v", G_TYPE_INT, 0,
+                                "speed-en-h", G_TYPE_INT, 1,
+                                "speed-h", G_TYPE_INT, 20,
+                                "speed-en-v", G_TYPE_INT, 1,
+                                "speed-v", G_TYPE_INT, 20,
+                                "loc-en-h", G_TYPE_INT, 1,
+                                "loc-h", G_TYPE_DOUBLE, 180.0,
+                                "loc-en-v", G_TYPE_INT, 1,
+                                "loc-v", G_TYPE_DOUBLE, 10.0,
+                                "offset-en", G_TYPE_INT, 0,
+                                "offset-h", G_TYPE_INT, 0,
+                                "offset-v", G_TYPE_INT, 0,
+                                NULL);
+
+    g_signal_emit_by_name(element, "send-servo-control", payload, &result);
+    gst_structure_free(payload);
+
+    g_print("[cuav][control-test] servo test send result=%d\n", result);
+    return result;
+}
+
+static gboolean
+send_cuav_visible_light_test_message(AppCtx *appCtx)
+{
+    GstStructure *payload = NULL;
+    gboolean result = FALSE;
+    GstElement *element = NULL;
+
+    if (!appCtx)
+        return FALSE;
+
+    element = appCtx->pipeline.common_elements.cuav_control;
+    if (!element)
+        return FALSE;
+
+    payload = gst_structure_new("cuav-visible-light-control",
+                                "pt-dev-en", G_TYPE_INT, 1,
+                                "pt-ctrl-en", G_TYPE_INT, 1,
+                                "pt-fov-en", G_TYPE_INT, 1,
+                                "pt-fov-h", G_TYPE_DOUBLE, 10.0,
+                                "pt-fov-v", G_TYPE_DOUBLE, 7.5,
+                                "pt-focal-en", G_TYPE_INT, 1,
+                                "pt-focal", G_TYPE_DOUBLE, 500.0,
+                                "pt-focus-en", G_TYPE_INT, 1,
+                                "pt-focus", G_TYPE_INT, 100,
+                                "pt-speed-en", G_TYPE_INT, 1,
+                                "pt-focus-speed", G_TYPE_INT, 5,
+                                "pt-bri-en", G_TYPE_INT, 1,
+                                "pt-bri-ctrs", G_TYPE_INT, 50,
+                                "pt-ctrs-en", G_TYPE_INT, 1,
+                                "pt-ctrs", G_TYPE_INT, 50,
+                                "pt-ofr-en", G_TYPE_INT, 0,
+                                "pt-ofr", G_TYPE_INT, 0,
+                                "pt-focus-mode", G_TYPE_INT, 1,
+                                "pt-zoom", G_TYPE_INT, 0,
+                                NULL);
+
+    g_signal_emit_by_name(element, "send-visible-light-control", payload, &result);
+    gst_structure_free(payload);
+
+    g_print("[cuav][control-test] visible-light test send result=%d\n", result);
+    return result;
+}
+
+gboolean
+send_cuav_test_messages(AppCtx *appCtx)
+{
+    gboolean servo_ok = FALSE;
+    gboolean visible_ok = FALSE;
+    NvDsSinkSubBinConfig *sink_config = NULL;
+
+    if (!appCtx)
+        return FALSE;
+
+    sink_config = find_cuav_control_sink_config(&appCtx->config);
+    if (!sink_config || !sink_config->cuav_control_config.send_test_on_startup)
+        return FALSE;
+
+    servo_ok = send_cuav_servo_test_message(appCtx);
+    visible_ok = send_cuav_visible_light_test_message(appCtx);
+
+    return servo_ok && visible_ok;
 }
 
 static void on_cuav_guidance(const CUAVCommonHeader *header,
@@ -1011,6 +1196,11 @@ create_common_elements(NvDsConfig *config, NvDsPipeline *pipeline,
         }
         *sink_elem = udpjsonmeta;
         pipeline->common_elements.udpjsonmeta = udpjsonmeta;
+    }
+
+    if (!create_cuav_control_element(config, pipeline))
+    {
+        goto done;
     }
 
     if (config->tracker_config.enable)

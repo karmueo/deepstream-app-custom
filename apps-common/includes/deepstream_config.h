@@ -59,6 +59,7 @@
 #define NVDS_ELEM_DSVIDEORECOGNITION_ELEMENT "videorecognition"
 #define NVDS_ELEM_DSMYNETWORK_ELEMENT "udpmulticast_sink"
 #define NVDS_ELEM_UDPJSONMETA_ELEMENT "udpjsonmeta"
+#define NVDS_ELEM_CUAVCONTROL_ELEMENT "cuavcontrolsink"
 
 #define NVDS_ELEM_DEWARPER "nvdewarper"
 #define NVDS_ELEM_SPOTANALYSIS "nvspot"

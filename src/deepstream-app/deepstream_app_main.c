@@ -2753,6 +2753,11 @@ int main(int argc, char *argv[])
             if (appCtx[i]->config.pipeline_recreate_sec)
                 g_timeout_add_seconds(appCtx[i]->config.pipeline_recreate_sec,
                                       recreate_pipeline_thread_func, appCtx[i]);
+
+            if (!send_cuav_test_messages(appCtx[i]))
+            {
+                /* 未配置 sink type=8 或未开启 send-test-on-startup 时直接返回 FALSE，这里不视为错误。 */
+            }
         }
     }
 

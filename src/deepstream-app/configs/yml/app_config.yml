@@ -187,7 +187,7 @@ sink1:
 sink2:
   # 是否启用此输出（0=禁用，1=启用）
   enable: 0
-  # 输出类型：1=FakeSink 2=EglSink 3=File 4=UDPSink 5=nvdrmvideosink 6=MsgConvBroker 7=MyNetwork(自定义组播)
+  # 输出类型：1=FakeSink 2=EglSink 3=File 4=UDPSink 5=nvdrmvideosink 6=MsgConvBroker 7=MyNetwork(自定义组播) 8=CuavControl
   type: 7
   # 组播目标IP地址
   ip: 230.1.8.31
@@ -224,6 +224,40 @@ sink4:
   enable: 1
   type: 1
   sync: 1
+
+# -----------------------------------------------------------------------------
+# Sink5: C-UAV 控制发送测试配置
+# 风险说明：默认关闭。仅用于开发/调试，避免把控制报文发到真实设备地址。
+# 回滚方式：保持 enable: 0，或直接删除本段配置。
+# -----------------------------------------------------------------------------
+sink5:
+  # 是否启用此输出（0=禁用，1=启用）
+  enable: 1
+  # 输出类型：8=CuavControl
+  type: 8
+  # 测试组播IP地址，避免连接真实设备
+  multicast-ip: 239.255.88.51
+  # 测试组播端口
+  port: 18003
+  # 发送网卡名称（可选）
+  interface: eno1
+  # 组播 TTL
+  ttl: 1
+  # 是否兼容成 0x7101 + cmd_id 包装模式
+  compat-cmd-wrapper: 0
+  # 是否打印发送调试日志
+  debug: 1
+  # pipeline 启动后自动发送一组伺服/可见光测试报文
+  send-test-on-startup: 1
+  # 公共报文头默认发送方/接收方信息
+  tx-sys-id: 999
+  tx-dev-type: 1
+  tx-dev-id: 999
+  tx-subdev-id: 999
+  rx-sys-id: 999
+  rx-dev-type: 1
+  rx-dev-id: 999
+  rx-subdev-id: 999
 
 # -----------------------------------------------------------------------------
 # OSD（On-Screen Display）屏幕叠加显示配置

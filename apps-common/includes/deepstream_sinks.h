@@ -18,6 +18,7 @@
 #endif
 
 #include <gst/gst.h>
+#include "deepstream_cuav_control.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -36,7 +37,8 @@ extern "C"
         NV_DS_SINK_UDPSINK,
         NV_DS_SINK_RENDER_DRM,
         NV_DS_SINK_MSG_CONV_BROKER,
-        NV_DS_SINK_MYNETWORK
+        NV_DS_SINK_MYNETWORK,
+        NV_DS_SINK_CUAVCONTROL
     } NvDsSinkType;
 
     typedef enum
@@ -166,6 +168,7 @@ extern "C"
         NvDsSinkRenderConfig render_config;
         NvDsSinkMsgConvBrokerConfig msg_conv_broker_config;
         NvDsMyNetworkConfig mynetwork_config;
+        NvDsCuavControlConfig cuav_control_config;
     } NvDsSinkSubBinConfig;
 
     typedef struct
