@@ -221,22 +221,99 @@ sink3:
 
 # FAKE SINK 输出
 sink4:
-  enable: 0
+  enable: 1
   type: 1
   sync: 1
 
 # -----------------------------------------------------------------------------
 # Sink5: C-UAV 控制发送测试配置
-# 风险说明：控制参数已拆分到独立 yml，默认仍使用测试组播地址。
-# 回滚方式：保持 enable: 0，或移除 cuav-control-config-file 并恢复旧内联配置。
+# 风险说明：默认关闭。仅用于开发/调试，避免把控制报文发到真实设备地址。
+# 回滚方式：保持 enable: 0，或直接删除本段配置。
 # -----------------------------------------------------------------------------
 sink5:
   # 是否启用此输出（0=禁用，1=启用）
   enable: 1
   # 输出类型：8=CuavControl
   type: 8
-  # 独立 C-UAV 控制配置文件，相对路径基于当前 app_config.yml
-  cuav-control-config-file: cuav_control_sink.yml
+  # 测试组播IP地址，避免连接真实设备
+  multicast-ip: 230.1.88.51
+  # 测试组播端口
+  port: 8003
+  # 发送网卡名称（可选）
+  interface: eno1
+  # 组播 TTL
+  ttl: 1
+  # 是否兼容成 0x7101 + cmd_id 包装模式
+  compat-cmd-wrapper: 0
+  # 是否打印发送调试日志
+  debug: 1
+  # pipeline 启动后是否发送固定测试报文；启用自动跟随后建议关闭
+  send-test-on-startup: 0
+  # 是否根据检测/跟踪目标自动发送伺服/可见光控制报文
+  auto-track-enable: 1
+  # 当前无目标时，是否使用仿真目标继续驱动控制报文
+  simulate-target-enable: 1
+  # 自动控制使用的 source_id
+  control-source-id: 0
+  # 自动控制最小发送周期（毫秒）
+  control-period-ms: 100
+  # 目标丢失后保持当前状态的时间（毫秒）
+  target-lost-hold-ms: 1000
+  # 速度估计使用的历史样本数
+  tracking-history-size: 5
+  # 画面中心死区，归一化到 [-1, 1]
+  center-deadband-x: 0.03
+  center-deadband-y: 0.03
+  # 伺服位置误差/速度前馈增益
+  servo-kp-x: 1.5
+  servo-kp-y: 1.5
+  servo-kv-x: 0.35
+  servo-kv-y: 0.35
+  # 伺服方向，水平向右为正；垂直默认向下目标需要减小俯仰角
+  servo-dir-x: 1
+  servo-dir-y: -1
+  # 单次伺服位置最大调整量（度）
+  servo-max-step-h: 1.5
+  servo-max-step-v: 1.0
+  # 伺服速度范围
+  servo-min-speed: 10
+  servo-max-speed: 60
+  # 目标框高度占比区间
+  zoom-target-ratio-min: 0.20
+  zoom-target-ratio-max: 0.35
+  # 焦距调节死区和增益
+  zoom-deadband: 0.02
+  zoom-kp: 2500.0
+  zoom-max-step: 400.0
+  # 可见光焦距范围
+  pt-focal-min: 134.0
+  pt-focal-max: 16298.0
+  # 仿真目标参数
+  simulate-target-amplitude-x: 0.35
+  simulate-target-amplitude-y: 0.20
+  simulate-target-ratio-min: 0.18
+  simulate-target-ratio-max: 0.36
+  simulate-target-period-ms: 6000
+  # 真实设备单项控制测试。风险：开启后会真实驱动云台和焦距。
+  # 回滚：将 real-device-test-enable 设回 0，并恢复测试组播地址。
+  real-device-test-enable: 1
+  real-device-test-command-interval-ms: 1200
+  real-device-test-observe-timeout-ms: 2500
+  real-device-test-settle-ms: 1000
+  real-device-test-repeat-count: 2
+  servo-effect-threshold-h: 0.5
+  servo-effect-threshold-v: 0.3
+  focal-effect-threshold: 50.0
+  state-stale-timeout-ms: 2000
+  # 公共报文头默认发送方/接收方信息
+  tx-sys-id: 999
+  tx-dev-type: 1
+  tx-dev-id: 999
+  tx-subdev-id: 999
+  rx-sys-id: 999
+  rx-dev-type: 1
+  rx-dev-id: 999
+  rx-subdev-id: 999
 
 # -----------------------------------------------------------------------------
 # OSD（On-Screen Display）屏幕叠加显示配置

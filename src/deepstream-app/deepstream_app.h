@@ -50,6 +50,8 @@ extern "C"
 {
 #endif
 
+#define CUAV_AUTO_CONTROL_HISTORY_MAX 32
+
     typedef struct _AppCtx AppCtx;
 
 /**
@@ -248,6 +250,114 @@ typedef struct
     gfloat   static_h;             /**< 静止目标高度 */
 } StaticTargetFilterState;
 
+typedef struct
+{
+    gboolean valid;
+    guint64 object_id;
+    gint64 sample_time_us;
+    gdouble err_x;
+    gdouble err_y;
+    gdouble target_ratio;
+    gdouble center_x;
+    gdouble center_y;
+    gdouble width;
+    gdouble height;
+} CuavTrackSample;
+
+typedef struct
+{
+    gboolean valid;
+    gint64 updated_at_us;
+    gdouble st_loc_h;
+    gdouble st_loc_v;
+    gdouble pt_focal;
+    guint pt_focus;
+    gdouble ir_focal;
+    guint ir_focus;
+    guint sv_stat;
+    guint trk_dev;
+    guint pt_trk_link;
+    guint ir_trk_link;
+    guint trk_stat;
+} CuavFeedbackState;
+
+typedef struct
+{
+    gboolean has_lock;
+    guint control_source_id;
+    guint64 locked_object_id;
+    gint64 last_target_seen_us;
+    gint64 last_servo_send_us;
+    gint64 last_visible_send_us;
+    gint64 last_infrared_send_us;
+    gboolean last_servo_valid;
+    gdouble last_loc_h;
+    gdouble last_loc_v;
+    guint last_speed_h;
+    guint last_speed_v;
+    gboolean last_visible_valid;
+    gdouble last_pt_focal;
+    guint last_pt_focus;
+    gboolean visible_initialized;
+    gboolean last_infrared_valid;
+    gdouble last_ir_focal;
+    guint last_ir_focus;
+    gboolean infrared_initialized;
+    guint history_len;
+    guint history_next;
+    CuavTrackSample history[CUAV_AUTO_CONTROL_HISTORY_MAX];
+} CuavAutoControlState;
+
+typedef enum
+{
+    CUAV_REAL_DEVICE_TEST_ITEM_NONE = 0,
+    CUAV_REAL_DEVICE_TEST_ITEM_SERVO_H = 1,
+    CUAV_REAL_DEVICE_TEST_ITEM_SERVO_V = 2,
+    CUAV_REAL_DEVICE_TEST_ITEM_VISIBLE_FOCAL = 3,
+    CUAV_REAL_DEVICE_TEST_ITEM_INFRARED_FOCAL = 4,
+    CUAV_REAL_DEVICE_TEST_ITEM_DONE = 5
+} CuavRealDeviceTestItem;
+
+typedef enum
+{
+    CUAV_REAL_DEVICE_TEST_PHASE_IDLE = 0,
+    CUAV_REAL_DEVICE_TEST_PHASE_WAIT_BASELINE = 1,
+    CUAV_REAL_DEVICE_TEST_PHASE_SEND_COMMAND = 2,
+    CUAV_REAL_DEVICE_TEST_PHASE_OBSERVE = 3,
+    CUAV_REAL_DEVICE_TEST_PHASE_SETTLE = 4,
+    CUAV_REAL_DEVICE_TEST_PHASE_COMPLETE = 5
+} CuavRealDeviceTestPhase;
+
+typedef struct
+{
+    guint sent_count;
+    guint effective_count;
+    guint ineffective_count;
+    guint uncertain_count;
+    gdouble max_delta_h;
+    gdouble max_delta_v;
+    gdouble max_delta_focal;
+} CuavRealDeviceTestSummary;
+
+typedef struct
+{
+    gboolean initialized;
+    gboolean final_logged;
+    CuavRealDeviceTestItem item;
+    CuavRealDeviceTestPhase phase;
+    guint repeat_index;
+    gint64 phase_started_us;
+    gint64 last_command_sent_us;
+    gint64 command_feedback_us;
+    gboolean baseline_valid;
+    gboolean observed_feedback;
+    CuavFeedbackState baseline_feedback;
+    gdouble observed_max_delta_h;
+    gdouble observed_max_delta_v;
+    gdouble observed_max_delta_focal;
+    CuavRealDeviceTestSummary summary[CUAV_REAL_DEVICE_TEST_ITEM_DONE];
+} CuavRealDeviceTestState;
+
 /**
  * @brief 应用程序上下文结构体，存储整个应用的核心状态与资源。
  *
@@ -332,6 +442,10 @@ struct _AppCtx
 
     /** 静止目标误检过滤状态 */
     StaticTargetFilterState static_target_filter_states[MAX_SOURCE_BINS]; /**< 各源静止目标过滤状态 */
+    GMutex cuav_control_lock;       /**< C-UAV 自动控制状态锁 */
+    CuavFeedbackState cuav_feedback_state; /**< 最近一次光电系统反馈 */
+    CuavAutoControlState cuav_auto_control_state; /**< 自动控制运行时状态 */
+    CuavRealDeviceTestState cuav_real_device_test_state; /**< 真实设备单项测试状态 */
 };
 
 /**
@@ -423,6 +537,7 @@ gboolean parse_config_file(NvDsConfig *config, gchar *cfg_file_path);
 gboolean parse_config_file_yaml(NvDsConfig *config, gchar *cfg_file_path);
 
 gboolean send_cuav_test_messages(AppCtx *appCtx);
+void process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta);
 
 /**
  * @brief 获取指定源 ID 对应的传感器信息。

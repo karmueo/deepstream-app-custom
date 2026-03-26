@@ -24,6 +24,7 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
 {
     gboolean ret = FALSE;
     YAML::Node configyml = YAML::LoadFile(cfg_file_path);
+    YAML::Node sink_node = configyml[group_str];
 
     config->encoder_config.rtsp_port = 8554;
     config->encoder_config.udp_port = 5000;
@@ -42,6 +43,7 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
     config->cuav_control_config.ttl = 1;
     config->cuav_control_config.compat_cmd_wrapper = FALSE;
     config->cuav_control_config.debug = FALSE;
+    config->cuav_control_config.print_upstream_state = FALSE;
     config->cuav_control_config.tx_sys_id = 999;
     config->cuav_control_config.tx_dev_type = 1;
     config->cuav_control_config.tx_dev_id = 999;
@@ -51,16 +53,92 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
     config->cuav_control_config.rx_dev_id = 999;
     config->cuav_control_config.rx_subdev_id = 999;
     config->cuav_control_config.send_test_on_startup = FALSE;
+    config->cuav_control_config.auto_track_enable = FALSE;
+    config->cuav_control_config.control_source_id = 0;
+    config->cuav_control_config.control_period_ms = 100;
+    config->cuav_control_config.target_lost_hold_ms = 1000;
+    config->cuav_control_config.tracking_history_size = 5;
+    config->cuav_control_config.center_deadband_x = 0.03;
+    config->cuav_control_config.center_deadband_y = 0.03;
+    config->cuav_control_config.servo_kp_x = 1.5;
+    config->cuav_control_config.servo_kp_y = 1.5;
+    config->cuav_control_config.servo_kv_x = 0.35;
+    config->cuav_control_config.servo_kv_y = 0.35;
+    config->cuav_control_config.servo_dir_x = 1;
+    config->cuav_control_config.servo_dir_y = -1;
+    config->cuav_control_config.servo_max_step_h = 1.5;
+    config->cuav_control_config.servo_max_step_v = 1.0;
+    config->cuav_control_config.servo_min_speed = 10;
+    config->cuav_control_config.servo_max_speed = 60;
+    config->cuav_control_config.zoom_target_ratio_min = 0.20;
+    config->cuav_control_config.zoom_target_ratio_max = 0.35;
+    config->cuav_control_config.zoom_deadband = 0.02;
+    config->cuav_control_config.zoom_kp = 2500.0;
+    config->cuav_control_config.zoom_max_step = 400.0;
+    config->cuav_control_config.visible_light_control_enable = TRUE;
+    config->cuav_control_config.infrared_control_enable = FALSE;
+    config->cuav_control_config.servo_dev_id = 2;
+    config->cuav_control_config.pt_focal_min = 134.0;
+    config->cuav_control_config.pt_focal_max = 16298.0;
+    config->cuav_control_config.ir_zoom_kp = 80.0;
+    config->cuav_control_config.ir_zoom_max_step = 40.0;
+    config->cuav_control_config.ir_focal_min = 851.0;
+    config->cuav_control_config.ir_focal_max = 1223.0;
+    config->cuav_control_config.ir_focus_default = 5;
+    config->cuav_control_config.simulate_target_enable = FALSE;
+    config->cuav_control_config.simulate_target_amplitude_x = 0.35;
+    config->cuav_control_config.simulate_target_amplitude_y = 0.20;
+    config->cuav_control_config.simulate_target_ratio_min = 0.18;
+    config->cuav_control_config.simulate_target_ratio_max = 0.36;
+    config->cuav_control_config.simulate_target_period_ms = 6000;
+    config->cuav_control_config.real_device_test_enable = FALSE;
+    config->cuav_control_config.real_device_test_zoom_only_enable = FALSE;
+    config->cuav_control_config.real_device_test_item = 0;
+    config->cuav_control_config.real_device_test_command_interval_ms = 1200;
+    config->cuav_control_config.real_device_test_observe_timeout_ms = 2500;
+    config->cuav_control_config.real_device_test_settle_ms = 1000;
+    config->cuav_control_config.real_device_test_repeat_count = 2;
+    config->cuav_control_config.servo_effect_threshold_h = 0.5;
+    config->cuav_control_config.servo_effect_threshold_v = 0.3;
+    config->cuav_control_config.focal_effect_threshold = 50.0;
+    config->cuav_control_config.ir_focal_effect_threshold = 10.0;
+    config->cuav_control_config.state_stale_timeout_ms = 2000;
 
-    if (configyml[group_str]["enable"])
+    if (sink_node["enable"])
     {
-        gboolean val = configyml[group_str]["enable"].as<gboolean>();
+        gboolean val = sink_node["enable"].as<gboolean>();
         if (val == FALSE)
             return TRUE;
     }
 
-    for (YAML::const_iterator itr = configyml[group_str].begin();
-         itr != configyml[group_str].end(); ++itr)
+    if (sink_node["cuav-control-config-file"])
+    {
+        std::string temp = sink_node["cuav-control-config-file"].as<std::string>();
+        char *str = (char *)malloc(sizeof(char) * 1024);
+        char *abs_cfg_path = (char *)malloc(sizeof(char) * 1024);
+        std::strncpy(str, temp.c_str(), 1023);
+        str[1023] = '\0';
+        if (!get_absolute_file_path_yaml(cfg_file_path, str, abs_cfg_path))
+        {
+            g_printerr("Error: Could not resolve cuav-control-config-file in sink.\n");
+            g_free(str);
+            g_free(abs_cfg_path);
+            goto done;
+        }
+        g_free(str);
+
+        if (!parse_cuav_control_yaml(&config->cuav_control_config, abs_cfg_path))
+        {
+            g_printerr("Error: Could not parse cuav-control-config-file '%s'.\n",
+                       abs_cfg_path);
+            g_free(abs_cfg_path);
+            goto done;
+        }
+        g_free(abs_cfg_path);
+    }
+
+    for (YAML::const_iterator itr = sink_node.begin();
+         itr != sink_node.end(); ++itr)
     {
         std::string paramKey = itr->first.as<std::string>();
 
@@ -247,6 +325,10 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
             config->msg_conv_broker_config.new_api =
                 itr->second.as<gboolean>();
         }
+        else if (paramKey == "cuav-control-config-file")
+        {
+            continue;
+        }
         else if (paramKey == "ip")
         {
             // 设置报文发送组播地址
@@ -303,6 +385,10 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
         {
             config->cuav_control_config.debug = itr->second.as<gboolean>();
         }
+        else if (paramKey == "print-upstream-state")
+        {
+            config->cuav_control_config.print_upstream_state = itr->second.as<gboolean>();
+        }
         else if (paramKey == "tx-sys-id")
         {
             config->cuav_control_config.tx_sys_id = itr->second.as<guint>();
@@ -338,6 +424,222 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
         else if (paramKey == "send-test-on-startup")
         {
             config->cuav_control_config.send_test_on_startup = itr->second.as<gboolean>();
+        }
+        else if (paramKey == "auto-track-enable")
+        {
+            config->cuav_control_config.auto_track_enable = itr->second.as<gboolean>();
+        }
+        else if (paramKey == "control-source-id")
+        {
+            config->cuav_control_config.control_source_id = itr->second.as<guint>();
+        }
+        else if (paramKey == "control-period-ms")
+        {
+            config->cuav_control_config.control_period_ms = itr->second.as<guint>();
+        }
+        else if (paramKey == "target-lost-hold-ms")
+        {
+            config->cuav_control_config.target_lost_hold_ms = itr->second.as<guint>();
+        }
+        else if (paramKey == "tracking-history-size")
+        {
+            config->cuav_control_config.tracking_history_size = itr->second.as<guint>();
+        }
+        else if (paramKey == "center-deadband-x")
+        {
+            config->cuav_control_config.center_deadband_x = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "center-deadband-y")
+        {
+            config->cuav_control_config.center_deadband_y = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "servo-kp-x")
+        {
+            config->cuav_control_config.servo_kp_x = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "servo-kp-y")
+        {
+            config->cuav_control_config.servo_kp_y = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "servo-kv-x")
+        {
+            config->cuav_control_config.servo_kv_x = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "servo-kv-y")
+        {
+            config->cuav_control_config.servo_kv_y = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "servo-dir-x")
+        {
+            config->cuav_control_config.servo_dir_x = itr->second.as<gint>();
+        }
+        else if (paramKey == "servo-dir-y")
+        {
+            config->cuav_control_config.servo_dir_y = itr->second.as<gint>();
+        }
+        else if (paramKey == "servo-max-step-h")
+        {
+            config->cuav_control_config.servo_max_step_h = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "servo-max-step-v")
+        {
+            config->cuav_control_config.servo_max_step_v = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "servo-min-speed")
+        {
+            config->cuav_control_config.servo_min_speed = itr->second.as<guint>();
+        }
+        else if (paramKey == "servo-max-speed")
+        {
+            config->cuav_control_config.servo_max_speed = itr->second.as<guint>();
+        }
+        else if (paramKey == "zoom-target-ratio-min")
+        {
+            config->cuav_control_config.zoom_target_ratio_min = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "zoom-target-ratio-max")
+        {
+            config->cuav_control_config.zoom_target_ratio_max = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "zoom-deadband")
+        {
+            config->cuav_control_config.zoom_deadband = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "zoom-kp")
+        {
+            config->cuav_control_config.zoom_kp = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "zoom-max-step")
+        {
+            config->cuav_control_config.zoom_max_step = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "visible-light-control-enable")
+        {
+            config->cuav_control_config.visible_light_control_enable = itr->second.as<gboolean>();
+        }
+        else if (paramKey == "infrared-control-enable")
+        {
+            config->cuav_control_config.infrared_control_enable = itr->second.as<gboolean>();
+        }
+        else if (paramKey == "servo-dev-id")
+        {
+            config->cuav_control_config.servo_dev_id = itr->second.as<guint>();
+        }
+        else if (paramKey == "pt-focal-min")
+        {
+            config->cuav_control_config.pt_focal_min = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "pt-focal-max")
+        {
+            config->cuav_control_config.pt_focal_max = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "ir-zoom-kp")
+        {
+            config->cuav_control_config.ir_zoom_kp = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "ir-zoom-max-step")
+        {
+            config->cuav_control_config.ir_zoom_max_step = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "ir-focal-min")
+        {
+            config->cuav_control_config.ir_focal_min = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "ir-focal-max")
+        {
+            config->cuav_control_config.ir_focal_max = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "ir-focus-default")
+        {
+            config->cuav_control_config.ir_focus_default = itr->second.as<guint>();
+        }
+        else if (paramKey == "simulate-target-enable")
+        {
+            config->cuav_control_config.simulate_target_enable = itr->second.as<gboolean>();
+        }
+        else if (paramKey == "simulate-target-amplitude-x")
+        {
+            config->cuav_control_config.simulate_target_amplitude_x = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "simulate-target-amplitude-y")
+        {
+            config->cuav_control_config.simulate_target_amplitude_y = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "simulate-target-ratio-min")
+        {
+            config->cuav_control_config.simulate_target_ratio_min = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "simulate-target-ratio-max")
+        {
+            config->cuav_control_config.simulate_target_ratio_max = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "simulate-target-period-ms")
+        {
+            config->cuav_control_config.simulate_target_period_ms = itr->second.as<guint>();
+        }
+        else if (paramKey == "real-device-test-enable")
+        {
+            config->cuav_control_config.real_device_test_enable = itr->second.as<gboolean>();
+        }
+        else if (paramKey == "real-device-test-zoom-only-enable")
+        {
+            config->cuav_control_config.real_device_test_zoom_only_enable = itr->second.as<gboolean>();
+        }
+        else if (paramKey == "real-device-test-item")
+        {
+            std::string value = itr->second.as<std::string>();
+            if (value == "all")
+                config->cuav_control_config.real_device_test_item = 0;
+            else if (value == "servo_h")
+                config->cuav_control_config.real_device_test_item = 1;
+            else if (value == "servo_v")
+                config->cuav_control_config.real_device_test_item = 2;
+            else if (value == "visible_focal")
+                config->cuav_control_config.real_device_test_item = 3;
+            else if (value == "infrared_focal")
+                config->cuav_control_config.real_device_test_item = 4;
+            else
+            {
+                g_printerr("Error: Unknown value '%s' for real-device-test-item in sink.\n",
+                           value.c_str());
+                goto done;
+            }
+        }
+        else if (paramKey == "real-device-test-command-interval-ms")
+        {
+            config->cuav_control_config.real_device_test_command_interval_ms = itr->second.as<guint>();
+        }
+        else if (paramKey == "real-device-test-observe-timeout-ms")
+        {
+            config->cuav_control_config.real_device_test_observe_timeout_ms = itr->second.as<guint>();
+        }
+        else if (paramKey == "real-device-test-settle-ms")
+        {
+            config->cuav_control_config.real_device_test_settle_ms = itr->second.as<guint>();
+        }
+        else if (paramKey == "real-device-test-repeat-count")
+        {
+            config->cuav_control_config.real_device_test_repeat_count = itr->second.as<guint>();
+        }
+        else if (paramKey == "servo-effect-threshold-h")
+        {
+            config->cuav_control_config.servo_effect_threshold_h = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "servo-effect-threshold-v")
+        {
+            config->cuav_control_config.servo_effect_threshold_v = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "focal-effect-threshold")
+        {
+            config->cuav_control_config.focal_effect_threshold = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "ir-focal-effect-threshold")
+        {
+            config->cuav_control_config.ir_focal_effect_threshold = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "state-stale-timeout-ms")
+        {
+            config->cuav_control_config.state_stale_timeout_ms = itr->second.as<guint>();
         }
         else
         {

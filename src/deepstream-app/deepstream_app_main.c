@@ -640,6 +640,8 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
         gst_buffer_unmap(buf, &inmap);
     }
 
+    process_cuav_auto_control(appCtx, batch_meta);
+
     /* 判断是否为单目标跟踪器 */
     gboolean tracker_enabled = appCtx->config.tracker_config.enable;
     gboolean single_object_tracker = FALSE;
@@ -2542,6 +2544,7 @@ int main(int argc, char *argv[])
         appCtx[i]->car_class_id = -1;
         appCtx[i]->index = i;
         appCtx[i]->active_source_index = -1;
+        g_mutex_init(&appCtx[i]->cuav_control_lock);
         if (show_bbox_text)
         {
             appCtx[i]->show_bbox_text = TRUE;
@@ -2826,6 +2829,8 @@ done:
             g_hash_table_destroy(appCtx[i]->label_anchor_map);
             appCtx[i]->label_anchor_map = NULL;
         }
+
+        g_mutex_clear(&appCtx[i]->cuav_control_lock);
 
         g_mutex_lock(&disp_lock);
         if (windows[i])

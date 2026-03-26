@@ -125,7 +125,47 @@ sink4:
   ttl: 1
   compat-cmd-wrapper: 0
   debug: 1
-  send-test-on-startup: 1
+  print-upstream-state: 0
+  send-test-on-startup: 0
+  auto-track-enable: 1
+  simulate-target-enable: 1
+  control-source-id: 0
+  control-period-ms: 100
+  target-lost-hold-ms: 1000
+  tracking-history-size: 5
+  center-deadband-x: 0.03
+  center-deadband-y: 0.03
+  servo-kp-x: 1.5
+  servo-kp-y: 1.5
+  servo-kv-x: 0.35
+  servo-kv-y: 0.35
+  servo-dir-x: 1
+  servo-dir-y: -1
+  servo-max-step-h: 1.5
+  servo-max-step-v: 1.0
+  servo-min-speed: 10
+  servo-max-speed: 60
+  zoom-target-ratio-min: 0.20
+  zoom-target-ratio-max: 0.35
+  zoom-deadband: 0.02
+  zoom-kp: 2500.0
+  zoom-max-step: 400.0
+  pt-focal-min: 134.0
+  pt-focal-max: 16298.0
+  simulate-target-amplitude-x: 0.35
+  simulate-target-amplitude-y: 0.20
+  simulate-target-ratio-min: 0.18
+  simulate-target-ratio-max: 0.36
+  simulate-target-period-ms: 6000
+  real-device-test-enable: 0
+  real-device-test-command-interval-ms: 1200
+  real-device-test-observe-timeout-ms: 2500
+  real-device-test-settle-ms: 1000
+  real-device-test-repeat-count: 2
+  servo-effect-threshold-h: 0.5
+  servo-effect-threshold-v: 0.3
+  focal-effect-threshold: 50.0
+  state-stale-timeout-ms: 2000
   tx-sys-id: 999
   tx-dev-type: 1
   tx-dev-id: 999
