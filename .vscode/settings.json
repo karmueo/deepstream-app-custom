@@ -4,8 +4,8 @@
     "cmake.debugConfig": {
         "args": [
             "-c",
-            "${workspaceFolder}/src/deepstream-app/configs/yml/perf-measurement.yml"
-            // "${workspaceFolder}/src/deepstream-app/configs/yml/app_config.yml"
+            // "${workspaceFolder}/src/deepstream-app/configs/yml/perf-measurement.yml"
+            "${workspaceFolder}/src/deepstream-app/configs/yml/app_config.yml"
         ],
         "environment": [
             {
