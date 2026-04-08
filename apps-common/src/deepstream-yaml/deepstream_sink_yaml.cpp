@@ -32,6 +32,7 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
     config->encoder_config.compute_hw = 0;
     config->render_config.qos = FALSE;
     config->link_to_demux = FALSE;
+    config->source_id_specified = FALSE;
     config->msg_conv_broker_config.new_api = FALSE;
     config->msg_conv_broker_config.conv_msg2p_new_api = FALSE;
     config->msg_conv_broker_config.conv_frame_interval = 30;
@@ -128,6 +129,7 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
         {
             config->source_id =
                 itr->second.as<guint>();
+            config->source_id_specified = TRUE;
         }
         else if (paramKey == "rtsp-port")
         {

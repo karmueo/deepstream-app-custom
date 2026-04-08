@@ -30,3 +30,4 @@ src/trt_classify
 *.out
 build
 *.bin
+.codex

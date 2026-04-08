@@ -159,6 +159,7 @@ extern "C"
     {
         gboolean enable;
         guint source_id;
+        gboolean source_id_specified; /**< 是否在配置文件中显式配置了 source-id */
         gboolean link_to_demux;
         NvDsSinkType type;
         gint sync;
@@ -208,11 +209,24 @@ extern "C"
      * @return true if bin created successfully.
      */
     gboolean create_sink_bin(guint num_sub_bins,
-                             NvDsSinkSubBinConfig *config_array, NvDsSinkBin *bin, guint index);
+                             NvDsSinkSubBinConfig *config_array, NvDsSinkBin *bin, guint index,
+                             gboolean include_mynetwork);
 
     void destroy_sink_bin(void);
     gboolean create_demux_sink_bin(guint num_sub_bins,
-                                   NvDsSinkSubBinConfig *config_array, NvDsSinkBin *bin, guint index);
+                                   NvDsSinkSubBinConfig *config_array, NvDsSinkBin *bin, guint index,
+                                   gboolean include_mynetwork);
+    /**
+     * @brief 创建仅包含自定义组播发送器的独立 sink bin。
+     *
+     * 该 bin 用于 tiled-display 模式下的旁路输出，直接挂到 tiler tee 前，
+     * 以便保留原始 source_id。
+     *
+     * @param config 自定义组播配置。
+     * @param bin 用于接收创建结果的 sink 子 bin。
+     * @return 创建成功返回 TRUE，否则返回 FALSE。
+     */
+    gboolean create_mynetwork_only_bin(NvDsMyNetworkConfig *config, NvDsSinkBinSubBin *bin);
 
     void set_rtsp_udp_port_num(guint rtsp_port_num, guint udp_port_num);
 

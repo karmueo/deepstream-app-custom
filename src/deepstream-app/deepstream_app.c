@@ -374,6 +374,8 @@ create_demux_pipeline(AppCtx *appCtx, guint index)
 {
     gboolean ret = FALSE;
     NvDsConfig *config = &appCtx->config;
+    gboolean   include_mynetwork = (config->tiled_display_config.enable ==
+                                    NV_DS_TILED_DISPLAY_DISABLE); /**< tiled 模式下是否保留 mynetwork sink 在 demux 实例内。 */
     NvDsInstanceBin *instance_bin = &appCtx->pipeline.demux_instance_bins[index];
     GstElement *last_elem;
     gchar elem_name[32];
@@ -386,7 +388,8 @@ create_demux_pipeline(AppCtx *appCtx, guint index)
 
     if (!create_demux_sink_bin(config->num_sink_sub_bins,
                                config->sink_bin_sub_bin_config, &instance_bin->demux_sink_bin,
-                               config->sink_bin_sub_bin_config[index].source_id))
+                               config->sink_bin_sub_bin_config[index].source_id,
+                               include_mynetwork))
     {
         goto done;
     }
@@ -432,6 +435,59 @@ done:
 }
 
 /**
+ * @brief 在 tiled-display 模式下创建并挂接独立的 mynetwork 旁路分支。
+ *
+ * 该分支直接连接到 tiler tee 的输出，避免报文经过 tiled 合成后丢失原始
+ * source 信息。
+ *
+ * @param appCtx 应用程序上下文。
+ * @param latency_probe_id 延迟探针 ID 输出指针，可为空。
+ * @return 创建成功返回 TRUE，否则返回 FALSE。
+ */
+static gboolean
+add_tiled_mynetwork_sink_branches(AppCtx *appCtx, gulong *latency_probe_id)
+{
+    NvDsConfig *config = &appCtx->config;
+    NvDsPipeline *pipeline = &appCtx->pipeline;
+    gboolean ret = FALSE;
+
+    for (guint i = 0; i < config->num_sink_sub_bins; i++)
+    {
+        NvDsSinkSubBinConfig *sink_config = &config->sink_bin_sub_bin_config[i]; /**< 当前 sink 配置。 */
+        NvDsSinkBinSubBin *sink_bin_sub = &pipeline->instance_bins[0].sink_bin.sub_bins[i]; /**< 复用 0 号实例的 sink 容器保存旁路分支。 */
+
+        if (!sink_config->enable || sink_config->type != NV_DS_SINK_MYNETWORK)
+        {
+            continue;
+        }
+
+        if (!create_mynetwork_only_bin(&sink_config->mynetwork_config, sink_bin_sub))
+        {
+            goto done;
+        }
+
+        if (!gst_bin_add(GST_BIN(pipeline->pipeline), sink_bin_sub->bin))
+        {
+            goto done;
+        }
+
+        if (!link_element_to_tee_src_pad(pipeline->tiler_tee, sink_bin_sub->bin))
+        {
+            goto done;
+        }
+
+    }
+
+    ret = TRUE;
+done:
+    if (!ret)
+    {
+        NVGSTDS_ERR_MSG_V("%s failed", __func__);
+    }
+    return ret;
+}
+
+/**
  * Function to add components to pipeline which are dependent on number
  * of streams. These components work on single buffer. If tiling is being
  * used then single instance will be created otherwise < N > such instances
@@ -444,6 +500,8 @@ create_processing_instance(AppCtx *appCtx, guint index)
 {
     gboolean ret = FALSE;
     NvDsConfig *config = &appCtx->config;
+    gboolean   include_mynetwork = (config->tiled_display_config.enable ==
+                                    NV_DS_TILED_DISPLAY_DISABLE); /**< tiled 模式下是否保留 mynetwork sink 在主 processing 实例内。 */
     NvDsInstanceBin *instance_bin = &appCtx->pipeline.instance_bins[index];
     GstElement *last_elem;
     gchar elem_name[32];
@@ -455,7 +513,8 @@ create_processing_instance(AppCtx *appCtx, guint index)
     instance_bin->bin = gst_bin_new(elem_name);
 
     if (!create_sink_bin(config->num_sink_sub_bins,
-                         config->sink_bin_sub_bin_config, &instance_bin->sink_bin, index))
+                         config->sink_bin_sub_bin_config, &instance_bin->sink_bin, index,
+                         include_mynetwork))
     {
         goto done;
     }
@@ -959,7 +1018,10 @@ is_sink_available_for_source_id(NvDsConfig *config, guint source_id)
     for (guint j = 0; j < config->num_sink_sub_bins; j++)
     {
         if (config->sink_bin_sub_bin_config[j].enable &&
-            config->sink_bin_sub_bin_config[j].source_id == source_id &&
+            (config->sink_bin_sub_bin_config[j].type == NV_DS_SINK_MYNETWORK
+                 ? (!config->sink_bin_sub_bin_config[j].source_id_specified ||
+                    config->sink_bin_sub_bin_config[j].source_id == source_id)
+                 : config->sink_bin_sub_bin_config[j].source_id == source_id) &&
             config->sink_bin_sub_bin_config[j].link_to_demux == FALSE)
         {
             return TRUE;
@@ -998,7 +1060,7 @@ create_pipeline(AppCtx *appCtx,
     GstElement *tmp_elem2;
     guint i;
     GstPad *fps_pad = NULL;
-    gulong latency_probe_id;
+    gulong latency_probe_id = 0; /**< 延迟探针 ID。 */
 
     _dsmeta_quark = g_quark_from_static_string(NVDS_META_STRING);
 
@@ -1389,6 +1451,10 @@ create_pipeline(AppCtx *appCtx,
 
         link_element_to_tee_src_pad(pipeline->tiler_tee,
                                     pipeline->tiled_display_bin.bin);
+        if (!add_tiled_mynetwork_sink_branches(appCtx, &latency_probe_id))
+        {
+            goto done;
+        }
         last_elem = pipeline->tiler_tee;
 
         NVGSTDS_ELEM_ADD_PROBE(latency_probe_id,

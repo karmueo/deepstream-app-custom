@@ -447,6 +447,22 @@ done:
 }
 
 /**
+ * @brief 创建仅包含自定义组播发送器的独立 sink bin。
+ *
+ * 该接口复用 mynetwork sink 的内部构建逻辑，供 tiled-display 模式下
+ * 的旁路分支使用。
+ *
+ * @param config 自定义组播配置。
+ * @param bin 用于接收创建结果的 sink 子 bin。
+ * @return 创建成功返回 TRUE，否则返回 FALSE。
+ */
+gboolean
+create_mynetwork_only_bin(NvDsMyNetworkConfig *config, NvDsSinkBinSubBin *bin)
+{
+    return create_mynework_bin(config, bin);
+}
+
+/**
  * Probe function to drop upstream "GST_QUERY_SEEKING" query from h264parse element.
  * This is a WAR to avoid memory leaks from h264parse element
  */
@@ -985,7 +1001,7 @@ done:
 
 gboolean
 create_sink_bin(guint num_sub_bins, NvDsSinkSubBinConfig *config_array,
-                NvDsSinkBin *bin, guint index)
+                NvDsSinkBin *bin, guint index, gboolean include_mynetwork)
 {
     gboolean ret = FALSE;
     guint i;
@@ -1027,7 +1043,20 @@ create_sink_bin(guint num_sub_bins, NvDsSinkSubBinConfig *config_array,
         {
             continue;
         }
-        if (config_array[i].source_id != index)
+        if (config_array[i].type == NV_DS_SINK_MYNETWORK)
+        {
+            if (!include_mynetwork)
+            {
+                continue;
+            }
+            /* 未显式配置 source-id 时，让 mynetwork sink 同时接收所有 source。 */
+            if (config_array[i].source_id_specified &&
+                config_array[i].source_id != index)
+            {
+                continue;
+            }
+        }
+        else if (config_array[i].source_id != index)
         {
             continue;
         }
@@ -1111,7 +1140,7 @@ done:
 
 gboolean
 create_demux_sink_bin(guint num_sub_bins, NvDsSinkSubBinConfig *config_array,
-                      NvDsSinkBin *bin, guint index)
+                      NvDsSinkBin *bin, guint index, gboolean include_mynetwork)
 {
     gboolean ret = FALSE;
     guint i;
@@ -1150,6 +1179,19 @@ create_demux_sink_bin(guint num_sub_bins, NvDsSinkSubBinConfig *config_array,
         if (!config_array[i].enable)
         {
             continue;
+        }
+        if (config_array[i].type == NV_DS_SINK_MYNETWORK)
+        {
+            if (!include_mynetwork)
+            {
+                continue;
+            }
+            /* 未显式配置 source-id 时，让 mynetwork sink 同时接收所有 source。 */
+            if (config_array[i].source_id_specified &&
+                config_array[i].source_id != index)
+            {
+                continue;
+            }
         }
         if (!config_array[i].link_to_demux)
         {
