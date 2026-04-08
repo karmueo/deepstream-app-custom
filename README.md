@@ -167,7 +167,7 @@ sudo cmake --install .
 
 ```sh
 mkdir build && cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..
+cmake -DCMAKE_BUILD_TYPE=Release ../src/deepstream-app/
 cmake --build .
 sudo cmake --install .
 ```
