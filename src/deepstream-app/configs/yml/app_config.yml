@@ -30,8 +30,8 @@ tiled-display:
 # -----------------------------------------------------------------------------
 source:
   # 视频源CSV配置文件路径（包含RTSP/文件流地址等）
-  csv-file-path: sources.csv
-  # csv-file-path: file_sources.csv
+  # csv-file-path: sources.csv
+  csv-file-path: file_sources.csv
   #file_sources.csv
   #debug_sources.csv
 
@@ -145,7 +145,7 @@ videorecognition:
 # -----------------------------------------------------------------------------
 udpjsonmeta:
   # 是否启用UDP JSON元数据接收（0=禁用，1=启用）
-  enable: 1
+  enable: 0
   # 组播IP地址
   multicast-ip: 230.1.1.22
   # 网络接口名称（如eth0, enp5s0等）
@@ -214,15 +214,16 @@ sink1:
 # -----------------------------------------------------------------------------
 sink2:
   # 是否启用此输出（0=禁用，1=启用）
-  enable: 0
+  enable: 1
   # 输出类型：1=FakeSink 2=EglSink 3=File 4=UDPSink 5=nvdrmvideosink 6=MsgConvBroker 7=MyNetwork(自定义组播)
   type: 7
+  # 不配置 source-id 时，sink2 会对所有 source 生效；如果填写则只绑定对应的单一路源
   # 组播目标IP地址
   ip: 230.1.8.31
   # 组播端口号
   multicast-port: 8128
   # 组播网卡接口名称（通过ip a命令查看，如eth0, enp5s0, ens33等）
-  # multicast-iface: eno1
+  multicast-iface: enP8p1s0
   # 组播TTL值（生存时间）
   # multicast-ttl=32
   # 输出帧率（可选参数，不配置时默认为25）

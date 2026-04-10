@@ -31,3 +31,4 @@ src/trt_classify
 build
 *.bin
 .codex
+*.pyc

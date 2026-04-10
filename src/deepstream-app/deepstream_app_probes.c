@@ -595,124 +595,117 @@ GstPadProbeReturn gie_primary_processing_done_buf_prob(GstPad *pad,
     }
 
     // ==== 可选：在修改框尺寸/写出之前执行 NMS 去重 ====
-    // 使用缓存的 ROI 配置（已在初始化时读取）
-    gboolean use_roi_nms = appCtx->roi_nms_enabled;
-    GArray *roi_centers = appCtx->roi_centers;
+    // 仅在显式启用 ROI NMS 时执行，避免在普通整帧检测链路上误删不同目标。
+    gboolean use_roi_nms = appCtx->roi_nms_enabled;  // 是否启用 ROI NMS
+    GArray *roi_centers = appCtx->roi_centers;       // ROI 中心点缓存
 
-    // TODO: 简单 NMS: 按置信度排序，IoU>阈值则删除低置信度框（不再按类别区分，跨类别也抑制）
-    // 如果启用了 ROI，则在 IoU 相同情况下优先保留离 ROI 中心点更近的框
-    const gfloat IOU_THRESH = 0.01f;  // 可调，>0 且 <1
-
-    // 统计 & 处理每个帧
-    for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame; l_frame = l_frame->next)
+    if (use_roi_nms && roi_centers && roi_centers->len >= 2)
     {
-        NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)l_frame->data;
-        // 收集对象指针
-        GArray *objs = g_array_new(FALSE, FALSE, sizeof(NvDsObjectMeta *));
-        for (NvDsMetaList *l = frame_meta->obj_meta_list; l; l = l->next)
+        const gfloat iou_thresh = 0.01f;  // ROI NMS 的 IoU 阈值
+
+        // 统计并处理每个帧中的重叠框
+        for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame; l_frame = l_frame->next)
         {
-            NvDsObjectMeta *o = (NvDsObjectMeta *)l->data;
-            g_array_append_val(objs, o);
-        }
-        guint n = objs->len;
-        if (n > 1)
-        {
-            // 简单冒泡/插入排序，按 confidence 降序 (对象数量通常较少; 若多可改为快速排序)
-            for (guint i = 1; i < n; i++)
+            NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)l_frame->data;
+            GArray *objs = g_array_new(FALSE, FALSE, sizeof(NvDsObjectMeta *));  // 当前帧对象列表
+            for (NvDsMetaList *l = frame_meta->obj_meta_list; l; l = l->next)
             {
-                NvDsObjectMeta *key = g_array_index(objs, NvDsObjectMeta *, i);
-                gfloat kc = key->confidence;
-                gint j = i - 1;
-                while (j >= 0)
-                {
-                    NvDsObjectMeta *pj = g_array_index(objs, NvDsObjectMeta *, j);
-                    if (pj->confidence >= kc)
-                        break;
-                    g_array_index(objs, NvDsObjectMeta *, j + 1) = pj;
-                    j--;
-                }
-                g_array_index(objs, NvDsObjectMeta *, j + 1) = key;
+                NvDsObjectMeta *o = (NvDsObjectMeta *)l->data;  // 当前对象元数据
+                g_array_append_val(objs, o);
             }
-            // 标记保留（安全初始化）
-            GByteArray *keep = g_byte_array_sized_new(n);
-            g_byte_array_set_size(keep, n);
-            memset(keep->data, 1, n);
-            for (guint i = 0; i < n; i++)
+
+            guint n = objs->len;  // 当前帧对象数量
+            if (n > 1)
             {
-                if (!keep->data[i])
-                    continue;
-                NvDsObjectMeta *a = g_array_index(objs, NvDsObjectMeta *, i);
-                float ax1 = a->rect_params.left;
-                float ay1 = a->rect_params.top;
-                float aw = a->rect_params.width;
-                float ah = a->rect_params.height;
-                float ax2 = ax1 + aw;
-                float ay2 = ay1 + ah;
-                if (aw <= 0 || ah <= 0)
+                for (guint i = 1; i < n; i++)
                 {
-                    keep->data[i] = 0;
-                    continue;
+                    NvDsObjectMeta *key = g_array_index(objs, NvDsObjectMeta *, i);  // 当前待插入对象
+                    gfloat kc = key->confidence;  // 当前待插入对象置信度
+                    gint j = i - 1;  // 已排序区末尾索引
+                    while (j >= 0)
+                    {
+                        NvDsObjectMeta *pj = g_array_index(objs, NvDsObjectMeta *, j);  // 已排序对象
+                        if (pj->confidence >= kc)
+                            break;
+                        g_array_index(objs, NvDsObjectMeta *, j + 1) = pj;
+                        j--;
+                    }
+                    g_array_index(objs, NvDsObjectMeta *, j + 1) = key;
                 }
 
-                // 计算 a 的中心点
-                float acx = ax1 + aw / 2.0f;
-                float acy = ay1 + ah / 2.0f;
-
-                for (guint j = i + 1; j < n; j++)
+                GByteArray *keep = g_byte_array_sized_new(n);  // 对象保留标记数组
+                g_byte_array_set_size(keep, n);
+                memset(keep->data, 1, n);
+                for (guint i = 0; i < n; i++)
                 {
-                    if (!keep->data[j])
+                    if (!keep->data[i])
                         continue;
-                    NvDsObjectMeta *b = g_array_index(objs, NvDsObjectMeta *, j);
-                    // 跨类别也进行抑制（去掉按类别过滤）
-                    float bx1 = b->rect_params.left;
-                    float by1 = b->rect_params.top;
-                    float bw = b->rect_params.width;
-                    float bh = b->rect_params.height;
-                    if (bw <= 0 || bh <= 0)
+
+                    NvDsObjectMeta *a = g_array_index(objs, NvDsObjectMeta *, i);  // 当前高置信度对象
+                    float ax1 = a->rect_params.left;  // 对象 a 左上角 x
+                    float ay1 = a->rect_params.top;   // 对象 a 左上角 y
+                    float aw = a->rect_params.width;  // 对象 a 宽度
+                    float ah = a->rect_params.height; // 对象 a 高度
+                    float ax2 = ax1 + aw;             // 对象 a 右下角 x
+                    float ay2 = ay1 + ah;             // 对象 a 右下角 y
+                    if (aw <= 0 || ah <= 0)
                     {
-                        keep->data[j] = 0;
+                        keep->data[i] = 0;
                         continue;
                     }
-                    float bx2 = bx1 + bw;
-                    float by2 = by1 + bh;
-                    float ix1 = ax1 > bx1 ? ax1 : bx1;
-                    float iy1 = ay1 > by1 ? ay1 : by1;
-                    float ix2 = ax2 < bx2 ? ax2 : bx2;
-                    float iy2 = ay2 < by2 ? ay2 : by2;
-                    float iw = ix2 - ix1;
-                    float ih = iy2 - iy1;
-                    if (iw <= 0 || ih <= 0)
-                        continue;
-                    float inter = iw * ih;
-                    float uni = aw * ah + bw * bh - inter;
-                    float iou = (uni <= 0.f) ? 0.f : inter / uni;
 
-                    if (iou > IOU_THRESH)
+                    float acx = ax1 + aw / 2.0f;  // 对象 a 中心点 x
+                    float acy = ay1 + ah / 2.0f;  // 对象 a 中心点 y
+
+                    for (guint j = i + 1; j < n; j++)
                     {
-                        // 如果启用了 ROI-based NMS，需要比较哪个框离 ROI 中心点更近
-                        gboolean suppress_j = TRUE;
+                        if (!keep->data[j])
+                            continue;
 
-                        if (use_roi_nms && roi_centers && roi_centers->len >= 2)
+                        NvDsObjectMeta *b = g_array_index(objs, NvDsObjectMeta *, j);  // 当前低置信度对象
+                        float bx1 = b->rect_params.left;   // 对象 b 左上角 x
+                        float by1 = b->rect_params.top;    // 对象 b 左上角 y
+                        float bw = b->rect_params.width;   // 对象 b 宽度
+                        float bh = b->rect_params.height;  // 对象 b 高度
+                        if (bw <= 0 || bh <= 0)
                         {
-                            // 计算 b 的中心点
-                            float bcx = bx1 + bw / 2.0f;
-                            float bcy = by1 + bh / 2.0f;
+                            keep->data[j] = 0;
+                            continue;
+                        }
 
-                            // 找到离 a 和 b 最近的 ROI 中心点
-                            gfloat min_dist_a = G_MAXFLOAT;
-                            gfloat min_dist_b = G_MAXFLOAT;
+                        float bx2 = bx1 + bw;  // 对象 b 右下角 x
+                        float by2 = by1 + bh;  // 对象 b 右下角 y
+                        float ix1 = ax1 > bx1 ? ax1 : bx1;  // 交集左上角 x
+                        float iy1 = ay1 > by1 ? ay1 : by1;  // 交集左上角 y
+                        float ix2 = ax2 < bx2 ? ax2 : bx2;  // 交集右下角 x
+                        float iy2 = ay2 < by2 ? ay2 : by2;  // 交集右下角 y
+                        float iw = ix2 - ix1;               // 交集宽度
+                        float ih = iy2 - iy1;               // 交集高度
+                        if (iw <= 0 || ih <= 0)
+                            continue;
+
+                        float inter = iw * ih;                      // 交集面积
+                        float uni = aw * ah + bw * bh - inter;      // 并集面积
+                        float iou = (uni <= 0.f) ? 0.f : inter / uni;  // IoU
+
+                        if (iou > iou_thresh)
+                        {
+                            gboolean suppress_j = TRUE;  // 是否抑制对象 b
+                            float bcx = bx1 + bw / 2.0f; // 对象 b 中心点 x
+                            float bcy = by1 + bh / 2.0f; // 对象 b 中心点 y
+                            gfloat min_dist_a = G_MAXFLOAT;  // 对象 a 到最近 ROI 中心距离
+                            gfloat min_dist_b = G_MAXFLOAT;  // 对象 b 到最近 ROI 中心距离
 
                             for (guint k = 0; k < roi_centers->len / 2; k++)
                             {
-                                gfloat roi_cx = g_array_index(roi_centers, gfloat, k * 2);
-                                gfloat roi_cy = g_array_index(roi_centers, gfloat, k * 2 + 1);
-
+                                gfloat roi_cx = g_array_index(roi_centers, gfloat, k * 2);      // ROI 中心点 x
+                                gfloat roi_cy = g_array_index(roi_centers, gfloat, k * 2 + 1);  // ROI 中心点 y
                                 gfloat dist_a =
                                     sqrtf((acx - roi_cx) * (acx - roi_cx) +
-                                          (acy - roi_cy) * (acy - roi_cy));
+                                          (acy - roi_cy) * (acy - roi_cy));  // a 到 ROI 距离
                                 gfloat dist_b =
                                     sqrtf((bcx - roi_cx) * (bcx - roi_cx) +
-                                          (bcy - roi_cy) * (bcy - roi_cy));
+                                          (bcy - roi_cy) * (bcy - roi_cy));  // b 到 ROI 距离
 
                                 if (dist_a < min_dist_a)
                                     min_dist_a = dist_a;
@@ -720,51 +713,52 @@ GstPadProbeReturn gie_primary_processing_done_buf_prob(GstPad *pad,
                                     min_dist_b = dist_b;
                             }
 
-                            // 如果 b 离 ROI 中心点更近，则抑制 a 而不是 b
                             if (min_dist_b < min_dist_a)
                             {
                                 suppress_j = FALSE;
-                                keep->data[i] = 0;  // 抑制 a
-                                break;              // a 已被抑制，退出内层循环
+                                keep->data[i] = 0;
+                                break;
                             }
-                        }
 
-                        if (suppress_j)
-                        {
-                            keep->data[j] = 0;  // 抑制低置信度的或离 ROI 中心点更远的
+                            if (suppress_j)
+                            {
+                                keep->data[j] = 0;
+                            }
                         }
                     }
                 }
-            }
-            // 删除被抑制的 meta
-            for (guint i = 0; i < n; i++)
-            {
-                if (!keep->data[i])
-                {
-                    NvDsObjectMeta *o = g_array_index(objs, NvDsObjectMeta *, i);
-                    nvds_remove_obj_meta_from_frame(frame_meta, o);
-                }
-            }
-            g_byte_array_unref(keep);
-        }
-        g_array_free(objs, TRUE);
-    }
 
-    // 注意：不要在这里释放 roi_centers，它是 AppCtx 的缓存数据
+                for (guint i = 0; i < n; i++)
+                {
+                    if (!keep->data[i])
+                    {
+                        NvDsObjectMeta *o = g_array_index(objs, NvDsObjectMeta *, i);  // 待移除对象
+                        nvds_remove_obj_meta_from_frame(frame_meta, o);
+                    }
+                }
+                g_byte_array_unref(keep);
+            }
+            g_array_free(objs, TRUE);
+        }
+    }
 
     // 边界 clamp + 最小尺寸过滤 (>=4) 确保后续 SGIE/OSD 安全
     for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame; l_frame = l_frame->next)
     {
-        NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)l_frame->data;
-        gint frame_w = frame_meta->source_frame_width;
-        gint frame_h = frame_meta->source_frame_height;
+        NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)l_frame->data;  // 当前帧元数据
+        gint source_frame_w = frame_meta->source_frame_width;  // 源帧宽度
+        gint source_frame_h = frame_meta->source_frame_height;  // 源帧高度
+        gint mux_frame_w = appCtx->config.streammux_config.pipeline_width;  // streammux 输出宽度
+        gint mux_frame_h = appCtx->config.streammux_config.pipeline_height;  // streammux 输出高度
+        gint frame_w = source_frame_w > mux_frame_w ? source_frame_w : mux_frame_w;  // 有效裁剪宽度
+        gint frame_h = source_frame_h > mux_frame_h ? source_frame_h : mux_frame_h;  // 有效裁剪高度
         if (frame_w <= 0 || frame_h <= 0)
             continue;
         for (NvDsMetaList *l_obj_it = frame_meta->obj_meta_list; l_obj_it != NULL;)
         {
-            NvDsMetaList *l_next = l_obj_it->next;
-            NvDsObjectMeta *obj = (NvDsObjectMeta *)l_obj_it->data;
-            NvOSD_RectParams *r = &obj->rect_params;
+            NvDsMetaList *l_next = l_obj_it->next;  // 下一个对象节点
+            NvDsObjectMeta *obj = (NvDsObjectMeta *)l_obj_it->data;  // 当前对象元数据
+            NvOSD_RectParams *r = &obj->rect_params;  // 当前对象框参数
             if (r->left < 0)
                 r->left = 0;
             if (r->top < 0)

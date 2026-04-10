@@ -20,13 +20,15 @@ property:
   # onnx-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/models/yolo26s_rgb_352_2c_v2.onnx
 
   # TensorRT 引擎文件路径（序列化后的推理引擎，加载更快）
-  model-engine-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/models/yolo26n_rgb_352_uav_no-p2_b4_fp16.engine
+  model-engine-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/models/yolo26n_rgb_352_person_b4_fp16.engine
+  # model-engine-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/models/yolo26n_rgb_352_uav_simulation_b4_fp16.engine
 
   # INT8 量化校准表文件路径（仅 network-mode=1 时需要）
   # int8-calib-file: calib.table
 
   # 类别标签文件路径（每行一个类别名称）
-  labelfile-path: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/labels.txt
+  # labelfile-path: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/labels.txt
+  labelfile-path: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/labels2.txt
 
   # 推理批处理大小（同时处理的图像数量）
   batch-size: 4
@@ -76,7 +78,7 @@ property:
 class-attrs-all:
   # 聚类前置信度阈值（低于此值的检测框将被过滤）
   # 注：此参数已替代旧版 threshold 参数
-  pre-cluster-threshold: 0.65
+  pre-cluster-threshold: 0.25
 
   # 检测框最小宽度（像素），小于此值的框将被过滤
   # detected-min-w: 32
