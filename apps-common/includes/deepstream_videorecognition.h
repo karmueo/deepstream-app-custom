@@ -36,6 +36,7 @@ extern "C"
     // 0 = multi-frame image classification (default), 1 = video recognition (temporal/clip based)
     guint model_type;
         guint model_sampling_rate;
+    guint infer_interval;
         gchar *trt_engine_name; // TensorRT engine name
         gchar *labels_file; // Path to labels file
     } NvDsVideoRecognitionConfig;

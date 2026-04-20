@@ -87,6 +87,11 @@ create_dsvideorecognition_bin(NvDsVideoRecognitionConfig *config, NvDsVideoRecog
         g_object_set(G_OBJECT(bin->elem_dsvideorecognition), "sampling-rate", config->model_sampling_rate, NULL);
     }
 
+    if (config->infer_interval)
+    {
+        g_object_set(G_OBJECT(bin->elem_dsvideorecognition), "infer-interval", config->infer_interval, NULL);
+    }
+
     if (config->trt_engine_name)
     {
         g_object_set(G_OBJECT(bin->elem_dsvideorecognition), "trt-engine-name", config->trt_engine_name, NULL);

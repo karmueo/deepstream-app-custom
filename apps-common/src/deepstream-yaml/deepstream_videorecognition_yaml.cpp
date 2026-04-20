@@ -56,6 +56,8 @@ parse_videorecognition_yaml (NvDsVideoRecognitionConfig *config, gchar *cfg_file
       config->model_type = itr->second.as<guint>();
     } else if (paramKey == "sampling-rate") {
       config->model_sampling_rate = itr->second.as<guint>();
+    } else if (paramKey == "infer-interval") {
+      config->infer_interval = itr->second.as<guint>();
     } else if (paramKey == "trt-engine-file") {
       std::string temp = itr->second.as<std::string>();
       char* str = (char*) malloc(sizeof(char) * 1024);
