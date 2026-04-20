@@ -23,7 +23,7 @@ cuav-control:
   compat-cmd-wrapper: 0
   # 是否打印控制发送调试日志。
   # 开启后会输出每次发出的控制信息，便于联调但日志会明显增多。
-  debug: 1
+  debug: 0
   # 是否打印上游 gst-udpjsonmeta 中转下来的状态报文。
   # 开启后便于确认设备反馈是否进入自动控制闭环。
   print-upstream-state: 1

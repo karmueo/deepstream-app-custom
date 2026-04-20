@@ -1,9 +1,9 @@
 
 # 1. 环境安装
 
-## Jetson环境
+## 1.1 Jetson环境
 
-### 安装依赖
+### 1.1.1 安装依赖
 
 ```bash
 sudo apt install \
@@ -22,7 +22,7 @@ libyaml-cpp-dev \
 ninja-build
 ```
 
-### 安装Deepstream
+### 1.1.2 安装Deepstream
 
 从官网下载deepstream_sdk_v7.1.0_jetson.tbz2
 
@@ -33,14 +33,14 @@ sudo ./install.sh
 sudo ldconfig
 ```
 
-### 配置环境变量
+### 1.1.3 配置环境变量
 
 ```bash
 export CUDA_VER=12.6
 ```
-## 服务器环境
+## 1.2 服务器环境
 
-### 安装依赖包
+### 1.2.1 安装依赖包
 
 ```bash
 sudo apt install \
@@ -73,7 +73,7 @@ libglapi-mesa
 ```
 > 注：安装时不要在conda环境下安装，如果在conda环境则执行`conda deactivate`来退出conda虚拟环境。
 
-### 安装显卡驱动
+### 1.2.2 安装显卡驱动
 pass
 
 ### 安装CUDA Toolkit
@@ -98,7 +98,7 @@ export LD_LIBRARY_PATH=/opt/nvidia/deepstream/deepstream/lib:/opt/nvidia/deepstr
 "
 ```
 
-### 安装TensorRT
+### 1.2.3 安装TensorRT
 下载地址: https://developer.nvidia.com/tensorrt/download/10x。这里使用的版本是: nv-tensorrt-local-repo-ubuntu2404-10.10.0-cuda-12.9_1.0-1_amd64.deb
 ```bash
 sudo dpkg -i nv-tensorrt-local-repo-ubuntu2404-10.10.0-cuda-12.9_1.0-1_amd64.deb
@@ -107,7 +107,7 @@ sudo apt-get update
 sudo apt-get install tensorrt
 ```
 
-### 安装Deepstream SDK
+### 1.2.4 安装Deepstream SDK
 下载地址: https://catalog.ngc.nvidia.com/orgs/nvidia/resources/deepstream?version=8.0, 这里使用的版本是: nv-tensorrt-local-repo-ubuntu2404-10.10.0-cuda-12.9_1.0-1_amd64.deb
 ```bash
 sudo dpkg -i nv-tensorrt-local-repo-ubuntu2404-10.10.0-cuda-12.9_1.0-1_amd64.deb
@@ -116,16 +116,16 @@ sudo apt-get update
 sudo apt-get install tensorrt
 ```
 
-# 2.编译安装
+# 2. 编译安装
 
-## 编译DeepStream-Yolo
+## 2.1 编译DeepStream-Yolo
 
 ```sh
 cd DeepStream-Yolo
 make -C nvdsinfer_custom_impl_Yolo clean && make -C nvdsinfer_custom_impl_Yolo
 ```
 
-## 编译报文发送插件
+## 2.2 编译报文发送插件
 
 ```sh
 cd src/gst-udpmulticast_sink
@@ -135,7 +135,7 @@ cmake --build .
 sudo cmake --install .
 ```
 
-## 编译报文接收插件
+## 2.3 编译报文接收插件
 
 ```sh
 cd src/gst-udpjson_meta
@@ -145,7 +145,7 @@ cmake --build .
 sudo cmake --install .
 ```
 
-## 编译单目标跟踪插件
+## 2.4 编译单目标跟踪插件
 ```sh
 cd sot_plugin
 mkdir build && cd build
@@ -154,36 +154,49 @@ cmake --build .
 sudo cmake --install .
 ```
 
-## 编译多帧目标识别插件
+## 2.5 编译多帧目标识别插件
 ```sh
 cd src/gst-videorecognition
 mkdir build && cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..
+cmake -DCMAKE_BUILD_TYPE=Release .. 
 cmake --build .
 sudo cmake --install .
 ```
 
-## 编译主程序
+## 2.6 编译717设备控制插件
+```sh
+cd src/gst-cuavcontrolsink
+mkdir build && cd build
+cmake -DCMAKE_BUILD_TYPE=Release .. 
+cmake --build .
+sudo cmake --install .
+```
+
+## 2.7 编译主程序
 
 ```sh
 mkdir build && cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..
+cmake -DCMAKE_BUILD_TYPE=Release ../src/deepstream-app
 cmake --build .
 sudo cmake --install .
 ```
 
-## 添加环境变量
+## 2.8 添加环境变量
 ```sh
 export GST_PLUGIN_PATH=/opt/nvidia/deepstream/deepstream/lib/gst-plugins:$GST_PLUGIN_PATH
 ```
 
 # 3. 准备模型
-## 目标检测模型
-把目标检测模型onnx文件放入src/deepstream-app/models目录下，根据实际的模型名称修改下面的参数：
-动态 batch: ./convert2trt.sh <ONNX_PATH> <ENGINE_PATH> [fp16]
-然后根据实际的engine文件名修改`src/deepstream-app/configs/yml/config_infer_primary_yoloV11_rgb.yml`中`model-engine-file`的值
 
-## 单目标跟踪模型
+## 3.1 目标检测模型
+把目标检测模型onnx文件放入src/deepstream-app/models目录下，根据实际的模型名称(这里模型名称为yolo26n_rgb_352_2c_v3.onnx)执行下面的命令：
+
+```bash
+# 假设模型名称为yolo26n_rgb_352_2c_v3.onnx
+./convert2trt.sh yolo26n_rgb_352_2c_v3.onnx yolo26n_rgb_352_2c.engine fp16
+```
+
+## 3.2 单目标跟踪模型
 把onnx模型文件放入`src/sot_plugin/models`目录下，
 
 ```sh
@@ -194,34 +207,97 @@ export GST_PLUGIN_PATH=/opt/nvidia/deepstream/deepstream/lib/gst-plugins:$GST_PL
 ./convert2trt.sh nanotrack_backbone_search.onnx nanotrack_backbone_search_fp16.engine fp16
 ```
 
-## 多帧识别模型
+## 3.3 多帧识别模型
 把onnx模型如放到`src/gst-videorecognition/models`目录下，使用`./convert2trt.sh`转换，类似前面的转换操作
 
-# 4.开机自启动
+```bash
+# 假设onnx模型名称为x3d_v9_3cls_simplified.onnx
+./convert2trt.sh x3d_v9_3cls_simplified.onnx x3d.engine fp16
+```
 
-## 程序开机自启动
-将如下命令作为 systemd 服务开机自启动：
+# 4.运行程序
+
+## 4.1 检查文件是否准备好
+确保下面命令运行没有问题，正确输出
+```bash
+ls /opt/nvidia/deepstream/deepstream/bin/deepstream-app
+ls /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/yml/app_config.yml
+ls /opt/nvidia/deepstream/deepstream/deepstream-app-ls /opt/nvidia/deepstream/deepstream/sot_plugin/models/nanotrack_backbone_fp16.enginecustom/models/yolo26n_rgb_352_2c.engine
+ls /opt/nvidia/deepstream/deepstream/deepstream-app-custom/models/yolo26n_rgb_352_2c.engine
+ls /opt/nvidia/deepstream/deepstream/sot_plugin/models/nanotrack_head_fp16.engine
+ls /opt/nvidia/deepstream/deepstream/sot_plugin/models/nanotrack_backbone_search_fp16.engine
+```
+
+## 4.2 配置文件
+
+### 4.2.1 主配置文件
+
+默认配置文件为`/opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/yml/app_config.yml`，该文件其实是`src/deepstream-app/configs/yml/app_config.yml`的软链接。
+常用修改一下配置：
+
+| 配置项 | 说明 |
+| --- | --- |
+| application | 应用程序全局配置，主要修改smart-rec-detect-default，0关闭录像，1开启录像，同时在source的csv配置中需要把smart-record置为3 |
+| source | 视频源CSV配置文件路径（包含RTSP/文件流地址等）|
+| sink0 | RTSP输出配置，enable设1开启，设0关闭，只有在NX的板子或者服务器上才能开启 |
+| sink1 | 本地窗口显示配置，如果是nano，把 enable设1，可以在hdmi输出中显示窗口 |
+| sink2 | UDP组播输出配置，enable设1开启，设0关闭 |
+| sink5 | 717设备闭环控制配置，enable设1开启，设0关闭 |
+| primary-gie | 检测配置，详见配置文件注释 |
+| tracker | 跟踪配置，详见配置文件注释 |
+| videorecognition | 视频识别模块配置（多帧动作/行为识别），详见配置文件注释 |
+| udpjsonmeta | UDP 组播json报文接收配置，注意不同机器/板子网卡名称需要根据实际情况修改 |
+
+更多配置情参考[Deepstream 7.1 官方文档](https://docs.nvidia.com/metropolis/deepstream/7.1/text/DS_ref_app_deepstream.html)
+
+### 4.2.1 视频源配置
+
+视频源通过 CSV 文件配置，每行对应一个视频源（对应 DeepStream 的 `[source0]`、`[source1]`... 分组）。CSV 表头及各字段说明如下：
+
+| 字段 | 说明 | 类型与取值 | 示例 |
+| --- | --- | --- | --- |
+| enable | 启用或禁用该视频源 | Boolean: `0`=禁用, `1`=启用 | `1` |
+| type | 视频源类型 | Integer: `1`=Camera(V4L2), `2`=URI(文件/HTTP), `3`=MultiURI, `4`=RTSP, `5`=Camera(CSI,仅Jetson) | `4` |
+| uri | 视频流地址。支持文件路径(`file:///`)、HTTP、RTSP；MultiURI 时可用 `%d` 格式指定多源 | String | `rtsp://192.168.1.12`, `file:///home/user/video.mp4` |
+| num-sources | 源数量，仅 type=3(MultiURI) 时有效 | Integer, ≥0 | `1` |
+| gpu-id | 指定使用的 GPU 编号（多 GPU 环境） | Integer, ≥0 | `0` |
+| cudadec-memtype | CUDA 解码内存类型。`0`=设备内存, `1`=主机锁页内存, `2`=统一内存。仅 type=2/3/4 有效 | Integer: 0, 1, 2 | `0` |
+| rtsp-reconnect-interval-sec | RTSP 重连间隔（秒）。设为 `0` 禁用重连。仅 type=4 有效 | Integer, ≥0 | `3` |
+| rtsp-reconnect-attempts | RTSP 最大重连次数。`-1`=无限重试。仅 type=4 且 reconnect-interval>0 时有效 | Integer, ≥-1 | `-1` |
+| select-rtp-protocol | RTP 传输协议。`0`=UDP+UDP组播+TCP, `4`=仅TCP。仅 type=4 有效 | Integer: 0, 4 | `0` |
+| smart-record | 智能录像触发方式。`0`=禁用, `3`检测到目标后自动记录 | Integer: 0, 3 | `3` |
+| smart-rec-dir-path | 智能录像文件保存目录 | String | `/home/tl/data2/smart_rec_rgb` |
+| smart-rec-duration | 智能录像时长（秒） | Integer, ≥0 | `30` |
+| smart-rec-start-time | 智能录像回溯起始时间（秒），从当前时间往前推算 | Integer, ≥0 | `3` |
+
+> 更多属性（如 `camera-width`、`camera-height`、`latency`、`drop-frame-interval`、`nvbuf-memory-type` 等）请参考官方文档：[Source Group](https://docs.nvidia.com/metropolis/deepstream/7.1/text/DS_ref_app_deepstream.html#source-group)
+
+配置示例参考`src/deepstream-app/configs/yml/sources.csv`和`src/deepstream-app/configs/yml/file_sources.csv`。
+
+## 4.3 启动程序
+
+执行以下命令启动程序
 
 ```bash
 /opt/nvidia/deepstream/deepstream/bin/deepstream-app -c /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/yml/app_config.yml
 ```
 
-## 步骤如下：
+## 4.4 程序开机自启动
 
 1) 创建服务文件 `/etc/systemd/system/deepstream-app-rgb.service`
 
 ```ini
 [Unit]
 Description=DeepStream RGB App
-# 网络就绪后再启动，如依赖 MQTT，请追加 mosquitto.service
-After=network-online.target mosquitto.service
-Wants=network-online.target mosquitto.service
+# 网络就绪后再启动
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 # 指定运行用户和组
-User=tl
-Group=tl
+User=nvidia
+Group=nvidia
 WorkingDirectory=/opt/nvidia/deepstream/deepstream
 ExecStart=/opt/nvidia/deepstream/deepstream/bin/deepstream-app -c /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/yml/app_config.yml
 Restart=always
@@ -252,204 +328,3 @@ sudo journalctl -u deepstream-app-rgb.service -f
 sudo systemctl stop deepstream-app-rgb.service
 sudo systemctl disable deepstream-app-rgb.service
 ```
-
-注意：
-- 如果你的应用依赖其他服务（如 MQTT），可在 `[Unit]` 中追加：`After=mosquitto.service` 与/或 `Wants=mosquitto.service`。
-- 若启用 `User=...` 以非 root 运行，请确保该用户有 GPU 与摄像头、模型及日志目录等资源的访问权限。
-
-## (可选)定时关闭、启动服务（由此可以定时切换模型，比如夜间和白天用不同的模型）
-
-> 注意: 先停止前面的服务：`sudo systemctl stop deepstream-app-rgb.service`
-
-1) 创建白天服务文件 `/etc/systemd/system/deepstream-day.service`
-
-```ini
-[Unit]
-Description=DeepStream Day App (07:00 - 19:00)
-After=network-online.target mosquitto.service
-Wants=network-online.target mosquitto.service
-# 当本服务启动时，强制停止夜间服务
-Conflicts=deepstream-night.service
-
-[Service]
-Type=simple
-User=tl
-Group=tl
-WorkingDirectory=/opt/nvidia/deepstream/deepstream
-# 白天使用的 RGB 配置文件
-ExecStart=/opt/nvidia/deepstream/deepstream/bin/deepstream-app -c /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/rgb_app_config.txt
-Restart=always
-RestartSec=30
-
-[Install]
-WantedBy=multi-user.target
-```
-2) 创建夜晚服务文件 `/etc/systemd/system/deepstream-night.service`
-
-```ini
-[Unit]
-Description=DeepStream Night App (19:00 - 07:00)
-After=network-online.target mosquitto.service
-Wants=network-online.target mosquitto.service
-# 当本服务启动时，强制停止白天服务
-Conflicts=deepstream-day.service
-
-[Service]
-Type=simple
-User=tl
-Group=tl
-WorkingDirectory=/opt/nvidia/deepstream/deepstream
-# 晚上使用的 Night 配置文件
-ExecStart=/opt/nvidia/deepstream/deepstream/bin/deepstream-app -c /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/night_app_config.txt
-Restart=always
-RestartSec=30
-
-[Install]
-WantedBy=multi-user.target
-```
-
-3) 创建白天定时器文件 `/etc/systemd/system/deepstream-day.timer`
-
-```ini
-[Unit]
-Description=Start Day App at 07:00 daily
-
-[Timer]
-# 每天 07:00:00 触发
-OnCalendar=*-*-* 07:00:00
-Unit=deepstream-day.service
-# 如果关机错过了时间，开机后是否补发？(可选，建议 false 以免逻辑混乱)
-Persistent=false
-
-[Install]
-WantedBy=timers.target
-```
-
-4) 创建夜晚定时器文件 `/etc/systemd/system/deepstream-night.timer`
-
-```ini
-[Unit]
-Description=Start Night App at 19:00 daily
-
-[Timer]
-# 每天 19:00:00 触发
-OnCalendar=*-*-* 19:00:00
-Unit=deepstream-night.service
-Persistent=false
-
-[Install]
-WantedBy=timers.target
-```
-
-5) 部署
-```sh
-# 重新加载 systemd 配置
-sudo systemctl daemon-reload
-
-# 启用定时器（不是服务！）
-sudo systemctl enable deepstream-day.timer
-sudo systemctl enable deepstream-night.timer
-
-# 启动定时器
-sudo systemctl start deepstream-day.timer
-sudo systemctl start deepstream-night.timer
-
-# 检查定时器状态
-sudo systemctl list-timers --all
-```
-
-# 5. (可选)MQTT报文服务
-
-## 安装
-```sh
-# 可选
-# 如果要使用MQTT发送结果，安装mosquitto，可以安装在docker中，也可以安装在宿主机或者局域网其他服务器中
-sudo apt-get install libglib2.0 libglib2.0-dev libcjson-dev
-wget https://mosquitto.org/files/source/mosquitto-2.0.15.tar.gz
-tar -xvf mosquitto-2.0.15.tar.gz
-cd mosquitto-2.0.15
-make
-make install
-sudo cp /usr/local/lib/libmosquitto* /opt/nvidia/deepstream/deepstream/lib/
-sudo ldconfig
-```
-
-运行mosquitto
-```sh
-adduser --system mosquitto
-mosquitto
-```
-
-mosquitto配置文件，比如创建一个my_config.conf如下
-```conf
-allow_anonymous true
-listener 1883 0.0.0.0
-```
-
-启动
-```sh
-mosquitto -v -c ./my_config.conf &
-```
-然后就可以使用mqtt发送和接收消息了
-
-## 作为服务安装并开机自启动
-如果要将 mosquitto 作为系统服务运行并设置开机自启动，请按照以下步骤操作：
-
-1. 创建配置文件目录并放置配置文件：
-```sh
-sudo mkdir -p /etc/mosquitto
-sudo cp my_config.conf /etc/mosquitto/
-```
-
-2. 创建 systemd 服务文件 `/etc/systemd/system/mosquitto.service`：
-```
-[Unit]
-Description=Mosquitto MQTT Broker
-After=network.target
-
-[Service]
-Type=simple
-User=mosquitto
-ExecStart=/usr/local/sbin/mosquitto -v -c /etc/mosquitto/my_config.conf
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
-```
-
-3. 重新加载 systemd 配置并启用服务：
-```sh
-sudo systemctl daemon-reload
-sudo systemctl enable mosquitto.service
-sudo systemctl start mosquitto.service
-```
-
-4. 检查服务状态：
-```sh
-sudo systemctl status mosquitto.service
-```
-
-5. 如果需要停止服务：
-```sh
-sudo systemctl stop mosquitto.service
-```
-
-6. 彻底取消自动重启（本次与下次开机都不拉起）：
-```sh
-sudo systemctl stop mosquitto.service
-sudo systemctl disable mosquitto.service
-```
-
-7. 查看日志
-```bash
-sudo journalctl -u mosquitto.service
-```
-
-# 6 (可选)服务可视化
-
-```bash
-sudo apt install cockpit -y
-# 启动并启用服务
-sudo systemctl enable cockpit.socket
-```
-浏览器访问 https://服务器IP:9090，使用系统用户名和密码登录即可进入管理界面。
