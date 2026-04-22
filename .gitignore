@@ -32,3 +32,4 @@ build
 *.bin
 
 *.pyc
+AGENTS.md

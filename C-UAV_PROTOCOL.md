@@ -322,10 +322,10 @@
 | `pt_fov_en` | int | 视场角使能：`0`无效 `1`设置 `2`获取 |
 | `pt_fov_h` | float | 可见光水平视场角 |
 | `pt_fov_v` | float | 可见光垂直视场角 |
-| `pt_focal_en` | int | 焦距使能：`0`无效 `1`定值 `2`获取 `3`增加 `4`减小 |
-| `pt_focal` | float | 可见光焦距 |
-| `pt_focus_en` | int | 聚焦使能：`0`无效 `1`定值 `2`获取 `3`增加 `4`减小 |
-| `pt_focus` | int | 可见光聚焦值（默认100） |
+| `pt_focal_en` | int | 焦距使能：`0`无效 `2`获取 `3`增加 `4`减小 |
+| `pt_focal` | float | 无效 |
+| `pt_focus_en` | int | 聚焦使能：`0`无效 `2`获取 `3`增加 `4`减小 |
+| `pt_focus` | int | 无效 |
 | `pt_speed_en` | int | 聚焦速度使能 |
 | `pt_focus_speed` | int | 可见光速度 |
 | `pt_bri_en` | int | 亮度使能 |
@@ -335,7 +335,7 @@
 | `pt_ofr_en` | int | 透雾使能：`0`关闭 `1`开启 `2`无效 |
 | `pt_ofr` | int | 透雾值 [0-100] |
 | `pt_focus_mode` | int | 聚焦模式：`0`自动 `1`手动 `2`无效 |
-| `pt_zoom` | int | 自动变倍：`0`不自动 `1`自动 `2`无效 |
+| `pt_zoom` | int | 无效 |
 
 ---
 
