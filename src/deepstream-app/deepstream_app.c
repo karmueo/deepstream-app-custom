@@ -78,8 +78,28 @@ static gboolean send_cuav_servo_command(AppCtx *appCtx,
                                         guint speed_v,
                                         gdouble loc_h,
                                         gdouble loc_v);
+static gboolean send_cuav_servo_command_with_en(AppCtx *appCtx,
+                                                guint dev_id,
+                                                guint dev_en,
+                                                guint ctrl_en,
+                                                guint mode_h,
+                                                guint mode_v,
+                                                guint speed_h,
+                                                guint speed_v,
+                                                guint loc_en_h,
+                                                gdouble loc_h,
+                                                guint loc_en_v,
+                                                gdouble loc_v);
+static gboolean send_cuav_visible_light_command_with_en(AppCtx *appCtx,
+                                                        guint pt_focal_en,
+                                                        gdouble pt_focal,
+                                                        guint pt_focus_en,
+                                                        guint pt_focus,
+                                                        guint pt_focus_mode,
+                                                        guint pt_zoom);
 static gboolean send_cuav_visible_light_command(AppCtx *appCtx,
                                                 gdouble pt_focal,
+                                                guint pt_focus_en,
                                                 guint pt_focus,
                                                 guint pt_focus_mode,
                                                 guint pt_zoom);
@@ -98,45 +118,35 @@ static gdouble cuav_heading_delta(gdouble current, gdouble baseline);
 static gboolean cuav_is_test_target(const NvDsCuavControlConfig *control_config);
 static gboolean cuav_feedback_is_fresh(const CuavFeedbackState *feedback_state,
                                        guint stale_timeout_ms);
+static gboolean cuav_startup_preset_has_home_target(const NvDsCuavControlConfig *control_config);
+static gboolean cuav_startup_preset_has_visible_preset(const NvDsCuavControlConfig *control_config);
+static void cuav_reset_startup_preset_state(CuavStartupPresetState *state);
+static gboolean process_cuav_startup_preset(AppCtx *appCtx,
+                                            const NvDsCuavControlConfig *control_config,
+                                            gint64 now_us);
+static void cuav_reset_corner_zoom_cycle_state(CuavCornerZoomCycleState *state,
+                                               const NvDsCuavControlConfig *control_config);
+static gboolean cuav_corner_zoom_cycle_resolve_home_target(const NvDsCuavControlConfig *control_config,
+                                                           const CuavFeedbackState *feedback_state,
+                                                           gboolean feedback_fresh,
+                                                           const CuavCornerZoomCycleState *state,
+                                                           gdouble *loc_h,
+                                                           gdouble *loc_v);
+static gboolean cuav_corner_zoom_cycle_home_reached(const CuavFeedbackState *feedback_state,
+                                                    const CuavCornerZoomCycleState *state,
+                                                    const NvDsCuavControlConfig *control_config);
 static void cuav_reset_auto_control_state(CuavAutoControlState *state, gboolean keep_last_commands);
-static void cuav_reset_real_device_test_state(CuavRealDeviceTestState *state,
-                                              const NvDsCuavControlConfig *control_config);
-static const gchar *cuav_real_device_test_item_name(CuavRealDeviceTestItem item);
-static gboolean cuav_compute_real_device_test_servo_command(const NvDsCuavControlConfig *control_config,
-                                                            const CuavFeedbackState *baseline_feedback,
-                                                            CuavRealDeviceTestItem item,
-                                                            guint repeat_index,
-                                                            gdouble sim_signal,
-                                                            gdouble *loc_h,
-                                                            gdouble *loc_v,
-                                                            guint *speed_h,
-                                                            guint *speed_v);
-static gboolean cuav_compute_real_device_test_visible_command(const NvDsCuavControlConfig *control_config,
-                                                              const CuavFeedbackState *baseline_feedback,
-                                                              guint repeat_index,
-                                                              gdouble sim_signal,
-                                                              gdouble *pt_focal,
-                                                              guint *pt_focus);
-static gboolean cuav_compute_real_device_test_infrared_command(const NvDsCuavControlConfig *control_config,
-                                                               const CuavFeedbackState *baseline_feedback,
-                                                               guint repeat_index,
-                                                               gdouble sim_signal,
-                                                               gdouble *ir_focal,
-                                                               guint *ir_focus);
-static CuavRealDeviceTestItem cuav_get_initial_real_device_test_item(const NvDsCuavControlConfig *control_config);
-static CuavRealDeviceTestItem cuav_get_next_real_device_test_item(const NvDsCuavControlConfig *control_config,
-                                                                  CuavRealDeviceTestItem current_item);
-static gboolean cuav_real_device_test_threshold_reached(const NvDsCuavControlConfig *control_config,
-                                                        CuavRealDeviceTestItem item,
-                                                        gdouble delta_h,
-                                                        gdouble delta_v,
-                                                        gdouble delta_focal);
-static void cuav_log_real_device_test_summary(AppCtx *appCtx,
-                                              CuavRealDeviceTestItem item,
-                                              const CuavRealDeviceTestSummary *summary);
-static gboolean process_cuav_real_device_test(AppCtx *appCtx,
-                                              const NvDsCuavControlConfig *control_config,
-                                              gint64 now_us);
+static const gchar *cuav_corner_zoom_cycle_corner_name(guint corner_index);
+static void cuav_corner_zoom_cycle_compute_target(gdouble base_h,
+                                                  gdouble base_v,
+                                                  gdouble offset_h,
+                                                  gdouble offset_v,
+                                                  guint corner_index,
+                                                  gdouble *loc_h,
+                                                  gdouble *loc_v);
+static gboolean process_cuav_corner_zoom_cycle(AppCtx *appCtx,
+                                               const NvDsCuavControlConfig *control_config,
+                                               gint64 now_us);
 static gboolean cuav_push_track_sample(CuavAutoControlState *state,
                                        guint history_size,
                                        const CuavTrackSample *sample);
@@ -155,7 +165,6 @@ static gboolean cuav_compute_servo_command(const NvDsCuavControlConfig *control_
                                            guint *speed_h,
                                            guint *speed_v);
 static gboolean cuav_compute_visible_light_command(const NvDsCuavControlConfig *control_config,
-                                                   const CuavFeedbackState *feedback_state,
                                                    const CuavAutoControlState *auto_state,
                                                    const CuavTrackSample *sample,
                                                    gdouble *pt_focal,
@@ -349,277 +358,386 @@ cuav_feedback_is_fresh(const CuavFeedbackState *feedback_state,
     return (g_get_monotonic_time() - feedback_state->updated_at_us) <= timeout_us;
 }
 
+static gboolean
+cuav_startup_preset_has_home_target(const NvDsCuavControlConfig *control_config)
+{
+    return control_config &&
+           (!isnan(control_config->corner_home_loc_h_deg) ||
+            !isnan(control_config->corner_home_loc_v_deg));
+}
+
+static gboolean
+cuav_startup_preset_has_visible_preset(const NvDsCuavControlConfig *control_config)
+{
+    return control_config &&
+           (!isnan(control_config->corner_home_pt_focal) ||
+            control_config->corner_home_pt_focus != G_MAXUINT);
+}
+
 static void
-cuav_reset_real_device_test_state(CuavRealDeviceTestState *state,
-                                  const NvDsCuavControlConfig *control_config)
+cuav_reset_startup_preset_state(CuavStartupPresetState *state)
 {
     if (!state)
         return;
 
     memset(state, 0, sizeof(*state));
-    state->item = cuav_get_initial_real_device_test_item(control_config);
-    state->phase = CUAV_REAL_DEVICE_TEST_PHASE_WAIT_BASELINE;
+    state->phase = CUAV_STARTUP_PRESET_PHASE_IDLE;
+    state->home_loc_h = 180.0;
+    state->home_loc_v = 0.0;
 }
 
-static CuavRealDeviceTestItem
-cuav_get_initial_real_device_test_item(const NvDsCuavControlConfig *control_config)
+static gboolean
+process_cuav_startup_preset(AppCtx *appCtx,
+                            const NvDsCuavControlConfig *control_config,
+                            gint64 now_us)
 {
-    if (!control_config)
-        return CUAV_REAL_DEVICE_TEST_ITEM_SERVO_H;
+    CuavStartupPresetState state_snapshot;
+    CuavFeedbackState feedback_snapshot;
+    gboolean feedback_fresh = FALSE;
+    gboolean has_home_target = FALSE;
+    gboolean has_visible_preset = FALSE;
+    gboolean visible_enabled = FALSE;
+    gdouble home_loc_h = 180.0;
+    gdouble home_loc_v = 0.0;
+    gboolean home_reached = FALSE;
+    gint64 settle_timeout_us = 0;
+    gboolean sent = FALSE;
 
-    if (control_config->real_device_test_zoom_only_enable)
+    if (!appCtx || !control_config)
+        return TRUE;
+
+    has_home_target = cuav_startup_preset_has_home_target(control_config);
+    visible_enabled = cuav_visible_control_enabled(control_config);
+    has_visible_preset = visible_enabled &&
+                         cuav_startup_preset_has_visible_preset(control_config);
+    if (!has_home_target && !has_visible_preset)
+        return TRUE;
+
+    if (!visible_enabled && cuav_startup_preset_has_visible_preset(control_config) &&
+        control_config->debug)
     {
-        if (cuav_visible_control_enabled(control_config))
-            return CUAV_REAL_DEVICE_TEST_ITEM_VISIBLE_FOCAL;
-        if (cuav_infrared_control_enabled(control_config))
-            return CUAV_REAL_DEVICE_TEST_ITEM_INFRARED_FOCAL;
-        return CUAV_REAL_DEVICE_TEST_ITEM_DONE;
+        g_print("[cuav][startup-preset][warn] visible preset configured but visible-light-control-enable=0, skip visible preset\n");
     }
 
-    switch ((CuavRealDeviceTestItem)control_config->real_device_test_item)
+    settle_timeout_us = ((gint64)MAX(control_config->state_stale_timeout_ms, 1U)) * 1000;
+
+    g_mutex_lock(&appCtx->cuav_control_lock);
+    if (!appCtx->cuav_startup_preset_state.initialized)
     {
-    case CUAV_REAL_DEVICE_TEST_ITEM_SERVO_H:
-    case CUAV_REAL_DEVICE_TEST_ITEM_SERVO_V:
-        return (CuavRealDeviceTestItem)control_config->real_device_test_item;
-    case CUAV_REAL_DEVICE_TEST_ITEM_VISIBLE_FOCAL:
-        return cuav_visible_control_enabled(control_config) ?
-                   CUAV_REAL_DEVICE_TEST_ITEM_VISIBLE_FOCAL :
-                   CUAV_REAL_DEVICE_TEST_ITEM_DONE;
-    case CUAV_REAL_DEVICE_TEST_ITEM_INFRARED_FOCAL:
-        return cuav_infrared_control_enabled(control_config) ?
-                   CUAV_REAL_DEVICE_TEST_ITEM_INFRARED_FOCAL :
-                   CUAV_REAL_DEVICE_TEST_ITEM_DONE;
-    case CUAV_REAL_DEVICE_TEST_ITEM_NONE:
-    default:
-        return CUAV_REAL_DEVICE_TEST_ITEM_SERVO_H;
+        cuav_reset_startup_preset_state(&appCtx->cuav_startup_preset_state);
+        appCtx->cuav_startup_preset_state.initialized = TRUE;
+        appCtx->cuav_startup_preset_state.phase =
+            has_home_target ? CUAV_STARTUP_PRESET_PHASE_SEND_HOME_SERVO :
+                              (has_visible_preset ? CUAV_STARTUP_PRESET_PHASE_SEND_VISIBLE_PRESET :
+                                                    CUAV_STARTUP_PRESET_PHASE_COMPLETE);
+        appCtx->cuav_startup_preset_state.phase_started_us = now_us;
+        appCtx->cuav_startup_preset_state.last_command_sent_us = 0;
     }
-}
+    feedback_snapshot = appCtx->cuav_feedback_state;
+    state_snapshot = appCtx->cuav_startup_preset_state;
+    g_mutex_unlock(&appCtx->cuav_control_lock);
 
-static CuavRealDeviceTestItem
-cuav_get_next_real_device_test_item(const NvDsCuavControlConfig *control_config,
-                                    CuavRealDeviceTestItem current_item)
-{
-    if (!control_config)
-        return CUAV_REAL_DEVICE_TEST_ITEM_DONE;
+    feedback_fresh = cuav_feedback_is_fresh(&feedback_snapshot,
+                                            control_config->state_stale_timeout_ms);
 
-    if (control_config->real_device_test_zoom_only_enable)
+    if (state_snapshot.phase == CUAV_STARTUP_PRESET_PHASE_COMPLETE)
     {
-        if (current_item == CUAV_REAL_DEVICE_TEST_ITEM_VISIBLE_FOCAL &&
-            cuav_infrared_control_enabled(control_config))
+        if (!state_snapshot.final_logged)
         {
-            return CUAV_REAL_DEVICE_TEST_ITEM_INFRARED_FOCAL;
+            g_print("[cuav][startup-preset] complete home=%d visible=%d\n",
+                    state_snapshot.servo_applied,
+                    state_snapshot.visible_applied);
+            g_mutex_lock(&appCtx->cuav_control_lock);
+            appCtx->cuav_startup_preset_state.final_logged = TRUE;
+            g_mutex_unlock(&appCtx->cuav_control_lock);
         }
-        return CUAV_REAL_DEVICE_TEST_ITEM_DONE;
+        return TRUE;
     }
 
-    if (control_config->real_device_test_item != CUAV_REAL_DEVICE_TEST_ITEM_NONE)
-        return CUAV_REAL_DEVICE_TEST_ITEM_DONE;
-
-    if (current_item == CUAV_REAL_DEVICE_TEST_ITEM_SERVO_H)
-        return CUAV_REAL_DEVICE_TEST_ITEM_SERVO_V;
-    if (current_item == CUAV_REAL_DEVICE_TEST_ITEM_SERVO_V)
+    switch (state_snapshot.phase)
     {
-        if (cuav_visible_control_enabled(control_config))
-            return CUAV_REAL_DEVICE_TEST_ITEM_VISIBLE_FOCAL;
-        if (cuav_infrared_control_enabled(control_config))
-            return CUAV_REAL_DEVICE_TEST_ITEM_INFRARED_FOCAL;
-        return CUAV_REAL_DEVICE_TEST_ITEM_DONE;
+    case CUAV_STARTUP_PRESET_PHASE_IDLE:
+        g_mutex_lock(&appCtx->cuav_control_lock);
+        appCtx->cuav_startup_preset_state.phase =
+            has_home_target ? CUAV_STARTUP_PRESET_PHASE_SEND_HOME_SERVO :
+                              (has_visible_preset ? CUAV_STARTUP_PRESET_PHASE_SEND_VISIBLE_PRESET :
+                                                    CUAV_STARTUP_PRESET_PHASE_COMPLETE);
+        appCtx->cuav_startup_preset_state.phase_started_us = now_us;
+        g_mutex_unlock(&appCtx->cuav_control_lock);
+        return TRUE;
+
+    case CUAV_STARTUP_PRESET_PHASE_SEND_HOME_SERVO:
+        if (!has_home_target)
+        {
+            g_mutex_lock(&appCtx->cuav_control_lock);
+            appCtx->cuav_startup_preset_state.servo_applied = FALSE;
+            appCtx->cuav_startup_preset_state.phase =
+                has_visible_preset ? CUAV_STARTUP_PRESET_PHASE_SEND_VISIBLE_PRESET :
+                                    CUAV_STARTUP_PRESET_PHASE_COMPLETE;
+            appCtx->cuav_startup_preset_state.phase_started_us = now_us;
+            g_mutex_unlock(&appCtx->cuav_control_lock);
+            return TRUE;
+        }
+
+        if (state_snapshot.last_command_sent_us > 0 &&
+            (now_us - state_snapshot.last_command_sent_us) < 1000)
+            return TRUE;
+
+        home_loc_h = !isnan(control_config->corner_home_loc_h_deg) ?
+                         wrap_heading_360(control_config->corner_home_loc_h_deg) :
+                         180.0;
+        home_loc_v = !isnan(control_config->corner_home_loc_v_deg) ?
+                         clamp_cuav_double(control_config->corner_home_loc_v_deg, -90.0, 90.0) :
+                         0.0;
+        sent = send_cuav_servo_command_with_en(appCtx,
+                                               control_config->servo_dev_id,
+                                               1, 1, 0, 0,
+                                               MAX(control_config->corner_servo_speed, 1U),
+                                               MAX(control_config->corner_servo_speed, 1U),
+                                               1, home_loc_h,
+                                               1, home_loc_v);
+        if (sent)
+        {
+            g_mutex_lock(&appCtx->cuav_control_lock);
+            appCtx->cuav_startup_preset_state.home_target_valid = TRUE;
+            appCtx->cuav_startup_preset_state.home_loc_h = home_loc_h;
+            appCtx->cuav_startup_preset_state.home_loc_v = home_loc_v;
+            appCtx->cuav_startup_preset_state.servo_applied = TRUE;
+            appCtx->cuav_startup_preset_state.last_command_sent_us = now_us;
+            appCtx->cuav_startup_preset_state.phase_started_us = now_us;
+            appCtx->cuav_startup_preset_state.phase = CUAV_STARTUP_PRESET_PHASE_HOLD_HOME_SERVO;
+            g_mutex_unlock(&appCtx->cuav_control_lock);
+
+            if (control_config->debug)
+            {
+                g_print("[cuav][startup-preset] send home loc=(%.2f,%.2f) speed=%u\n",
+                        home_loc_h, home_loc_v,
+                        MAX(control_config->corner_servo_speed, 1U));
+            }
+        }
+        return TRUE;
+
+    case CUAV_STARTUP_PRESET_PHASE_HOLD_HOME_SERVO:
+        if (!has_home_target)
+        {
+            g_mutex_lock(&appCtx->cuav_control_lock);
+            appCtx->cuav_startup_preset_state.phase =
+                has_visible_preset ? CUAV_STARTUP_PRESET_PHASE_SEND_VISIBLE_PRESET :
+                                    CUAV_STARTUP_PRESET_PHASE_COMPLETE;
+            appCtx->cuav_startup_preset_state.phase_started_us = now_us;
+            g_mutex_unlock(&appCtx->cuav_control_lock);
+            return TRUE;
+        }
+
+        home_loc_h = state_snapshot.home_loc_h;
+        home_loc_v = state_snapshot.home_loc_v;
+        home_reached = feedback_fresh &&
+                       cuav_heading_delta(feedback_snapshot.st_loc_h, home_loc_h) <=
+                           MAX(control_config->servo_effect_threshold_h, 0.0) &&
+                       fabs(feedback_snapshot.st_loc_v - home_loc_v) <=
+                           MAX(control_config->servo_effect_threshold_v, 0.0);
+        if (home_reached || ((now_us - state_snapshot.phase_started_us) >= settle_timeout_us))
+        {
+            if (control_config->debug && !home_reached)
+            {
+                g_print("[cuav][startup-preset][warn] home settle timeout, continue to visible preset\n");
+            }
+            g_mutex_lock(&appCtx->cuav_control_lock);
+            appCtx->cuav_startup_preset_state.phase =
+                has_visible_preset ? CUAV_STARTUP_PRESET_PHASE_SEND_VISIBLE_PRESET :
+                                    CUAV_STARTUP_PRESET_PHASE_COMPLETE;
+            appCtx->cuav_startup_preset_state.phase_started_us = now_us;
+            g_mutex_unlock(&appCtx->cuav_control_lock);
+            return TRUE;
+        }
+        return TRUE;
+
+    case CUAV_STARTUP_PRESET_PHASE_SEND_VISIBLE_PRESET:
+        if (!has_visible_preset)
+        {
+            g_mutex_lock(&appCtx->cuav_control_lock);
+            appCtx->cuav_startup_preset_state.phase = CUAV_STARTUP_PRESET_PHASE_COMPLETE;
+            appCtx->cuav_startup_preset_state.phase_started_us = now_us;
+            g_mutex_unlock(&appCtx->cuav_control_lock);
+            return TRUE;
+        }
+
+        if (state_snapshot.last_command_sent_us > 0 &&
+            (now_us - state_snapshot.last_command_sent_us) < 1000)
+            return TRUE;
+
+        home_loc_h = state_snapshot.home_loc_h;
+        home_loc_v = state_snapshot.home_loc_v;
+        sent = send_cuav_visible_light_command_with_en(appCtx,
+                                                       !isnan(control_config->corner_home_pt_focal) ? 1 : 0,
+                                                       !isnan(control_config->corner_home_pt_focal) ? control_config->corner_home_pt_focal : 500.0,
+                                                       control_config->corner_home_pt_focus != G_MAXUINT ? 1 : 0,
+                                                       control_config->corner_home_pt_focus != G_MAXUINT ? control_config->corner_home_pt_focus : 100,
+                                                       1,
+                                                       0);
+        if (sent)
+        {
+            g_mutex_lock(&appCtx->cuav_control_lock);
+            appCtx->cuav_startup_preset_state.visible_applied = TRUE;
+            appCtx->cuav_startup_preset_state.last_command_sent_us = now_us;
+            appCtx->cuav_startup_preset_state.phase_started_us = now_us;
+            appCtx->cuav_startup_preset_state.phase = CUAV_STARTUP_PRESET_PHASE_COMPLETE;
+            g_mutex_unlock(&appCtx->cuav_control_lock);
+
+            if (control_config->debug)
+            {
+                g_print("[cuav][startup-preset] send visible focal_en=%u focus_en=%u\n",
+                        !isnan(control_config->corner_home_pt_focal) ? 1U : 0U,
+                        control_config->corner_home_pt_focus != G_MAXUINT ? 1U : 0U);
+            }
+        }
+        return TRUE;
+
+    case CUAV_STARTUP_PRESET_PHASE_COMPLETE:
+    default:
+        g_mutex_lock(&appCtx->cuav_control_lock);
+        appCtx->cuav_startup_preset_state.final_logged = TRUE;
+        g_mutex_unlock(&appCtx->cuav_control_lock);
+        return TRUE;
     }
-    if (current_item == CUAV_REAL_DEVICE_TEST_ITEM_VISIBLE_FOCAL &&
-        cuav_infrared_control_enabled(control_config))
-        return CUAV_REAL_DEVICE_TEST_ITEM_INFRARED_FOCAL;
-    return CUAV_REAL_DEVICE_TEST_ITEM_DONE;
+}
+
+static gboolean
+cuav_corner_zoom_cycle_resolve_home_target(const NvDsCuavControlConfig *control_config,
+                                           const CuavFeedbackState *feedback_state,
+                                           gboolean feedback_fresh,
+                                           const CuavCornerZoomCycleState *state,
+                                           gdouble *loc_h,
+                                           gdouble *loc_v)
+{
+    if (!state || !loc_h || !loc_v)
+        return FALSE;
+
+    if (control_config && !isnan(control_config->corner_home_loc_h_deg))
+        *loc_h = wrap_heading_360(control_config->corner_home_loc_h_deg);
+    else if (feedback_fresh && feedback_state && feedback_state->valid)
+        *loc_h = wrap_heading_360(feedback_state->st_loc_h);
+    else if (state->home_target_valid)
+        *loc_h = state->home_loc_h;
+    else
+        *loc_h = state->base_loc_h;
+
+    if (control_config && !isnan(control_config->corner_home_loc_v_deg))
+        *loc_v = clamp_cuav_double(control_config->corner_home_loc_v_deg, -90.0, 90.0);
+    else if (feedback_fresh && feedback_state && feedback_state->valid)
+        *loc_v = clamp_cuav_double(feedback_state->st_loc_v, -90.0, 90.0);
+    else if (state->home_target_valid)
+        *loc_v = state->home_loc_v;
+    else
+        *loc_v = state->base_loc_v;
+
+    return TRUE;
+}
+
+static gboolean
+cuav_corner_zoom_cycle_home_reached(const CuavFeedbackState *feedback_state,
+                                    const CuavCornerZoomCycleState *state,
+                                    const NvDsCuavControlConfig *control_config)
+{
+    gdouble threshold_h = 0.0;
+    gdouble threshold_v = 0.0;
+
+    if (!feedback_state || !state || !control_config || !feedback_state->valid)
+        return FALSE;
+
+    threshold_h = MAX(control_config->servo_effect_threshold_h, 0.0);
+    threshold_v = MAX(control_config->servo_effect_threshold_v, 0.0);
+    return cuav_heading_delta(feedback_state->st_loc_h, state->home_loc_h) <= threshold_h &&
+           fabs(feedback_state->st_loc_v - state->home_loc_v) <= threshold_v;
+}
+
+static void
+cuav_reset_corner_zoom_cycle_state(CuavCornerZoomCycleState *state,
+                                   const NvDsCuavControlConfig *control_config)
+{
+    if (!state)
+        return;
+
+    (void)control_config;
+
+    memset(state, 0, sizeof(*state));
+    state->phase = CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_HOME_SERVO;
+    state->home_target_valid = FALSE;
+    state->home_loc_h = 180.0;
+    state->home_loc_v = 0.0;
+    state->base_loc_h = 180.0;
+    state->base_loc_v = 0.0;
+    state->return_home_before_zoom = FALSE;
+    state->resume_cycle_after_home = FALSE;
+    state->increment_repeat_after_home = FALSE;
+    state->last_loc_h = 180.0;
+    state->last_loc_v = 0.0;
+
+    if (control_config)
+    {
+        state->last_loc_h = 180.0;
+        state->last_loc_v = 0.0;
+    }
 }
 
 static const gchar *
-cuav_real_device_test_item_name(CuavRealDeviceTestItem item)
+cuav_corner_zoom_cycle_corner_name(guint corner_index)
 {
-    switch (item)
+    switch (corner_index)
     {
-    case CUAV_REAL_DEVICE_TEST_ITEM_SERVO_H:
-        return "servo_h";
-    case CUAV_REAL_DEVICE_TEST_ITEM_SERVO_V:
-        return "servo_v";
-    case CUAV_REAL_DEVICE_TEST_ITEM_VISIBLE_FOCAL:
-        return "visible_focal";
-    case CUAV_REAL_DEVICE_TEST_ITEM_INFRARED_FOCAL:
-        return "infrared_focal";
-    case CUAV_REAL_DEVICE_TEST_ITEM_DONE:
-        return "done";
-    case CUAV_REAL_DEVICE_TEST_ITEM_NONE:
+    case 0:
+        return "right-up";
+    case 1:
+        return "left-up";
+    case 2:
+        return "left-down";
+    case 3:
+        return "right-down";
     default:
-        return "none";
-    }
-}
-
-static gboolean
-cuav_compute_real_device_test_servo_command(const NvDsCuavControlConfig *control_config,
-                                            const CuavFeedbackState *baseline_feedback,
-                                            CuavRealDeviceTestItem item,
-                                            guint repeat_index,
-                                            gdouble sim_signal,
-                                            gdouble *loc_h,
-                                            gdouble *loc_v,
-                                            guint *speed_h,
-                                            guint *speed_v)
-{
-    gdouble base_h = 180.0;
-    gdouble base_v = 0.0;
-    gdouble min_delta_h = 0.0;
-    gdouble min_delta_v = 0.0;
-    gdouble delta = 0.0;
-    guint speed = 0;
-
-    if (!control_config || !baseline_feedback || !loc_h || !loc_v || !speed_h || !speed_v)
-        return FALSE;
-
-    base_h = baseline_feedback->st_loc_h;
-    base_v = baseline_feedback->st_loc_v;
-    min_delta_h = MAX(control_config->servo_effect_threshold_h * 1.5,
-                      control_config->servo_max_step_h * 0.5);
-    min_delta_v = MAX(control_config->servo_effect_threshold_v * 1.5,
-                      control_config->servo_max_step_v * 0.5);
-    speed = clamp_cuav_uint(MAX(control_config->servo_min_speed, 15U),
-                            control_config->servo_min_speed,
-                            MAX(control_config->servo_max_speed, control_config->servo_min_speed));
-
-    if (fabs(sim_signal) < 0.05)
-        sim_signal = (repeat_index % 2 == 0) ? 1.0 : -1.0;
-
-    if (item == CUAV_REAL_DEVICE_TEST_ITEM_SERVO_H)
-    {
-        delta = ((sim_signal >= 0.0) ? 1.0 : -1.0) * min_delta_h;
-        *loc_h = wrap_heading_360(base_h + delta);
-        *loc_v = clamp_cuav_double(base_v, -90.0, 90.0);
-    }
-    else if (item == CUAV_REAL_DEVICE_TEST_ITEM_SERVO_V)
-    {
-        delta = ((sim_signal >= 0.0) ? 1.0 : -1.0) * min_delta_v;
-        *loc_h = wrap_heading_360(base_h);
-        *loc_v = clamp_cuav_double(base_v + delta, -90.0, 90.0);
-    }
-    else
-    {
-        return FALSE;
-    }
-
-    *speed_h = speed;
-    *speed_v = speed;
-    return TRUE;
-}
-
-static gboolean
-cuav_compute_real_device_test_visible_command(const NvDsCuavControlConfig *control_config,
-                                              const CuavFeedbackState *baseline_feedback,
-                                              guint repeat_index,
-                                              gdouble sim_signal,
-                                              gdouble *pt_focal,
-                                              guint *pt_focus)
-{
-    gdouble base_focal = 500.0;
-    gdouble min_delta = 0.0;
-    gdouble delta = 0.0;
-
-    if (!control_config || !baseline_feedback || !pt_focal || !pt_focus)
-        return FALSE;
-
-    base_focal = baseline_feedback->pt_focal > 0.0 ? baseline_feedback->pt_focal : 500.0;
-    min_delta = MAX(control_config->focal_effect_threshold * 1.5,
-                    control_config->zoom_max_step * 0.5);
-
-    if (fabs(sim_signal) < 0.02)
-        sim_signal = (repeat_index % 2 == 0) ? 1.0 : -1.0;
-
-    delta = ((sim_signal >= 0.0) ? 1.0 : -1.0) * min_delta;
-    *pt_focal = clamp_cuav_double(base_focal + delta,
-                                  control_config->pt_focal_min,
-                                  control_config->pt_focal_max);
-    *pt_focus = baseline_feedback->pt_focus > 0 ? baseline_feedback->pt_focus : 100;
-    return TRUE;
-}
-
-static gboolean
-cuav_compute_real_device_test_infrared_command(const NvDsCuavControlConfig *control_config,
-                                               const CuavFeedbackState *baseline_feedback,
-                                               guint repeat_index,
-                                               gdouble sim_signal,
-                                               gdouble *ir_focal,
-                                               guint *ir_focus)
-{
-    gdouble base_focal = 900.0;
-    gdouble min_delta = 0.0;
-    gdouble delta = 0.0;
-
-    if (!control_config || !baseline_feedback || !ir_focal || !ir_focus)
-        return FALSE;
-
-    base_focal = baseline_feedback->ir_focal > 0.0 ? baseline_feedback->ir_focal : 900.0;
-    min_delta = MAX(control_config->ir_focal_effect_threshold * 1.5,
-                    control_config->ir_zoom_max_step * 0.5);
-
-    if (fabs(sim_signal) < 0.02)
-        sim_signal = (repeat_index % 2 == 0) ? 1.0 : -1.0;
-
-    delta = ((sim_signal >= 0.0) ? 1.0 : -1.0) * min_delta;
-    *ir_focal = clamp_cuav_double(base_focal + delta,
-                                  control_config->ir_focal_min,
-                                  control_config->ir_focal_max);
-    *ir_focus = baseline_feedback->ir_focus > 0 ?
-                    baseline_feedback->ir_focus :
-                    MAX(control_config->ir_focus_default, 1U);
-    return TRUE;
-}
-
-static gboolean
-cuav_real_device_test_threshold_reached(const NvDsCuavControlConfig *control_config,
-                                        CuavRealDeviceTestItem item,
-                                        gdouble delta_h,
-                                        gdouble delta_v,
-                                        gdouble delta_focal)
-{
-    if (!control_config)
-        return FALSE;
-
-    switch (item)
-    {
-    case CUAV_REAL_DEVICE_TEST_ITEM_SERVO_H:
-        return delta_h >= control_config->servo_effect_threshold_h;
-    case CUAV_REAL_DEVICE_TEST_ITEM_SERVO_V:
-        return delta_v >= control_config->servo_effect_threshold_v;
-    case CUAV_REAL_DEVICE_TEST_ITEM_VISIBLE_FOCAL:
-        return delta_focal >= control_config->focal_effect_threshold;
-    case CUAV_REAL_DEVICE_TEST_ITEM_INFRARED_FOCAL:
-        return delta_focal >= control_config->ir_focal_effect_threshold;
-    default:
-        return FALSE;
+        return "unknown";
     }
 }
 
 static void
-cuav_log_real_device_test_summary(AppCtx *appCtx,
-                                  CuavRealDeviceTestItem item,
-                                  const CuavRealDeviceTestSummary *summary)
+cuav_corner_zoom_cycle_compute_target(gdouble base_h,
+                                      gdouble base_v,
+                                      gdouble offset_h,
+                                      gdouble offset_v,
+                                      guint corner_index,
+                                      gdouble *loc_h,
+                                      gdouble *loc_v)
 {
-    gchar line[512] = {0};
+    gdouble delta_h = fabs(offset_h);
+    gdouble delta_v = fabs(offset_v);
+    gdouble target_h = base_h;
+    gdouble target_v = base_v;
 
-    (void)appCtx;
-    if (!summary || item <= CUAV_REAL_DEVICE_TEST_ITEM_NONE ||
-        item >= CUAV_REAL_DEVICE_TEST_ITEM_DONE)
-        return;
+    switch (corner_index)
+    {
+    case 0:
+        target_h = base_h + delta_h;
+        target_v = base_v + delta_v;
+        break;
+    case 1:
+        target_h = base_h - delta_h;
+        target_v = base_v + delta_v;
+        break;
+    case 2:
+        target_h = base_h - delta_h;
+        target_v = base_v - delta_v;
+        break;
+    case 3:
+        target_h = base_h + delta_h;
+        target_v = base_v - delta_v;
+        break;
+    default:
+        break;
+    }
 
-    g_snprintf(line, sizeof(line),
-               "[cuav][real-test][summary] item=%s sent=%u effective=%u ineffective=%u uncertain=%u "
-               "max_delta_h=%.2f max_delta_v=%.2f max_delta_focal=%.1f",
-               cuav_real_device_test_item_name(item),
-               summary->sent_count,
-               summary->effective_count,
-               summary->ineffective_count,
-               summary->uncertain_count,
-               summary->max_delta_h,
-               summary->max_delta_v,
-               summary->max_delta_focal);
-    g_print("%s\n", line);
-    append_cuav_log_line(line);
+    if (loc_h)
+        *loc_h = wrap_heading_360(target_h);
+    if (loc_v)
+        *loc_v = clamp_cuav_double(target_v, -90.0, 90.0);
 }
 
 static void
@@ -809,7 +927,6 @@ cuav_compute_servo_command(const NvDsCuavControlConfig *control_config,
 
 static gboolean
 cuav_compute_visible_light_command(const NvDsCuavControlConfig *control_config,
-                                   const CuavFeedbackState *feedback_state,
                                    const CuavAutoControlState *auto_state,
                                    const CuavTrackSample *sample,
                                    gdouble *pt_focal,
@@ -822,21 +939,19 @@ cuav_compute_visible_light_command(const NvDsCuavControlConfig *control_config,
     if (!control_config || !auto_state || !sample || !pt_focal || !pt_focus)
         return FALSE;
 
-    if (feedback_state && feedback_state->valid &&
-        feedback_state->pt_focal > 0.0 &&
-        (g_get_monotonic_time() - feedback_state->updated_at_us) <= CUAV_FEEDBACK_STALE_USEC)
-    {
-        base_focal = feedback_state->pt_focal;
-        *pt_focus = feedback_state->pt_focus > 0 ? feedback_state->pt_focus : 100;
-    }
-    else if (auto_state->last_visible_valid)
+    if (auto_state->last_visible_valid)
     {
         base_focal = auto_state->last_pt_focal;
-        *pt_focus = auto_state->last_pt_focus > 0 ? auto_state->last_pt_focus : 100;
+        *pt_focus = auto_state->last_pt_focus;
     }
     else
     {
-        *pt_focus = 100;
+        if (!isnan(control_config->corner_home_pt_focal))
+            base_focal = control_config->corner_home_pt_focal;
+        if (control_config->corner_home_pt_focus != G_MAXUINT)
+            *pt_focus = control_config->corner_home_pt_focus;
+        else
+            *pt_focus = 100;
     }
 
     if (sample->target_ratio < (control_config->zoom_target_ratio_min - control_config->zoom_deadband))
@@ -983,16 +1098,18 @@ update_cuav_eo_system_state(AppCtx *appCtx,
 }
 
 static gboolean
-send_cuav_servo_command(AppCtx *appCtx,
-                        guint dev_id,
-                        guint dev_en,
-                        guint ctrl_en,
-                        guint mode_h,
-                        guint mode_v,
-                        guint speed_h,
-                        guint speed_v,
-                        gdouble loc_h,
-                        gdouble loc_v)
+send_cuav_servo_command_with_en(AppCtx *appCtx,
+                                guint dev_id,
+                                guint dev_en,
+                                guint ctrl_en,
+                                guint mode_h,
+                                guint mode_v,
+                                guint speed_h,
+                                guint speed_v,
+                                guint loc_en_h,
+                                gdouble loc_h,
+                                guint loc_en_v,
+                                gdouble loc_v)
 {
     GstStructure *payload = NULL;
     gboolean result = FALSE;
@@ -1007,9 +1124,9 @@ send_cuav_servo_command(AppCtx *appCtx,
                                 "speed-h", G_TYPE_INT, (gint)speed_h,
                                 "speed-en-v", G_TYPE_INT, 1,
                                 "speed-v", G_TYPE_INT, (gint)speed_v,
-                                "loc-en-h", G_TYPE_INT, 1,
+                                "loc-en-h", G_TYPE_INT, (gint)loc_en_h,
                                 "loc-h", G_TYPE_DOUBLE, loc_h,
-                                "loc-en-v", G_TYPE_INT, 1,
+                                "loc-en-v", G_TYPE_INT, (gint)loc_en_v,
                                 "loc-v", G_TYPE_DOUBLE, loc_v,
                                 "offset-en", G_TYPE_INT, 0,
                                 "offset-h", G_TYPE_INT, 0,
@@ -1022,11 +1139,39 @@ send_cuav_servo_command(AppCtx *appCtx,
 }
 
 static gboolean
-send_cuav_visible_light_command(AppCtx *appCtx,
-                                gdouble pt_focal,
-                                guint pt_focus,
-                                guint pt_focus_mode,
-                                guint pt_zoom)
+send_cuav_servo_command(AppCtx *appCtx,
+                        guint dev_id,
+                        guint dev_en,
+                        guint ctrl_en,
+                        guint mode_h,
+                        guint mode_v,
+                        guint speed_h,
+                        guint speed_v,
+                        gdouble loc_h,
+                        gdouble loc_v)
+{
+    return send_cuav_servo_command_with_en(appCtx,
+                                           dev_id,
+                                           dev_en,
+                                           ctrl_en,
+                                           mode_h,
+                                           mode_v,
+                                           speed_h,
+                                           speed_v,
+                                           1,
+                                           loc_h,
+                                           1,
+                                           loc_v);
+}
+
+static gboolean
+send_cuav_visible_light_command_with_en(AppCtx *appCtx,
+                                        guint pt_focal_en,
+                                        gdouble pt_focal,
+                                        guint pt_focus_en,
+                                        guint pt_focus,
+                                        guint pt_focus_mode,
+                                        guint pt_zoom)
 {
     GstStructure *payload = NULL;
     gboolean result = FALSE;
@@ -1037,9 +1182,9 @@ send_cuav_visible_light_command(AppCtx *appCtx,
                                 "pt-fov-en", G_TYPE_INT, 0,
                                 "pt-fov-h", G_TYPE_DOUBLE, 0.0,
                                 "pt-fov-v", G_TYPE_DOUBLE, 0.0,
-                                "pt-focal-en", G_TYPE_INT, 1,
+                                "pt-focal-en", G_TYPE_INT, (gint)pt_focal_en,
                                 "pt-focal", G_TYPE_DOUBLE, pt_focal,
-                                "pt-focus-en", G_TYPE_INT, 0,
+                                "pt-focus-en", G_TYPE_INT, (gint)pt_focus_en,
                                 "pt-focus", G_TYPE_INT, (gint)pt_focus,
                                 "pt-speed-en", G_TYPE_INT, 0,
                                 "pt-focus-speed", G_TYPE_INT, 0,
@@ -1056,6 +1201,19 @@ send_cuav_visible_light_command(AppCtx *appCtx,
     result = emit_cuav_control_signal(appCtx, "send-visible-light-control", payload);
     gst_structure_free(payload);
     return result;
+}
+
+static gboolean
+send_cuav_visible_light_command(AppCtx *appCtx,
+                                gdouble pt_focal,
+                                guint pt_focus_en,
+                                guint pt_focus,
+                                guint pt_focus_mode,
+                                guint pt_zoom)
+{
+    return send_cuav_visible_light_command_with_en(appCtx, 1, pt_focal,
+                                                   pt_focus_en, pt_focus,
+                                                   pt_focus_mode, pt_zoom);
 }
 
 static gboolean
@@ -1158,8 +1316,9 @@ create_cuav_control_element(NvDsConfig *config, NvDsPipeline *pipeline)
     if (pipeline->appCtx)
     {
         g_mutex_lock(&pipeline->appCtx->cuav_control_lock);
-        cuav_reset_real_device_test_state(&pipeline->appCtx->cuav_real_device_test_state,
-                                          control_config);
+        cuav_reset_startup_preset_state(&pipeline->appCtx->cuav_startup_preset_state);
+        cuav_reset_corner_zoom_cycle_state(&pipeline->appCtx->cuav_corner_zoom_cycle_state,
+                                           control_config);
         g_mutex_unlock(&pipeline->appCtx->cuav_control_lock);
     }
 
@@ -1169,18 +1328,22 @@ create_cuav_control_element(NvDsConfig *config, NvDsPipeline *pipeline)
                    control_config->multicast_ip ? control_config->multicast_ip : "(null)",
                    control_config->port);
     }
-    if (control_config->real_device_test_enable)
+    if (control_config->corner_zoom_cycle_enable)
     {
-        g_printerr("[cuav][real-test][risk] real-device-test is enabled for target %s:%u zoom-only=%d item=%s visible=%d infrared=%d, this will move real hardware\n",
-                   control_config->multicast_ip ? control_config->multicast_ip : "(null)",
-                   control_config->port,
-                   control_config->real_device_test_zoom_only_enable,
-                   control_config->real_device_test_item == CUAV_REAL_DEVICE_TEST_ITEM_NONE ?
-                       "all" :
-                       cuav_real_device_test_item_name(
-                           (CuavRealDeviceTestItem)control_config->real_device_test_item),
-                   control_config->visible_light_control_enable,
-                   control_config->infrared_control_enable);
+        g_print("[cuav][corner-zoom] enabled repeat=%u corner-cycle=%u offset=(%.1f,%.1f) dwell=%u ms zoom-in=%u ms zoom-out=%u ms speed=%u\n",
+                control_config->sequence_repeat_count,
+                control_config->corner_cycle_count,
+                control_config->corner_offset_h_deg,
+                control_config->corner_offset_v_deg,
+                control_config->corner_dwell_ms,
+                control_config->zoom_in_duration_ms,
+                control_config->zoom_out_duration_ms,
+                control_config->corner_servo_speed);
+        g_print("[cuav][corner-zoom] home target loc=(%.1f,%.1f) preset_focal_en=%u preset_focus_en=%u\n",
+                control_config->corner_home_loc_h_deg,
+                control_config->corner_home_loc_v_deg,
+                !isnan(control_config->corner_home_pt_focal) ? 1U : 0U,
+                control_config->corner_home_pt_focus != G_MAXUINT ? 1U : 0U);
     }
     return TRUE;
 }
@@ -1213,7 +1376,7 @@ send_cuav_visible_light_test_message(AppCtx *appCtx)
     if (!appCtx)
         return FALSE;
 
-    result = send_cuav_visible_light_command(appCtx, 500.0, 100, 1, 0);
+    result = send_cuav_visible_light_command(appCtx, 500.0, 1, 100, 1, 0);
 
     g_print("[cuav][control-test] visible-light test send result=%d\n", result);
     return result;
@@ -1249,6 +1412,8 @@ send_cuav_test_messages(AppCtx *appCtx)
         return FALSE;
 
     if (sink_config->cuav_control_config.auto_track_enable)
+        return FALSE;
+    if (sink_config->cuav_control_config.corner_zoom_cycle_enable)
         return FALSE;
 
     servo_ok = send_cuav_servo_test_message(appCtx);
@@ -1353,63 +1518,103 @@ cuav_fill_simulated_sample(const NvDsCuavControlConfig *control_config,
 }
 
 static gboolean
-process_cuav_real_device_test(AppCtx *appCtx,
-                              const NvDsCuavControlConfig *control_config,
-                              gint64 now_us)
+process_cuav_corner_zoom_cycle(AppCtx *appCtx,
+                               const NvDsCuavControlConfig *control_config,
+                               gint64 now_us)
 {
+    CuavCornerZoomCycleState state_snapshot;
     CuavFeedbackState feedback_snapshot;
-    CuavRealDeviceTestState state_snapshot;
-    CuavTrackSample sample;
     gboolean feedback_fresh = FALSE;
-    gboolean command_ok = FALSE;
-    gdouble loc_h = 0.0;
-    gdouble loc_v = 0.0;
-    guint speed_h = 0;
-    guint speed_v = 0;
-    gdouble pt_focal = 0.0;
-    guint pt_focus = 100;
-    gdouble ir_focal = 0.0;
-    guint ir_focus = 5;
-    gdouble delta_h = 0.0;
-    gdouble delta_v = 0.0;
-    gdouble delta_focal = 0.0;
-    gboolean threshold_hit = FALSE;
-    CuavRealDeviceTestItem next_item = CUAV_REAL_DEVICE_TEST_ITEM_DONE;
+    gboolean sent = FALSE;
+    CuavStartupPresetState startup_snapshot;
+    guint repeat_limit = 1;
+    guint corner_cycle_limit = 1;
+    guint corner_count = 4;
+    guint corner_index = 0;
+    guint corner_cycle_index = 0;
+    guint corner_servo_speed = 0;
+    gdouble corner_offset_h = 0.0;
+    gdouble corner_offset_v = 0.0;
+    gdouble home_loc_h = 180.0;
+    gdouble home_loc_v = 0.0;
+    gdouble base_loc_h = 180.0;
+    gdouble base_loc_v = 0.0;
+    gdouble target_loc_h = 180.0;
+    gdouble target_loc_v = 0.0;
+    guint visible_focus = 100;
+    gdouble visible_focal_cmd = 8.0;
+    gboolean home_visible_preset_valid = FALSE;
+    gboolean home_visible_focal_valid = FALSE;
+    gboolean home_visible_focus_valid = FALSE;
+    gdouble home_visible_focal = 500.0;
+    guint home_visible_focus = 100;
+    guint min_gap_ms = 1;
+    gint64 min_gap_us = 0;
+    gint64 corner_dwell_us = 0;
+    gint64 home_settle_timeout_us = 0;
+    gint64 zoom_in_hold_us = 0;
+    gint64 zoom_out_hold_us = 0;
+    gboolean visible_enabled = FALSE;
 
     if (!appCtx || !control_config || !appCtx->pipeline.common_elements.cuav_control)
         return FALSE;
 
+    visible_enabled = cuav_visible_control_enabled(control_config);
+    min_gap_ms = MAX(control_config->control_period_ms, 1U);
+    min_gap_us = ((gint64)min_gap_ms) * 1000;
+    corner_dwell_us = ((gint64)MAX(control_config->corner_dwell_ms, 1U)) * 1000;
+    zoom_in_hold_us = ((gint64)MAX(control_config->zoom_in_duration_ms, 1U)) * 1000;
+    zoom_out_hold_us = ((gint64)MAX(control_config->zoom_out_duration_ms, 1U)) * 1000;
+    repeat_limit = MAX(control_config->sequence_repeat_count, 1U);
+    corner_cycle_limit = MAX(control_config->corner_cycle_count, 1U);
+    corner_servo_speed = clamp_cuav_uint(MAX(control_config->corner_servo_speed, 1U),
+                                         1, 200);
+    corner_offset_h = fabs(control_config->corner_offset_h_deg);
+    corner_offset_v = fabs(control_config->corner_offset_v_deg);
+    home_loc_h = control_config->corner_home_loc_h_deg;
+    home_loc_v = control_config->corner_home_loc_v_deg;
+    home_settle_timeout_us = ((gint64)MAX(control_config->corner_dwell_ms,
+                                          control_config->state_stale_timeout_ms)) * 1000;
+    home_visible_focal_valid = !isnan(control_config->corner_home_pt_focal);
+    home_visible_focus_valid = control_config->corner_home_pt_focus != G_MAXUINT;
+    home_visible_preset_valid = visible_enabled &&
+                                (home_visible_focal_valid || home_visible_focus_valid);
+    if (home_visible_focal_valid)
+        home_visible_focal = control_config->corner_home_pt_focal;
+    if (home_visible_focus_valid)
+        home_visible_focus = control_config->corner_home_pt_focus;
+
     g_mutex_lock(&appCtx->cuav_control_lock);
-    if (!appCtx->cuav_real_device_test_state.initialized)
+    if (!appCtx->cuav_corner_zoom_cycle_state.initialized)
     {
-        cuav_reset_real_device_test_state(&appCtx->cuav_real_device_test_state,
-                                          control_config);
-        appCtx->cuav_real_device_test_state.initialized = TRUE;
-        appCtx->cuav_real_device_test_state.phase_started_us = now_us;
+        cuav_reset_corner_zoom_cycle_state(&appCtx->cuav_corner_zoom_cycle_state,
+                                           control_config);
+        appCtx->cuav_corner_zoom_cycle_state.initialized = TRUE;
+        startup_snapshot = appCtx->cuav_startup_preset_state;
+        appCtx->cuav_corner_zoom_cycle_state.phase =
+            startup_snapshot.servo_applied ?
+                CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_CORNER :
+                CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_HOME_SERVO;
+        appCtx->cuav_corner_zoom_cycle_state.phase_started_us = now_us;
+        appCtx->cuav_corner_zoom_cycle_state.last_command_sent_us = 0;
     }
     feedback_snapshot = appCtx->cuav_feedback_state;
-    state_snapshot = appCtx->cuav_real_device_test_state;
+    state_snapshot = appCtx->cuav_corner_zoom_cycle_state;
+    startup_snapshot = appCtx->cuav_startup_preset_state;
     g_mutex_unlock(&appCtx->cuav_control_lock);
 
     feedback_fresh = cuav_feedback_is_fresh(&feedback_snapshot,
                                             control_config->state_stale_timeout_ms);
 
-    if (state_snapshot.item == CUAV_REAL_DEVICE_TEST_ITEM_DONE ||
-        state_snapshot.phase == CUAV_REAL_DEVICE_TEST_PHASE_COMPLETE)
+    if (state_snapshot.phase == CUAV_CORNER_ZOOM_CYCLE_PHASE_COMPLETE)
     {
         if (!state_snapshot.final_logged)
         {
-            guint i = 0;
-
-            for (i = CUAV_REAL_DEVICE_TEST_ITEM_SERVO_H;
-                 i < CUAV_REAL_DEVICE_TEST_ITEM_DONE; i++)
-            {
-                cuav_log_real_device_test_summary(appCtx, (CuavRealDeviceTestItem)i,
-                                                  &state_snapshot.summary[i]);
-            }
-
+            g_print("[cuav][corner-zoom] complete repeat=%u/%u\n",
+                    MIN(state_snapshot.outer_repeat_index + 1, repeat_limit),
+                    repeat_limit);
             g_mutex_lock(&appCtx->cuav_control_lock);
-            appCtx->cuav_real_device_test_state.final_logged = TRUE;
+            appCtx->cuav_corner_zoom_cycle_state.final_logged = TRUE;
             g_mutex_unlock(&appCtx->cuav_control_lock);
         }
         return TRUE;
@@ -1417,269 +1622,514 @@ process_cuav_real_device_test(AppCtx *appCtx,
 
     switch (state_snapshot.phase)
     {
-    case CUAV_REAL_DEVICE_TEST_PHASE_WAIT_BASELINE:
-        if (!feedback_fresh)
-            return TRUE;
-
+    case CUAV_CORNER_ZOOM_CYCLE_PHASE_IDLE:
         g_mutex_lock(&appCtx->cuav_control_lock);
-        appCtx->cuav_real_device_test_state.baseline_feedback = feedback_snapshot;
-        appCtx->cuav_real_device_test_state.baseline_valid = TRUE;
-        appCtx->cuav_real_device_test_state.observed_feedback = FALSE;
-        appCtx->cuav_real_device_test_state.observed_max_delta_h = 0.0;
-        appCtx->cuav_real_device_test_state.observed_max_delta_v = 0.0;
-        appCtx->cuav_real_device_test_state.observed_max_delta_focal = 0.0;
-        appCtx->cuav_real_device_test_state.phase = CUAV_REAL_DEVICE_TEST_PHASE_SEND_COMMAND;
-        appCtx->cuav_real_device_test_state.phase_started_us = now_us;
+        appCtx->cuav_corner_zoom_cycle_state.phase = CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_HOME_SERVO;
+        appCtx->cuav_corner_zoom_cycle_state.phase_started_us = now_us;
         g_mutex_unlock(&appCtx->cuav_control_lock);
-
-        g_print("[cuav][real-test] item=%s repeat=%u baseline st_loc_h=%.2f st_loc_v=%.2f pt_focal=%.1f ir_focal=%.1f\n",
-                cuav_real_device_test_item_name(state_snapshot.item),
-                state_snapshot.repeat_index + 1,
-                feedback_snapshot.st_loc_h,
-                feedback_snapshot.st_loc_v,
-                feedback_snapshot.pt_focal,
-                feedback_snapshot.ir_focal);
         return TRUE;
 
-    case CUAV_REAL_DEVICE_TEST_PHASE_SEND_COMMAND:
-        if (!state_snapshot.baseline_valid)
+    case CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_HOME_SERVO:
+        if (state_snapshot.last_command_sent_us > 0 &&
+            (now_us - state_snapshot.last_command_sent_us) < min_gap_us)
+            return TRUE;
+
+        if (!state_snapshot.home_target_valid)
+        {
+            if (!cuav_corner_zoom_cycle_resolve_home_target(control_config,
+                                                            &feedback_snapshot,
+                                                            feedback_fresh,
+                                                            &state_snapshot,
+                                                            &home_loc_h,
+                                                            &home_loc_v))
+                return FALSE;
+
+            g_mutex_lock(&appCtx->cuav_control_lock);
+            appCtx->cuav_corner_zoom_cycle_state.home_target_valid = TRUE;
+            appCtx->cuav_corner_zoom_cycle_state.home_loc_h = home_loc_h;
+            appCtx->cuav_corner_zoom_cycle_state.home_loc_v = home_loc_v;
+            appCtx->cuav_corner_zoom_cycle_state.base_loc_h = home_loc_h;
+            appCtx->cuav_corner_zoom_cycle_state.base_loc_v = home_loc_v;
+            state_snapshot.home_target_valid = TRUE;
+            state_snapshot.home_loc_h = home_loc_h;
+            state_snapshot.home_loc_v = home_loc_v;
+            state_snapshot.base_loc_h = home_loc_h;
+            state_snapshot.base_loc_v = home_loc_v;
+            appCtx->cuav_corner_zoom_cycle_state.corner_cycle_index = 0;
+            appCtx->cuav_corner_zoom_cycle_state.corner_index = 0;
+            g_mutex_unlock(&appCtx->cuav_control_lock);
+
+            if (control_config->debug)
+            {
+                g_print("[cuav][corner-zoom] home start repeat=%u/%u home=(%.2f,%.2f) "
+                        "corner_cycle=%u offset=(%.1f,%.1f) preset_focal_en=%u preset_focus_en=%u\n",
+                        state_snapshot.outer_repeat_index +
+                            (state_snapshot.increment_repeat_after_home ? 1 : 0) + 1,
+                        repeat_limit,
+                        home_loc_h, home_loc_v,
+                        corner_cycle_limit,
+                        corner_offset_h, corner_offset_v,
+                        home_visible_focal_valid ? 1 : 0,
+                        home_visible_focus_valid ? 1 : 0);
+            }
+        }
+        else
+        {
+            home_loc_h = state_snapshot.home_loc_h;
+            home_loc_v = state_snapshot.home_loc_v;
+        }
+        sent = send_cuav_servo_command_with_en(appCtx,
+                                               control_config->servo_dev_id,
+                                               1, 1, 0, 0,
+                                               corner_servo_speed,
+                                               corner_servo_speed,
+                                               1, home_loc_h,
+                                               1, home_loc_v);
+        if (sent)
         {
             g_mutex_lock(&appCtx->cuav_control_lock);
-            appCtx->cuav_real_device_test_state.phase = CUAV_REAL_DEVICE_TEST_PHASE_WAIT_BASELINE;
-            appCtx->cuav_real_device_test_state.phase_started_us = now_us;
+            appCtx->cuav_corner_zoom_cycle_state.last_loc_h = home_loc_h;
+            appCtx->cuav_corner_zoom_cycle_state.last_loc_v = home_loc_v;
+            appCtx->cuav_corner_zoom_cycle_state.last_command_sent_us = now_us;
+            appCtx->cuav_corner_zoom_cycle_state.phase = CUAV_CORNER_ZOOM_CYCLE_PHASE_HOLD_HOME_SERVO;
+            appCtx->cuav_corner_zoom_cycle_state.phase_started_us = now_us;
+            g_mutex_unlock(&appCtx->cuav_control_lock);
+
+            if (control_config->debug)
+            {
+                g_print("[cuav][corner-zoom] send home repeat=%u/%u loc=(%.2f,%.2f) speed=%u\n",
+                        state_snapshot.outer_repeat_index +
+                            (state_snapshot.increment_repeat_after_home ? 1 : 0) + 1,
+                        repeat_limit,
+                        home_loc_h, home_loc_v,
+                        corner_servo_speed);
+            }
+        }
+        return TRUE;
+
+    case CUAV_CORNER_ZOOM_CYCLE_PHASE_HOLD_HOME_SERVO:
+        if (feedback_fresh && cuav_corner_zoom_cycle_home_reached(&feedback_snapshot,
+                                                                  &state_snapshot,
+                                                                  control_config))
+        {
+            g_mutex_lock(&appCtx->cuav_control_lock);
+            if (state_snapshot.increment_repeat_after_home)
+            {
+                appCtx->cuav_corner_zoom_cycle_state.outer_repeat_index++;
+                appCtx->cuav_corner_zoom_cycle_state.increment_repeat_after_home = FALSE;
+            }
+            appCtx->cuav_corner_zoom_cycle_state.phase_started_us = now_us;
+            if (state_snapshot.return_home_before_zoom)
+            {
+                appCtx->cuav_corner_zoom_cycle_state.phase =
+                    home_visible_preset_valid ?
+                        CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_HOME_VISIBLE_PRESET :
+                        CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_ZOOM_IN;
+            }
+            else if (state_snapshot.resume_cycle_after_home)
+            {
+                appCtx->cuav_corner_zoom_cycle_state.phase =
+                    home_visible_preset_valid ?
+                        CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_HOME_VISIBLE_PRESET :
+                        CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_CORNER;
+            }
+            else
+            {
+                appCtx->cuav_corner_zoom_cycle_state.phase =
+                    home_visible_preset_valid ?
+                        CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_HOME_VISIBLE_PRESET :
+                        CUAV_CORNER_ZOOM_CYCLE_PHASE_COMPLETE;
+            }
+            g_mutex_unlock(&appCtx->cuav_control_lock);
+            return TRUE;
+        }
+        if ((now_us - state_snapshot.phase_started_us) < home_settle_timeout_us)
+            return TRUE;
+
+        if (control_config->debug && !cuav_corner_zoom_cycle_home_reached(&feedback_snapshot,
+                                                                          &state_snapshot,
+                                                                          control_config))
+        {
+            g_print("[cuav][corner-zoom][warn] home settle timeout, continue to next stage\n");
+        }
+
+        g_mutex_lock(&appCtx->cuav_control_lock);
+        if (state_snapshot.increment_repeat_after_home)
+        {
+            appCtx->cuav_corner_zoom_cycle_state.outer_repeat_index++;
+            appCtx->cuav_corner_zoom_cycle_state.increment_repeat_after_home = FALSE;
+        }
+        appCtx->cuav_corner_zoom_cycle_state.phase_started_us = now_us;
+        if (state_snapshot.return_home_before_zoom)
+        {
+            appCtx->cuav_corner_zoom_cycle_state.phase =
+                home_visible_preset_valid ?
+                    CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_HOME_VISIBLE_PRESET :
+                    CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_ZOOM_IN;
+        }
+        else if (state_snapshot.resume_cycle_after_home)
+        {
+            appCtx->cuav_corner_zoom_cycle_state.phase =
+                home_visible_preset_valid ?
+                    CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_HOME_VISIBLE_PRESET :
+                    CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_CORNER;
+        }
+        else
+        {
+            appCtx->cuav_corner_zoom_cycle_state.phase =
+                home_visible_preset_valid ?
+                    CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_HOME_VISIBLE_PRESET :
+                    CUAV_CORNER_ZOOM_CYCLE_PHASE_COMPLETE;
+        }
+        g_mutex_unlock(&appCtx->cuav_control_lock);
+        return TRUE;
+
+    case CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_HOME_VISIBLE_PRESET:
+        if (state_snapshot.last_command_sent_us > 0 &&
+            (now_us - state_snapshot.last_command_sent_us) < min_gap_us)
+            return TRUE;
+
+        if (!home_visible_preset_valid)
+        {
+            g_mutex_lock(&appCtx->cuav_control_lock);
+            appCtx->cuav_corner_zoom_cycle_state.phase =
+                state_snapshot.return_home_before_zoom ?
+                    CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_ZOOM_IN :
+                    (state_snapshot.resume_cycle_after_home ?
+                        CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_CORNER :
+                        CUAV_CORNER_ZOOM_CYCLE_PHASE_COMPLETE);
+            appCtx->cuav_corner_zoom_cycle_state.phase_started_us = now_us;
             g_mutex_unlock(&appCtx->cuav_control_lock);
             return TRUE;
         }
 
-        if ((now_us - state_snapshot.phase_started_us) <
-            ((gint64)control_config->real_device_test_command_interval_ms * 1000))
-            return TRUE;
-
-        cuav_fill_simulated_sample(control_config, now_us, &sample);
-        switch (state_snapshot.item)
+        sent = send_cuav_visible_light_command_with_en(appCtx,
+                                                       home_visible_focal_valid ? 1 : 0,
+                                                       home_visible_focal,
+                                                       home_visible_focus_valid ? 1 : 0,
+                                                       home_visible_focus,
+                                                       1,
+                                                       0);
+        if (sent)
         {
-        case CUAV_REAL_DEVICE_TEST_ITEM_SERVO_H:
-            command_ok = cuav_compute_real_device_test_servo_command(control_config,
-                                                                     &state_snapshot.baseline_feedback,
-                                                                     state_snapshot.item,
-                                                                     state_snapshot.repeat_index,
-                                                                     sample.err_x,
-                                                                     &loc_h, &loc_v,
-                                                                     &speed_h, &speed_v);
-            if (command_ok)
-                command_ok = send_cuav_servo_command(appCtx, control_config->servo_dev_id, 1, 1, 0, 0,
-                                                     speed_h, speed_v, loc_h, loc_v);
-            break;
-        case CUAV_REAL_DEVICE_TEST_ITEM_SERVO_V:
-            command_ok = cuav_compute_real_device_test_servo_command(control_config,
-                                                                     &state_snapshot.baseline_feedback,
-                                                                     state_snapshot.item,
-                                                                     state_snapshot.repeat_index,
-                                                                     sample.err_y,
-                                                                     &loc_h, &loc_v,
-                                                                     &speed_h, &speed_v);
-            if (command_ok)
-                command_ok = send_cuav_servo_command(appCtx, control_config->servo_dev_id, 1, 1, 0, 0,
-                                                     speed_h, speed_v, loc_h, loc_v);
-            break;
-        case CUAV_REAL_DEVICE_TEST_ITEM_VISIBLE_FOCAL:
-            command_ok = cuav_compute_real_device_test_visible_command(control_config,
-                                                                       &state_snapshot.baseline_feedback,
-                                                                       state_snapshot.repeat_index,
-                                                                       sample.target_ratio -
-                                                                           ((control_config->simulate_target_ratio_min +
-                                                                             control_config->simulate_target_ratio_max) * 0.5),
-                                                                       &pt_focal, &pt_focus);
-            if (command_ok)
-                command_ok = send_cuav_visible_light_command(appCtx, pt_focal,
-                                                             pt_focus, 0, 0);
-            break;
-        case CUAV_REAL_DEVICE_TEST_ITEM_INFRARED_FOCAL:
-            command_ok = cuav_compute_real_device_test_infrared_command(control_config,
-                                                                        &state_snapshot.baseline_feedback,
-                                                                        state_snapshot.repeat_index,
-                                                                        sample.target_ratio -
-                                                                            ((control_config->simulate_target_ratio_min +
-                                                                              control_config->simulate_target_ratio_max) * 0.5),
-                                                                        &ir_focal, &ir_focus);
-            if (command_ok)
-                command_ok = send_cuav_infrared_command(appCtx, ir_focal,
-                                                        ir_focus, 0, 0);
-            break;
-        default:
-            break;
-        }
-
-        g_mutex_lock(&appCtx->cuav_control_lock);
-        appCtx->cuav_real_device_test_state.summary[state_snapshot.item].sent_count++;
-        if (command_ok)
-        {
-            appCtx->cuav_real_device_test_state.last_command_sent_us = now_us;
-            appCtx->cuav_real_device_test_state.command_feedback_us =
-                state_snapshot.baseline_feedback.updated_at_us;
-            appCtx->cuav_real_device_test_state.phase = CUAV_REAL_DEVICE_TEST_PHASE_OBSERVE;
-            appCtx->cuav_real_device_test_state.phase_started_us = now_us;
-        }
-        else
-        {
-            appCtx->cuav_real_device_test_state.summary[state_snapshot.item].uncertain_count++;
-            appCtx->cuav_real_device_test_state.phase = CUAV_REAL_DEVICE_TEST_PHASE_SETTLE;
-            appCtx->cuav_real_device_test_state.phase_started_us = now_us;
-        }
-        state_snapshot = appCtx->cuav_real_device_test_state;
-        g_mutex_unlock(&appCtx->cuav_control_lock);
-
-        if (command_ok)
-        {
-            if (state_snapshot.item == CUAV_REAL_DEVICE_TEST_ITEM_VISIBLE_FOCAL)
-            {
-                g_print("[cuav][real-test] item=%s repeat=%u send focal=%.1f focus=%u\n",
-                        cuav_real_device_test_item_name(state_snapshot.item),
-                        state_snapshot.repeat_index + 1, pt_focal, pt_focus);
-            }
-            else if (state_snapshot.item == CUAV_REAL_DEVICE_TEST_ITEM_INFRARED_FOCAL)
-            {
-                g_print("[cuav][real-test] item=%s repeat=%u send ir_focal=%.1f ir_focus=%u\n",
-                        cuav_real_device_test_item_name(state_snapshot.item),
-                        state_snapshot.repeat_index + 1, ir_focal, ir_focus);
-            }
-            else
-            {
-                g_print("[cuav][real-test] item=%s repeat=%u send loc_h=%.2f loc_v=%.2f speed_h=%u speed_v=%u\n",
-                        cuav_real_device_test_item_name(state_snapshot.item),
-                        state_snapshot.repeat_index + 1,
-                        loc_h, loc_v, speed_h, speed_v);
-            }
-        }
-        else
-        {
-            g_printerr("[cuav][real-test] item=%s repeat=%u send failed\n",
-                       cuav_real_device_test_item_name(state_snapshot.item),
-                       state_snapshot.repeat_index + 1);
-        }
-        return TRUE;
-
-    case CUAV_REAL_DEVICE_TEST_PHASE_OBSERVE:
-        if (feedback_fresh &&
-            feedback_snapshot.updated_at_us > state_snapshot.command_feedback_us)
-        {
-            delta_h = cuav_heading_delta(feedback_snapshot.st_loc_h,
-                                         state_snapshot.baseline_feedback.st_loc_h);
-            delta_v = fabs(feedback_snapshot.st_loc_v - state_snapshot.baseline_feedback.st_loc_v);
-            if (state_snapshot.item == CUAV_REAL_DEVICE_TEST_ITEM_INFRARED_FOCAL)
-            {
-                delta_focal = fabs(feedback_snapshot.ir_focal - state_snapshot.baseline_feedback.ir_focal);
-            }
-            else
-            {
-                delta_focal = fabs(feedback_snapshot.pt_focal - state_snapshot.baseline_feedback.pt_focal);
-            }
-            threshold_hit = cuav_real_device_test_threshold_reached(control_config,
-                                                                    state_snapshot.item,
-                                                                    delta_h, delta_v, delta_focal);
-
             g_mutex_lock(&appCtx->cuav_control_lock);
-            appCtx->cuav_real_device_test_state.observed_feedback = TRUE;
-            appCtx->cuav_real_device_test_state.observed_max_delta_h =
-                MAX(appCtx->cuav_real_device_test_state.observed_max_delta_h, delta_h);
-            appCtx->cuav_real_device_test_state.observed_max_delta_v =
-                MAX(appCtx->cuav_real_device_test_state.observed_max_delta_v, delta_v);
-            appCtx->cuav_real_device_test_state.observed_max_delta_focal =
-                MAX(appCtx->cuav_real_device_test_state.observed_max_delta_focal, delta_focal);
-            appCtx->cuav_real_device_test_state.summary[state_snapshot.item].max_delta_h =
-                MAX(appCtx->cuav_real_device_test_state.summary[state_snapshot.item].max_delta_h, delta_h);
-            appCtx->cuav_real_device_test_state.summary[state_snapshot.item].max_delta_v =
-                MAX(appCtx->cuav_real_device_test_state.summary[state_snapshot.item].max_delta_v, delta_v);
-            appCtx->cuav_real_device_test_state.summary[state_snapshot.item].max_delta_focal =
-                MAX(appCtx->cuav_real_device_test_state.summary[state_snapshot.item].max_delta_focal, delta_focal);
-            if (threshold_hit)
-            {
-                appCtx->cuav_real_device_test_state.summary[state_snapshot.item].effective_count++;
-                appCtx->cuav_real_device_test_state.phase = CUAV_REAL_DEVICE_TEST_PHASE_SETTLE;
-                appCtx->cuav_real_device_test_state.phase_started_us = now_us;
-            }
-            state_snapshot = appCtx->cuav_real_device_test_state;
+            appCtx->cuav_corner_zoom_cycle_state.last_command_sent_us = now_us;
+            appCtx->cuav_corner_zoom_cycle_state.phase_started_us = now_us;
+            appCtx->cuav_corner_zoom_cycle_state.phase =
+                state_snapshot.return_home_before_zoom ?
+                    CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_ZOOM_IN :
+                    (state_snapshot.resume_cycle_after_home ?
+                        CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_CORNER :
+                        CUAV_CORNER_ZOOM_CYCLE_PHASE_COMPLETE);
             g_mutex_unlock(&appCtx->cuav_control_lock);
 
-            g_print("[cuav][real-test] item=%s observe delta_h=%.2f delta_v=%.2f delta_focal=%.1f result=%s\n",
-                    cuav_real_device_test_item_name(state_snapshot.item),
-                    delta_h, delta_v, delta_focal,
-                    threshold_hit ? "effective" : "observing");
-
-            if (threshold_hit)
-                return TRUE;
+            if (control_config->debug)
+            {
+                g_print("[cuav][corner-zoom] home preset repeat=%u/%u focal_en=%u focal=%.1f focus_en=%u focus=%u\n",
+                        state_snapshot.outer_repeat_index +
+                            (state_snapshot.increment_repeat_after_home ? 1 : 0) + 1,
+                        repeat_limit,
+                        home_visible_focal_valid ? 1 : 0,
+                        home_visible_focal,
+                        home_visible_focus_valid ? 1 : 0,
+                        home_visible_focus);
+            }
         }
+        return TRUE;
 
-        if ((now_us - state_snapshot.phase_started_us) <
-            ((gint64)control_config->real_device_test_observe_timeout_ms * 1000))
+    case CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_CORNER:
+        if (state_snapshot.last_command_sent_us > 0 &&
+            (now_us - state_snapshot.last_command_sent_us) < min_gap_us)
             return TRUE;
 
-        g_mutex_lock(&appCtx->cuav_control_lock);
-        if (appCtx->cuav_real_device_test_state.observed_feedback)
+        if (!state_snapshot.home_target_valid)
         {
-            appCtx->cuav_real_device_test_state.summary[state_snapshot.item].ineffective_count++;
+            if (!cuav_corner_zoom_cycle_resolve_home_target(control_config,
+                                                            &feedback_snapshot,
+                                                            feedback_fresh,
+                                                            &state_snapshot,
+                                                            &home_loc_h,
+                                                            &home_loc_v))
+                return FALSE;
+
+            g_mutex_lock(&appCtx->cuav_control_lock);
+            appCtx->cuav_corner_zoom_cycle_state.home_target_valid = TRUE;
+            appCtx->cuav_corner_zoom_cycle_state.home_loc_h = home_loc_h;
+            appCtx->cuav_corner_zoom_cycle_state.home_loc_v = home_loc_v;
+            appCtx->cuav_corner_zoom_cycle_state.base_loc_h = home_loc_h;
+            appCtx->cuav_corner_zoom_cycle_state.base_loc_v = home_loc_v;
+            state_snapshot.home_target_valid = TRUE;
+            state_snapshot.home_loc_h = home_loc_h;
+            state_snapshot.home_loc_v = home_loc_v;
+            state_snapshot.base_loc_h = home_loc_h;
+            state_snapshot.base_loc_v = home_loc_v;
+            g_mutex_unlock(&appCtx->cuav_control_lock);
         }
         else
         {
-            appCtx->cuav_real_device_test_state.summary[state_snapshot.item].uncertain_count++;
+            home_loc_h = state_snapshot.home_loc_h;
+            home_loc_v = state_snapshot.home_loc_v;
         }
-        appCtx->cuav_real_device_test_state.phase = CUAV_REAL_DEVICE_TEST_PHASE_SETTLE;
-        appCtx->cuav_real_device_test_state.phase_started_us = now_us;
-        state_snapshot = appCtx->cuav_real_device_test_state;
-        g_mutex_unlock(&appCtx->cuav_control_lock);
 
-        g_print("[cuav][real-test] item=%s timeout result=%s max_delta_h=%.2f max_delta_v=%.2f max_delta_focal=%.1f\n",
-                cuav_real_device_test_item_name(state_snapshot.item),
-                state_snapshot.observed_feedback ? "ineffective" : "uncertain",
-                state_snapshot.observed_max_delta_h,
-                state_snapshot.observed_max_delta_v,
-                state_snapshot.observed_max_delta_focal);
+        visible_focus = home_visible_focus;
+
+        base_loc_h = state_snapshot.base_loc_h;
+        base_loc_v = state_snapshot.base_loc_v;
+        corner_index = state_snapshot.corner_index;
+        corner_cycle_index = state_snapshot.corner_cycle_index;
+        cuav_corner_zoom_cycle_compute_target(base_loc_h, base_loc_v,
+                                              corner_offset_h, corner_offset_v,
+                                              corner_index,
+                                              &target_loc_h, &target_loc_v);
+        sent = send_cuav_servo_command_with_en(appCtx,
+                                               control_config->servo_dev_id,
+                                               1, 1, 0, 0,
+                                               corner_servo_speed,
+                                               corner_servo_speed,
+                                               1, target_loc_h,
+                                               1, target_loc_v);
+        if (sent)
+        {
+            g_mutex_lock(&appCtx->cuav_control_lock);
+            appCtx->cuav_corner_zoom_cycle_state.last_loc_h = target_loc_h;
+            appCtx->cuav_corner_zoom_cycle_state.last_loc_v = target_loc_v;
+            appCtx->cuav_corner_zoom_cycle_state.last_command_sent_us = now_us;
+            appCtx->cuav_corner_zoom_cycle_state.phase = CUAV_CORNER_ZOOM_CYCLE_PHASE_HOLD_CORNER;
+            appCtx->cuav_corner_zoom_cycle_state.phase_started_us = now_us;
+            g_mutex_unlock(&appCtx->cuav_control_lock);
+
+            if (control_config->debug)
+            {
+                g_print("[cuav][corner-zoom] send corner repeat=%u/%u cycle=%u/%u corner=%s loc=(%.2f,%.2f) speed=%u\n",
+                        state_snapshot.outer_repeat_index + 1,
+                        repeat_limit,
+                        corner_cycle_index + 1,
+                        corner_cycle_limit,
+                        cuav_corner_zoom_cycle_corner_name(corner_index),
+                        target_loc_h, target_loc_v,
+                        corner_servo_speed);
+            }
+        }
         return TRUE;
 
-    case CUAV_REAL_DEVICE_TEST_PHASE_SETTLE:
-        if ((now_us - state_snapshot.phase_started_us) <
-            ((gint64)control_config->real_device_test_settle_ms * 1000))
+    case CUAV_CORNER_ZOOM_CYCLE_PHASE_HOLD_CORNER:
+        if ((now_us - state_snapshot.phase_started_us) < corner_dwell_us)
             return TRUE;
 
-        next_item = state_snapshot.item;
         g_mutex_lock(&appCtx->cuav_control_lock);
-        if ((state_snapshot.repeat_index + 1) < MAX(control_config->real_device_test_repeat_count, 1U))
+        if ((state_snapshot.corner_index + 1) < corner_count)
         {
-            appCtx->cuav_real_device_test_state.repeat_index++;
-            appCtx->cuav_real_device_test_state.phase = CUAV_REAL_DEVICE_TEST_PHASE_WAIT_BASELINE;
-            appCtx->cuav_real_device_test_state.phase_started_us = now_us;
-            appCtx->cuav_real_device_test_state.baseline_valid = FALSE;
-            appCtx->cuav_real_device_test_state.observed_feedback = FALSE;
-            appCtx->cuav_real_device_test_state.observed_max_delta_h = 0.0;
-            appCtx->cuav_real_device_test_state.observed_max_delta_v = 0.0;
-            appCtx->cuav_real_device_test_state.observed_max_delta_focal = 0.0;
+            appCtx->cuav_corner_zoom_cycle_state.corner_index++;
+            appCtx->cuav_corner_zoom_cycle_state.phase = CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_CORNER;
+        }
+        else if ((state_snapshot.corner_cycle_index + 1) < corner_cycle_limit)
+        {
+            appCtx->cuav_corner_zoom_cycle_state.corner_cycle_index++;
+            appCtx->cuav_corner_zoom_cycle_state.corner_index = 0;
+            appCtx->cuav_corner_zoom_cycle_state.phase = CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_CORNER;
         }
         else
         {
-            cuav_log_real_device_test_summary(appCtx, state_snapshot.item,
-                                              &appCtx->cuav_real_device_test_state.summary[state_snapshot.item]);
-            appCtx->cuav_real_device_test_state.repeat_index = 0;
-            appCtx->cuav_real_device_test_state.baseline_valid = FALSE;
-            appCtx->cuav_real_device_test_state.observed_feedback = FALSE;
-            appCtx->cuav_real_device_test_state.observed_max_delta_h = 0.0;
-            appCtx->cuav_real_device_test_state.observed_max_delta_v = 0.0;
-            appCtx->cuav_real_device_test_state.observed_max_delta_focal = 0.0;
-            next_item = cuav_get_next_real_device_test_item(control_config,
-                                                            state_snapshot.item);
-
-            appCtx->cuav_real_device_test_state.item = next_item;
-            appCtx->cuav_real_device_test_state.phase =
-                (next_item == CUAV_REAL_DEVICE_TEST_ITEM_DONE) ?
-                    CUAV_REAL_DEVICE_TEST_PHASE_COMPLETE :
-                    CUAV_REAL_DEVICE_TEST_PHASE_WAIT_BASELINE;
-            appCtx->cuav_real_device_test_state.phase_started_us = now_us;
+            appCtx->cuav_corner_zoom_cycle_state.phase = CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_SERVO_STOP;
         }
+        appCtx->cuav_corner_zoom_cycle_state.phase_started_us = now_us;
         g_mutex_unlock(&appCtx->cuav_control_lock);
         return TRUE;
 
-    case CUAV_REAL_DEVICE_TEST_PHASE_IDLE:
-    case CUAV_REAL_DEVICE_TEST_PHASE_COMPLETE:
+    case CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_SERVO_STOP:
+        if (state_snapshot.last_command_sent_us > 0 &&
+            (now_us - state_snapshot.last_command_sent_us) < min_gap_us)
+            return TRUE;
+
+        sent = send_cuav_servo_command_with_en(appCtx,
+                                               control_config->servo_dev_id,
+                                               1, 1, 0, 0,
+                                               corner_servo_speed,
+                                               corner_servo_speed,
+                                               0, state_snapshot.last_loc_h,
+                                               0, state_snapshot.last_loc_v);
+        if (sent)
+        {
+            g_mutex_lock(&appCtx->cuav_control_lock);
+            appCtx->cuav_corner_zoom_cycle_state.last_command_sent_us = now_us;
+            appCtx->cuav_corner_zoom_cycle_state.phase_started_us = now_us;
+            appCtx->cuav_corner_zoom_cycle_state.corner_cycle_index = 0;
+            appCtx->cuav_corner_zoom_cycle_state.corner_index = 0;
+            appCtx->cuav_corner_zoom_cycle_state.return_home_before_zoom = visible_enabled;
+            appCtx->cuav_corner_zoom_cycle_state.resume_cycle_after_home =
+                !visible_enabled && ((state_snapshot.outer_repeat_index + 1) < repeat_limit);
+            appCtx->cuav_corner_zoom_cycle_state.increment_repeat_after_home =
+                appCtx->cuav_corner_zoom_cycle_state.resume_cycle_after_home;
+            appCtx->cuav_corner_zoom_cycle_state.phase = CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_HOME_SERVO;
+            g_mutex_unlock(&appCtx->cuav_control_lock);
+
+            if (control_config->debug)
+            {
+                g_print("[cuav][corner-zoom] servo stop repeat=%u/%u loc=(%.2f,%.2f)\n",
+                        state_snapshot.outer_repeat_index + 1,
+                        repeat_limit,
+                        state_snapshot.last_loc_h,
+                        state_snapshot.last_loc_v);
+                if (visible_enabled)
+                    g_print("[cuav][corner-zoom] return to home preset before zoom\n");
+                else
+                    g_print("[cuav][corner-zoom][warn] visible-light-control-enable=0, skip zoom phases\n");
+            }
+        }
+        return TRUE;
+
+    case CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_ZOOM_IN:
+        if (state_snapshot.last_command_sent_us > 0 &&
+            (now_us - state_snapshot.last_command_sent_us) < min_gap_us)
+            return TRUE;
+
+        sent = send_cuav_visible_light_command_with_en(appCtx,
+                                                       3,
+                                                       visible_focal_cmd,
+                                                       0,
+                                                       visible_focus,
+                                                       2,
+                                                       0);
+        if (sent)
+        {
+            g_mutex_lock(&appCtx->cuav_control_lock);
+            appCtx->cuav_corner_zoom_cycle_state.last_command_sent_us = now_us;
+            appCtx->cuav_corner_zoom_cycle_state.phase_started_us = now_us;
+            appCtx->cuav_corner_zoom_cycle_state.phase = CUAV_CORNER_ZOOM_CYCLE_PHASE_HOLD_ZOOM_IN;
+            g_mutex_unlock(&appCtx->cuav_control_lock);
+
+            if (control_config->debug)
+            {
+                g_print("[cuav][corner-zoom] zoom-in start repeat=%u/%u duration=%u ms\n",
+                        state_snapshot.outer_repeat_index + 1,
+                        repeat_limit,
+                        control_config->zoom_in_duration_ms);
+            }
+        }
+        return TRUE;
+
+    case CUAV_CORNER_ZOOM_CYCLE_PHASE_HOLD_ZOOM_IN:
+        if ((now_us - state_snapshot.phase_started_us) < zoom_in_hold_us)
+            return TRUE;
+
+        g_mutex_lock(&appCtx->cuav_control_lock);
+        appCtx->cuav_corner_zoom_cycle_state.phase = CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_ZOOM_IN_STOP;
+        appCtx->cuav_corner_zoom_cycle_state.phase_started_us = now_us;
+        g_mutex_unlock(&appCtx->cuav_control_lock);
+        return TRUE;
+
+    case CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_ZOOM_IN_STOP:
+        if (state_snapshot.last_command_sent_us > 0 &&
+            (now_us - state_snapshot.last_command_sent_us) < min_gap_us)
+            return TRUE;
+
+        sent = send_cuav_visible_light_command_with_en(appCtx,
+                                                       0,
+                                                       visible_focal_cmd,
+                                                       0,
+                                                       visible_focus,
+                                                       2,
+                                                       0);
+        if (sent)
+        {
+            g_mutex_lock(&appCtx->cuav_control_lock);
+            appCtx->cuav_corner_zoom_cycle_state.last_command_sent_us = now_us;
+            appCtx->cuav_corner_zoom_cycle_state.phase_started_us = now_us;
+            appCtx->cuav_corner_zoom_cycle_state.phase = CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_ZOOM_OUT;
+            g_mutex_unlock(&appCtx->cuav_control_lock);
+        }
+        return TRUE;
+
+    case CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_ZOOM_OUT:
+        if (state_snapshot.last_command_sent_us > 0 &&
+            (now_us - state_snapshot.last_command_sent_us) < min_gap_us)
+            return TRUE;
+
+        sent = send_cuav_visible_light_command_with_en(appCtx,
+                                                       4,
+                                                       visible_focal_cmd,
+                                                       0,
+                                                       visible_focus,
+                                                       2,
+                                                       0);
+        if (sent)
+        {
+            g_mutex_lock(&appCtx->cuav_control_lock);
+            appCtx->cuav_corner_zoom_cycle_state.last_command_sent_us = now_us;
+            appCtx->cuav_corner_zoom_cycle_state.phase_started_us = now_us;
+            appCtx->cuav_corner_zoom_cycle_state.phase = CUAV_CORNER_ZOOM_CYCLE_PHASE_HOLD_ZOOM_OUT;
+            g_mutex_unlock(&appCtx->cuav_control_lock);
+
+            if (control_config->debug)
+            {
+                g_print("[cuav][corner-zoom] zoom-out start repeat=%u/%u duration=%u ms\n",
+                        state_snapshot.outer_repeat_index + 1,
+                        repeat_limit,
+                        control_config->zoom_out_duration_ms);
+            }
+        }
+        return TRUE;
+
+    case CUAV_CORNER_ZOOM_CYCLE_PHASE_HOLD_ZOOM_OUT:
+        if ((now_us - state_snapshot.phase_started_us) < zoom_out_hold_us)
+            return TRUE;
+
+        g_mutex_lock(&appCtx->cuav_control_lock);
+        appCtx->cuav_corner_zoom_cycle_state.phase = CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_ZOOM_OUT_STOP;
+        appCtx->cuav_corner_zoom_cycle_state.phase_started_us = now_us;
+        g_mutex_unlock(&appCtx->cuav_control_lock);
+        return TRUE;
+
+    case CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_ZOOM_OUT_STOP:
+        if (state_snapshot.last_command_sent_us > 0 &&
+            (now_us - state_snapshot.last_command_sent_us) < min_gap_us)
+            return TRUE;
+
+        sent = send_cuav_visible_light_command_with_en(appCtx,
+                                                       0,
+                                                       visible_focal_cmd,
+                                                       0,
+                                                       visible_focus,
+                                                       2,
+                                                       0);
+        if (sent)
+        {
+            g_mutex_lock(&appCtx->cuav_control_lock);
+            appCtx->cuav_corner_zoom_cycle_state.last_command_sent_us = now_us;
+            appCtx->cuav_corner_zoom_cycle_state.phase_started_us = now_us;
+            appCtx->cuav_corner_zoom_cycle_state.corner_cycle_index = 0;
+            appCtx->cuav_corner_zoom_cycle_state.corner_index = 0;
+            appCtx->cuav_corner_zoom_cycle_state.return_home_before_zoom = FALSE;
+            appCtx->cuav_corner_zoom_cycle_state.resume_cycle_after_home =
+                (state_snapshot.outer_repeat_index + 1) < repeat_limit;
+            appCtx->cuav_corner_zoom_cycle_state.increment_repeat_after_home =
+                appCtx->cuav_corner_zoom_cycle_state.resume_cycle_after_home;
+            appCtx->cuav_corner_zoom_cycle_state.phase = CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_HOME_SERVO;
+            g_mutex_unlock(&appCtx->cuav_control_lock);
+
+            if (control_config->debug)
+            {
+                g_print("[cuav][corner-zoom] zoom-out stop repeat=%u/%u next=%s\n",
+                        state_snapshot.outer_repeat_index + 1,
+                        repeat_limit,
+                        (state_snapshot.outer_repeat_index + 1) < repeat_limit ?
+                            "home+repeat" : "home+complete");
+            }
+        }
+        return TRUE;
+
+    case CUAV_CORNER_ZOOM_CYCLE_PHASE_COMPLETE:
     default:
+        g_mutex_lock(&appCtx->cuav_control_lock);
+        if (!appCtx->cuav_corner_zoom_cycle_state.final_logged)
+        {
+            appCtx->cuav_corner_zoom_cycle_state.final_logged = TRUE;
+            g_print("[cuav][corner-zoom] complete repeat=%u/%u\n",
+                    MIN(appCtx->cuav_corner_zoom_cycle_state.outer_repeat_index + 1,
+                        repeat_limit),
+                    repeat_limit);
+        }
+        g_mutex_unlock(&appCtx->cuav_control_lock);
         return TRUE;
     }
 }
@@ -1694,6 +2144,7 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
     guint64 locked_object_id = 0;
     gint64 now_us = 0;
     gint64 hold_deadline_us = 0;
+    gboolean startup_preset_required = FALSE;
     CuavTrackSample sample;
     CuavFeedbackState feedback_snapshot;
     CuavAutoControlState state_snapshot;
@@ -1722,17 +2173,29 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
         return;
 
     control_config = &sink_config->cuav_control_config;
+    now_us = g_get_monotonic_time();
+    startup_preset_required = cuav_startup_preset_has_home_target(control_config) ||
+                              (cuav_visible_control_enabled(control_config) &&
+                               cuav_startup_preset_has_visible_preset(control_config));
+    if (startup_preset_required)
+    {
+        process_cuav_startup_preset(appCtx, control_config, now_us);
+        g_mutex_lock(&appCtx->cuav_control_lock);
+        if (appCtx->cuav_startup_preset_state.phase != CUAV_STARTUP_PRESET_PHASE_COMPLETE)
+        {
+            g_mutex_unlock(&appCtx->cuav_control_lock);
+            return;
+        }
+        g_mutex_unlock(&appCtx->cuav_control_lock);
+    }
+    if (control_config->corner_zoom_cycle_enable)
+    {
+        process_cuav_corner_zoom_cycle(appCtx, control_config, now_us);
+        return;
+    }
     if (!control_config->auto_track_enable ||
         !appCtx->pipeline.common_elements.cuav_control)
         return;
-
-    now_us = g_get_monotonic_time();
-
-    if (control_config->real_device_test_enable)
-    {
-        process_cuav_real_device_test(appCtx, control_config, now_us);
-        return;
-    }
 
     g_mutex_lock(&appCtx->cuav_control_lock);
     appCtx->cuav_auto_control_state.control_source_id =
@@ -1800,7 +2263,6 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
                     ((gint64)control_config->control_period_ms * 1000)))
             {
                 should_send_visible = cuav_compute_visible_light_command(control_config,
-                                                                         &feedback_snapshot,
                                                                          &state_snapshot,
                                                                          &sample,
                                                                          &pt_focal,
@@ -1839,7 +2301,7 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
             if (should_send_visible)
             {
                 visible_sent = send_cuav_visible_light_command(appCtx, pt_focal,
-                                                               pt_focus, 0, 0);
+                                                               0, pt_focus, 0, 0);
             }
 
             if (should_send_infrared)
@@ -1957,7 +2419,6 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
             ((gint64)control_config->control_period_ms * 1000)))
     {
         should_send_visible = cuav_compute_visible_light_command(control_config,
-                                                                 &feedback_snapshot,
                                                                  &state_snapshot,
                                                                  &sample,
                                                                  &pt_focal,
@@ -2005,7 +2466,7 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
     if (should_send_visible)
     {
         visible_sent = send_cuav_visible_light_command(appCtx, pt_focal,
-                                                       pt_focus, 0, 0);
+                                                       0, pt_focus, 0, 0);
         if (visible_sent && control_config->debug)
         {
             g_print("[cuav][control][auto] source=%u target=%" G_GUINT64_FORMAT

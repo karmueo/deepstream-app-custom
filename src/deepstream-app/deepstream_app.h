@@ -310,53 +310,66 @@ typedef struct
 
 typedef enum
 {
-    CUAV_REAL_DEVICE_TEST_ITEM_NONE = 0,
-    CUAV_REAL_DEVICE_TEST_ITEM_SERVO_H = 1,
-    CUAV_REAL_DEVICE_TEST_ITEM_SERVO_V = 2,
-    CUAV_REAL_DEVICE_TEST_ITEM_VISIBLE_FOCAL = 3,
-    CUAV_REAL_DEVICE_TEST_ITEM_INFRARED_FOCAL = 4,
-    CUAV_REAL_DEVICE_TEST_ITEM_DONE = 5
-} CuavRealDeviceTestItem;
+    CUAV_CORNER_ZOOM_CYCLE_PHASE_IDLE = 0,
+    CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_HOME_SERVO = 1,
+    CUAV_CORNER_ZOOM_CYCLE_PHASE_HOLD_HOME_SERVO = 2,
+    CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_HOME_VISIBLE_PRESET = 3,
+    CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_CORNER = 4,
+    CUAV_CORNER_ZOOM_CYCLE_PHASE_HOLD_CORNER = 5,
+    CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_SERVO_STOP = 6,
+    CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_ZOOM_IN = 7,
+    CUAV_CORNER_ZOOM_CYCLE_PHASE_HOLD_ZOOM_IN = 8,
+    CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_ZOOM_IN_STOP = 9,
+    CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_ZOOM_OUT = 10,
+    CUAV_CORNER_ZOOM_CYCLE_PHASE_HOLD_ZOOM_OUT = 11,
+    CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_ZOOM_OUT_STOP = 12,
+    CUAV_CORNER_ZOOM_CYCLE_PHASE_COMPLETE = 13
+} CuavCornerZoomCyclePhase;
 
 typedef enum
 {
-    CUAV_REAL_DEVICE_TEST_PHASE_IDLE = 0,
-    CUAV_REAL_DEVICE_TEST_PHASE_WAIT_BASELINE = 1,
-    CUAV_REAL_DEVICE_TEST_PHASE_SEND_COMMAND = 2,
-    CUAV_REAL_DEVICE_TEST_PHASE_OBSERVE = 3,
-    CUAV_REAL_DEVICE_TEST_PHASE_SETTLE = 4,
-    CUAV_REAL_DEVICE_TEST_PHASE_COMPLETE = 5
-} CuavRealDeviceTestPhase;
-
-typedef struct
-{
-    guint sent_count;
-    guint effective_count;
-    guint ineffective_count;
-    guint uncertain_count;
-    gdouble max_delta_h;
-    gdouble max_delta_v;
-    gdouble max_delta_focal;
-} CuavRealDeviceTestSummary;
+    CUAV_STARTUP_PRESET_PHASE_IDLE = 0,
+    CUAV_STARTUP_PRESET_PHASE_SEND_HOME_SERVO = 1,
+    CUAV_STARTUP_PRESET_PHASE_HOLD_HOME_SERVO = 2,
+    CUAV_STARTUP_PRESET_PHASE_SEND_VISIBLE_PRESET = 3,
+    CUAV_STARTUP_PRESET_PHASE_COMPLETE = 4
+} CuavStartupPresetPhase;
 
 typedef struct
 {
     gboolean initialized;
     gboolean final_logged;
-    CuavRealDeviceTestItem item;
-    CuavRealDeviceTestPhase phase;
-    guint repeat_index;
+    CuavStartupPresetPhase phase;
     gint64 phase_started_us;
     gint64 last_command_sent_us;
-    gint64 command_feedback_us;
-    gboolean baseline_valid;
-    gboolean observed_feedback;
-    CuavFeedbackState baseline_feedback;
-    gdouble observed_max_delta_h;
-    gdouble observed_max_delta_v;
-    gdouble observed_max_delta_focal;
-    CuavRealDeviceTestSummary summary[CUAV_REAL_DEVICE_TEST_ITEM_DONE];
-} CuavRealDeviceTestState;
+    gboolean home_target_valid;
+    gdouble home_loc_h;
+    gdouble home_loc_v;
+    gboolean servo_applied;
+    gboolean visible_applied;
+} CuavStartupPresetState;
+
+typedef struct
+{
+    gboolean initialized;
+    gboolean final_logged;
+    CuavCornerZoomCyclePhase phase;
+    guint outer_repeat_index;
+    guint corner_cycle_index;
+    guint corner_index;
+    gint64 phase_started_us;
+    gint64 last_command_sent_us;
+    gboolean home_target_valid;
+    gdouble home_loc_h;
+    gdouble home_loc_v;
+    gdouble base_loc_h;
+    gdouble base_loc_v;
+    gboolean return_home_before_zoom;
+    gboolean resume_cycle_after_home;
+    gboolean increment_repeat_after_home;
+    gdouble last_loc_h;
+    gdouble last_loc_v;
+} CuavCornerZoomCycleState;
 
 /**
  * @brief 应用程序上下文结构体，存储整个应用的核心状态与资源。
@@ -443,9 +456,10 @@ struct _AppCtx
     /** 静止目标误检过滤状态 */
     StaticTargetFilterState static_target_filter_states[MAX_SOURCE_BINS]; /**< 各源静止目标过滤状态 */
     GMutex cuav_control_lock;       /**< C-UAV 自动控制状态锁 */
+    CuavStartupPresetState cuav_startup_preset_state; /**< 启动预置位状态 */
     CuavFeedbackState cuav_feedback_state; /**< 最近一次光电系统反馈 */
     CuavAutoControlState cuav_auto_control_state; /**< 自动控制运行时状态 */
-    CuavRealDeviceTestState cuav_real_device_test_state; /**< 真实设备单项测试状态 */
+    CuavCornerZoomCycleState cuav_corner_zoom_cycle_state; /**< 角点+变焦循环状态 */
 };
 
 /**

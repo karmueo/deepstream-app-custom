@@ -34,3 +34,5 @@ build
 *.pyc
 AGENTS.md
 .worktrees
+.codex
+tmp.json

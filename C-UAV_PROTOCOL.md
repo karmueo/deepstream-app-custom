@@ -323,9 +323,9 @@
 | `pt_fov_h` | float | 可见光水平视场角 |
 | `pt_fov_v` | float | 可见光垂直视场角 |
 | `pt_focal_en` | int | 焦距使能：`0`无效 `2`获取 `3`增加 `4`减小 |
-| `pt_focal` | float | 无效 |
+| `pt_focal` | float | 可见光焦距，（单精度浮点）预置位设定焦距值 |
 | `pt_focus_en` | int | 聚焦使能：`0`无效 `2`获取 `3`增加 `4`减小 |
-| `pt_focus` | int | 无效 |
+| `pt_focus` | int | 可见光聚焦值，（整型）   预置位设定聚焦值 |
 | `pt_speed_en` | int | 聚焦速度使能 |
 | `pt_focus_speed` | int | 可见光速度 |
 | `pt_bri_en` | int | 亮度使能 |

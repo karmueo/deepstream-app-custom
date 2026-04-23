@@ -91,18 +91,24 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
     config->cuav_control_config.simulate_target_ratio_min = 0.18;
     config->cuav_control_config.simulate_target_ratio_max = 0.36;
     config->cuav_control_config.simulate_target_period_ms = 6000;
-    config->cuav_control_config.real_device_test_enable = FALSE;
-    config->cuav_control_config.real_device_test_zoom_only_enable = FALSE;
-    config->cuav_control_config.real_device_test_item = 0;
-    config->cuav_control_config.real_device_test_command_interval_ms = 1200;
-    config->cuav_control_config.real_device_test_observe_timeout_ms = 2500;
-    config->cuav_control_config.real_device_test_settle_ms = 1000;
-    config->cuav_control_config.real_device_test_repeat_count = 2;
     config->cuav_control_config.servo_effect_threshold_h = 0.5;
     config->cuav_control_config.servo_effect_threshold_v = 0.3;
     config->cuav_control_config.focal_effect_threshold = 50.0;
     config->cuav_control_config.ir_focal_effect_threshold = 10.0;
     config->cuav_control_config.state_stale_timeout_ms = 2000;
+    config->cuav_control_config.corner_zoom_cycle_enable = FALSE;
+    config->cuav_control_config.corner_cycle_count = 1;
+    config->cuav_control_config.sequence_repeat_count = 1;
+    config->cuav_control_config.corner_offset_h_deg = 15.0;
+    config->cuav_control_config.corner_offset_v_deg = 10.0;
+    config->cuav_control_config.corner_dwell_ms = 1000;
+    config->cuav_control_config.corner_servo_speed = 30;
+    config->cuav_control_config.zoom_in_duration_ms = 1000;
+    config->cuav_control_config.zoom_out_duration_ms = 1000;
+    config->cuav_control_config.corner_home_loc_h_deg = NAN;
+    config->cuav_control_config.corner_home_loc_v_deg = NAN;
+    config->cuav_control_config.corner_home_pt_focal = NAN;
+    config->cuav_control_config.corner_home_pt_focus = G_MAXUINT;
 
     if (sink_node["enable"])
     {
@@ -577,50 +583,6 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
         {
             config->cuav_control_config.simulate_target_period_ms = itr->second.as<guint>();
         }
-        else if (paramKey == "real-device-test-enable")
-        {
-            config->cuav_control_config.real_device_test_enable = itr->second.as<gboolean>();
-        }
-        else if (paramKey == "real-device-test-zoom-only-enable")
-        {
-            config->cuav_control_config.real_device_test_zoom_only_enable = itr->second.as<gboolean>();
-        }
-        else if (paramKey == "real-device-test-item")
-        {
-            std::string value = itr->second.as<std::string>();
-            if (value == "all")
-                config->cuav_control_config.real_device_test_item = 0;
-            else if (value == "servo_h")
-                config->cuav_control_config.real_device_test_item = 1;
-            else if (value == "servo_v")
-                config->cuav_control_config.real_device_test_item = 2;
-            else if (value == "visible_focal")
-                config->cuav_control_config.real_device_test_item = 3;
-            else if (value == "infrared_focal")
-                config->cuav_control_config.real_device_test_item = 4;
-            else
-            {
-                g_printerr("Error: Unknown value '%s' for real-device-test-item in sink.\n",
-                           value.c_str());
-                goto done;
-            }
-        }
-        else if (paramKey == "real-device-test-command-interval-ms")
-        {
-            config->cuav_control_config.real_device_test_command_interval_ms = itr->second.as<guint>();
-        }
-        else if (paramKey == "real-device-test-observe-timeout-ms")
-        {
-            config->cuav_control_config.real_device_test_observe_timeout_ms = itr->second.as<guint>();
-        }
-        else if (paramKey == "real-device-test-settle-ms")
-        {
-            config->cuav_control_config.real_device_test_settle_ms = itr->second.as<guint>();
-        }
-        else if (paramKey == "real-device-test-repeat-count")
-        {
-            config->cuav_control_config.real_device_test_repeat_count = itr->second.as<guint>();
-        }
         else if (paramKey == "servo-effect-threshold-h")
         {
             config->cuav_control_config.servo_effect_threshold_h = itr->second.as<gdouble>();
@@ -640,6 +602,60 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
         else if (paramKey == "state-stale-timeout-ms")
         {
             config->cuav_control_config.state_stale_timeout_ms = itr->second.as<guint>();
+        }
+        else if (paramKey == "corner-zoom-cycle-enable")
+        {
+            config->cuav_control_config.corner_zoom_cycle_enable = itr->second.as<gboolean>();
+        }
+        else if (paramKey == "corner-cycle-count")
+        {
+            config->cuav_control_config.corner_cycle_count = itr->second.as<guint>();
+        }
+        else if (paramKey == "sequence-repeat-count")
+        {
+            config->cuav_control_config.sequence_repeat_count = itr->second.as<guint>();
+        }
+        else if (paramKey == "corner-offset-h-deg")
+        {
+            config->cuav_control_config.corner_offset_h_deg = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "corner-offset-v-deg")
+        {
+            config->cuav_control_config.corner_offset_v_deg = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "corner-dwell-ms")
+        {
+            config->cuav_control_config.corner_dwell_ms = itr->second.as<guint>();
+        }
+        else if (paramKey == "corner-servo-speed")
+        {
+            config->cuav_control_config.corner_servo_speed = itr->second.as<guint>();
+        }
+        else if (paramKey == "zoom-in-duration-ms")
+        {
+            config->cuav_control_config.zoom_in_duration_ms = itr->second.as<guint>();
+        }
+        else if (paramKey == "zoom-out-duration-ms")
+        {
+            config->cuav_control_config.zoom_out_duration_ms = itr->second.as<guint>();
+        }
+        else if (paramKey == "corner-home-loc-h-deg" ||
+                 paramKey == "corner-return-loc-h-deg")
+        {
+            config->cuav_control_config.corner_home_loc_h_deg = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "corner-home-loc-v-deg" ||
+                 paramKey == "corner-return-loc-v-deg")
+        {
+            config->cuav_control_config.corner_home_loc_v_deg = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "corner-home-pt-focal")
+        {
+            config->cuav_control_config.corner_home_pt_focal = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "corner-home-pt-focus")
+        {
+            config->cuav_control_config.corner_home_pt_focus = itr->second.as<guint>();
         }
         else
         {

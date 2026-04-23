@@ -16,8 +16,8 @@ application:
 # -----------------------------------------------------------------------------
 source:
   # 视频源CSV配置文件路径（包含RTSP/文件流地址等）
-  # csv-file-path: sources.csv
-  csv-file-path: file_sources.csv
+  csv-file-path: sources.csv
+  # csv-file-path: file_sources.csv
   #file_sources.csv
   #debug_sources.csv
 
@@ -171,7 +171,7 @@ sink0:
 # -----------------------------------------------------------------------------
 sink1:
   # 是否启用此输出（0=禁用，1=启用）
-  enable: 1
+  enable: 0
   # 输出类型：2=EglSink（本地窗口显示）
   type: 2
   # 是否同步播放（0=异步，1=同步）
@@ -234,7 +234,7 @@ sink4:
 # -----------------------------------------------------------------------------
 sink5:
   # 是否启用此输出（0=禁用，1=启用）
-  enable: 0
+  enable: 1
   # 输出类型：8=CuavControl
   type: 8
   # 独立 C-UAV 控制配置文件，相对路径基于当前 app_config.yml

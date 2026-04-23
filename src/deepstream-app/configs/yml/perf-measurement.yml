@@ -157,11 +157,6 @@ sink4:
   simulate-target-ratio-min: 0.18
   simulate-target-ratio-max: 0.36
   simulate-target-period-ms: 6000
-  real-device-test-enable: 0
-  real-device-test-command-interval-ms: 1200
-  real-device-test-observe-timeout-ms: 2500
-  real-device-test-settle-ms: 1000
-  real-device-test-repeat-count: 2
   servo-effect-threshold-h: 0.5
   servo-effect-threshold-v: 0.3
   focal-effect-threshold: 50.0

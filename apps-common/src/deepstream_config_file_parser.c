@@ -14,6 +14,7 @@
 #include "deepstream_config_file_parser.h"
 #include <string.h>
 #include <stdlib.h>
+#include <math.h>
 #include <unistd.h>
 
 GST_DEBUG_CATEGORY(APP_CFG_PARSER_CAT);
@@ -1500,18 +1501,24 @@ parse_cuav_control(NvDsCuavControlConfig *config, GKeyFile *key_file)
     config->simulate_target_ratio_min = 0.18;
     config->simulate_target_ratio_max = 0.36;
     config->simulate_target_period_ms = 6000;
-    config->real_device_test_enable = FALSE;
-    config->real_device_test_zoom_only_enable = FALSE;
-    config->real_device_test_item = 0;
-    config->real_device_test_command_interval_ms = 1200;
-    config->real_device_test_observe_timeout_ms = 2500;
-    config->real_device_test_settle_ms = 1000;
-    config->real_device_test_repeat_count = 2;
     config->servo_effect_threshold_h = 0.5;
     config->servo_effect_threshold_v = 0.3;
     config->focal_effect_threshold = 50.0;
     config->ir_focal_effect_threshold = 10.0;
     config->state_stale_timeout_ms = 2000;
+    config->corner_zoom_cycle_enable = FALSE;
+    config->corner_cycle_count = 1;
+    config->sequence_repeat_count = 1;
+    config->corner_offset_h_deg = 15.0;
+    config->corner_offset_v_deg = 10.0;
+    config->corner_dwell_ms = 1000;
+    config->corner_servo_speed = 30;
+    config->zoom_in_duration_ms = 1000;
+    config->zoom_out_duration_ms = 1000;
+    config->corner_home_loc_h_deg = NAN;
+    config->corner_home_loc_v_deg = NAN;
+    config->corner_home_pt_focal = NAN;
+    config->corner_home_pt_focus = G_MAXUINT;
 
     keys = g_key_file_get_keys(key_file, CONFIG_GROUP_CUAV_CONTROL, NULL, &error);
     CHECK_ERROR(error);
@@ -1792,58 +1799,6 @@ parse_cuav_control(NvDsCuavControlConfig *config, GKeyFile *key_file)
             config->simulate_target_period_ms = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "simulate-target-period-ms", &error);
             CHECK_ERROR(error);
         }
-        else if (!g_strcmp0(*key, "real-device-test-enable"))
-        {
-            config->real_device_test_enable = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "real-device-test-enable", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "real-device-test-zoom-only-enable"))
-        {
-            config->real_device_test_zoom_only_enable = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "real-device-test-zoom-only-enable", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "real-device-test-item"))
-        {
-            gchar *value = g_key_file_get_string(key_file, CONFIG_GROUP_CUAV_CONTROL, "real-device-test-item", &error);
-            CHECK_ERROR(error);
-            if (!g_strcmp0(value, "all"))
-                config->real_device_test_item = 0;
-            else if (!g_strcmp0(value, "servo_h"))
-                config->real_device_test_item = 1;
-            else if (!g_strcmp0(value, "servo_v"))
-                config->real_device_test_item = 2;
-            else if (!g_strcmp0(value, "visible_focal"))
-                config->real_device_test_item = 3;
-            else if (!g_strcmp0(value, "infrared_focal"))
-                config->real_device_test_item = 4;
-            else
-            {
-                NVGSTDS_ERR_MSG_V("Unknown value '%s' for group [%s]", value, CONFIG_GROUP_CUAV_CONTROL);
-                g_free(value);
-                goto done;
-            }
-            g_free(value);
-        }
-        else if (!g_strcmp0(*key, "real-device-test-command-interval-ms"))
-        {
-            config->real_device_test_command_interval_ms = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "real-device-test-command-interval-ms", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "real-device-test-observe-timeout-ms"))
-        {
-            config->real_device_test_observe_timeout_ms = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "real-device-test-observe-timeout-ms", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "real-device-test-settle-ms"))
-        {
-            config->real_device_test_settle_ms = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "real-device-test-settle-ms", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "real-device-test-repeat-count"))
-        {
-            config->real_device_test_repeat_count = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "real-device-test-repeat-count", &error);
-            CHECK_ERROR(error);
-        }
         else if (!g_strcmp0(*key, "servo-effect-threshold-h"))
         {
             config->servo_effect_threshold_h = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, "servo-effect-threshold-h", &error);
@@ -1867,6 +1822,73 @@ parse_cuav_control(NvDsCuavControlConfig *config, GKeyFile *key_file)
         else if (!g_strcmp0(*key, "state-stale-timeout-ms"))
         {
             config->state_stale_timeout_ms = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "state-stale-timeout-ms", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "corner-zoom-cycle-enable"))
+        {
+            config->corner_zoom_cycle_enable = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "corner-zoom-cycle-enable", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "corner-cycle-count"))
+        {
+            config->corner_cycle_count = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "corner-cycle-count", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "sequence-repeat-count"))
+        {
+            config->sequence_repeat_count = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "sequence-repeat-count", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "corner-offset-h-deg"))
+        {
+            config->corner_offset_h_deg = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, "corner-offset-h-deg", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "corner-offset-v-deg"))
+        {
+            config->corner_offset_v_deg = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, "corner-offset-v-deg", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "corner-dwell-ms"))
+        {
+            config->corner_dwell_ms = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "corner-dwell-ms", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "corner-servo-speed"))
+        {
+            config->corner_servo_speed = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "corner-servo-speed", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "zoom-in-duration-ms"))
+        {
+            config->zoom_in_duration_ms = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "zoom-in-duration-ms", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "zoom-out-duration-ms"))
+        {
+            config->zoom_out_duration_ms = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "zoom-out-duration-ms", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "corner-home-loc-h-deg") ||
+                 !g_strcmp0(*key, "corner-return-loc-h-deg"))
+        {
+            config->corner_home_loc_h_deg = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, *key, &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "corner-home-loc-v-deg") ||
+                 !g_strcmp0(*key, "corner-return-loc-v-deg"))
+        {
+            config->corner_home_loc_v_deg = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, *key, &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "corner-home-pt-focal"))
+        {
+            config->corner_home_pt_focal = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, "corner-home-pt-focal", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "corner-home-pt-focus"))
+        {
+            config->corner_home_pt_focus = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "corner-home-pt-focus", &error);
             CHECK_ERROR(error);
         }
         else
@@ -2918,13 +2940,6 @@ parse_sink(NvDsSinkSubBinConfig *config, GKeyFile *key_file, gchar *group,
     config->cuav_control_config.simulate_target_ratio_min = 0.18;
     config->cuav_control_config.simulate_target_ratio_max = 0.36;
     config->cuav_control_config.simulate_target_period_ms = 6000;
-    config->cuav_control_config.real_device_test_enable = FALSE;
-    config->cuav_control_config.real_device_test_zoom_only_enable = FALSE;
-    config->cuav_control_config.real_device_test_item = 0;
-    config->cuav_control_config.real_device_test_command_interval_ms = 1200;
-    config->cuav_control_config.real_device_test_observe_timeout_ms = 2500;
-    config->cuav_control_config.real_device_test_settle_ms = 1000;
-    config->cuav_control_config.real_device_test_repeat_count = 2;
     config->cuav_control_config.servo_effect_threshold_h = 0.5;
     config->cuav_control_config.servo_effect_threshold_v = 0.3;
     config->cuav_control_config.focal_effect_threshold = 50.0;
@@ -3558,64 +3573,6 @@ parse_sink(NvDsSinkSubBinConfig *config, GKeyFile *key_file, gchar *group,
         {
             config->cuav_control_config.simulate_target_period_ms =
                 g_key_file_get_integer(key_file, group, "simulate-target-period-ms", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "real-device-test-enable"))
-        {
-            config->cuav_control_config.real_device_test_enable =
-                g_key_file_get_integer(key_file, group, "real-device-test-enable", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "real-device-test-zoom-only-enable"))
-        {
-            config->cuav_control_config.real_device_test_zoom_only_enable =
-                g_key_file_get_integer(key_file, group, "real-device-test-zoom-only-enable", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "real-device-test-item"))
-        {
-            gchar *value = g_key_file_get_string(key_file, group, "real-device-test-item", &error);
-            CHECK_ERROR(error);
-            if (!g_strcmp0(value, "all"))
-                config->cuav_control_config.real_device_test_item = 0;
-            else if (!g_strcmp0(value, "servo_h"))
-                config->cuav_control_config.real_device_test_item = 1;
-            else if (!g_strcmp0(value, "servo_v"))
-                config->cuav_control_config.real_device_test_item = 2;
-            else if (!g_strcmp0(value, "visible_focal"))
-                config->cuav_control_config.real_device_test_item = 3;
-            else if (!g_strcmp0(value, "infrared_focal"))
-                config->cuav_control_config.real_device_test_item = 4;
-            else
-            {
-                NVGSTDS_ERR_MSG_V("Unknown value '%s' for group [%s]", value, group);
-                g_free(value);
-                goto done;
-            }
-            g_free(value);
-        }
-        else if (!g_strcmp0(*key, "real-device-test-command-interval-ms"))
-        {
-            config->cuav_control_config.real_device_test_command_interval_ms =
-                g_key_file_get_integer(key_file, group, "real-device-test-command-interval-ms", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "real-device-test-observe-timeout-ms"))
-        {
-            config->cuav_control_config.real_device_test_observe_timeout_ms =
-                g_key_file_get_integer(key_file, group, "real-device-test-observe-timeout-ms", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "real-device-test-settle-ms"))
-        {
-            config->cuav_control_config.real_device_test_settle_ms =
-                g_key_file_get_integer(key_file, group, "real-device-test-settle-ms", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "real-device-test-repeat-count"))
-        {
-            config->cuav_control_config.real_device_test_repeat_count =
-                g_key_file_get_integer(key_file, group, "real-device-test-repeat-count", &error);
             CHECK_ERROR(error);
         }
         else if (!g_strcmp0(*key, "servo-effect-threshold-h"))

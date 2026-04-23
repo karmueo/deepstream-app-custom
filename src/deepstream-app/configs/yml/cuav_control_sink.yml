@@ -1,17 +1,18 @@
 # -----------------------------------------------------------------------------
 # C-UAV 控制发送独立配置
-# 风险说明：默认使用测试组播地址。若改为真实设备地址并打开真实测试开关，会真实驱动云台和焦距。
-# 回滚方式：恢复测试组播地址/端口，或将 real-device-test-enable 改回 0。
+# 风险说明：默认使用真实设备地址。若误改为其他设备地址并打开测试开关，会真实驱动云台和焦距。
+# 回滚方式：恢复真实设备地址/端口，或将测试开关改回 0。
 # -----------------------------------------------------------------------------
 cuav-control:
   # 控制报文发送目标的组播 IP 地址。
-  # 当前值指向真实设备测试地址；联调时如需避免触发真实设备，可改为隔离测试组播地址。
-  multicast-ip: 239.255.88.51
-  # 示例隔离测试地址：239.255.88.51
+  # 真实设备控制地址。
+  # 设备接收控制报文：230.1.88.51:8003
+  multicast-ip: 230.1.88.51
+  # 如需隔离联调，可临时切换到其他测试组播地址。
   # 控制报文发送端口。
-  # 必须与接收端设备或测试接收器监听端口一致。
-  port: 18003
-  # 示例隔离测试端口：18003
+  # 真实设备控制端口：8003
+  port: 8003
+  # 如需隔离联调，可临时切换到其他测试端口。
   # 发送报文使用的网卡名称。
   # 多网卡环境下建议显式指定，避免报文从错误接口发出。
   interface: eno1
@@ -23,7 +24,7 @@ cuav-control:
   compat-cmd-wrapper: 0
   # 是否打印控制发送调试日志。
   # 开启后会输出每次发出的控制信息，便于联调但日志会明显增多。
-  debug: 0
+  debug: 1
   # 是否打印上游 gst-udpjsonmeta 中转下来的状态报文。
   # 开启后便于确认设备反馈是否进入自动控制闭环。
   print-upstream-state: 1
@@ -35,7 +36,7 @@ cuav-control:
   auto-track-enable: 1
   # 当前无目标时是否启用仿真目标。
   # 1 时即使没有真实检测目标，也会构造一个模拟目标继续驱动控制闭环。
-  simulate-target-enable: 1
+  simulate-target-enable: 0
   # 自动控制使用的视频源 source_id。
   # 多路视频输入时，控制逻辑只会读取该路视频的检测/跟踪结果。
   control-source-id: 0
@@ -137,26 +138,6 @@ cuav-control:
   simulate-target-ratio-max: 0.36
   # 仿真目标完整运动周期，单位毫秒。
   simulate-target-period-ms: 6000
-  # 真实设备单项控制测试。风险：开启后会真实驱动云台和焦距。
-  # 回滚：将 real-device-test-enable 设回 0，并恢复测试组播地址。
-  real-device-test-enable: 0
-  # 是否只执行变焦测试。
-  # 0=按 real-device-test-item 或默认全项执行。
-  # 1=如果只开可见光则只测 visible_focal；只开红外则只测 infrared_focal；两者都开则顺序测试两路焦距。
-  real-device-test-zoom-only-enable: 1
-  # 真实设备测试项选择。
-  # 可选值：all / servo_h / servo_v / visible_focal / infrared_focal。
-  # 当 real-device-test-zoom-only-enable=1 时，该项会被覆盖为按已启用的成像链路只测焦距。
-  real-device-test-item: visible_focal
-  # 真实设备测试模式下，两次发送测试命令之间的最小间隔，单位毫秒。
-  real-device-test-command-interval-ms: 1200
-  # 真实设备测试模式下，观察设备反馈是否生效的超时时间，单位毫秒。
-  real-device-test-observe-timeout-ms: 2500
-  # 每个测试动作结束后的稳定等待时间，单位毫秒。
-  real-device-test-settle-ms: 1000
-  # 每个测试项的重复次数。
-  # 次数越高统计更稳，但测试整体耗时会更长。
-  real-device-test-repeat-count: 5
   # 判定水平伺服动作“确实生效”的最小变化阈值，单位度。
   servo-effect-threshold-h: 0.5
   # 判定垂直伺服动作“确实生效”的最小变化阈值，单位度。
@@ -169,6 +150,33 @@ cuav-control:
   # 设备状态报文的新鲜度超时，单位毫秒。
   # 超过该时间未收到新状态时，会认为反馈过期。
   state-stale-timeout-ms: 2000
+  # 是否启用“四角伺服 + 拉近/拉远焦距”循环序列。
+  # 0=关闭，1=开启。
+  # 开启后会优先于 auto-track。
+  corner-zoom-cycle-enable: 1
+  # 单轮四角循环次数。
+  corner-cycle-count: 2
+  # 整套“四角 + 变焦”流程重复次数。
+  sequence-repeat-count: 3
+  # 四角相对当前中心位置的水平偏移量，单位度。
+  corner-offset-h-deg: 15.0
+  # 四角相对当前中心位置的垂直偏移量，单位度。
+  corner-offset-v-deg: 10.0
+  # 每个角点停留时间，单位毫秒。
+  corner-dwell-ms: 1000
+  # 四角循环使用的伺服速度。
+  corner-servo-speed: 30
+  # 拉进焦距持续时间，单位毫秒。
+  zoom-in-duration-ms: 1000
+  # 拉远焦距持续时间，单位毫秒。
+  zoom-out-duration-ms: 1000
+  # 可选：程序启动和每轮回位的初始伺服位置；不配置则默认使用首个有效反馈位置。
+  corner-home-loc-h-deg: 54.0
+  corner-home-loc-v-deg: -1.0
+  # 可选：程序启动和每轮回位时的可见光焦距预置位；不配置则不下发 pt_focal 预置报文。
+  corner-home-pt-focal: 50.0
+  # 可选：程序启动和每轮回位时的可见光聚焦预置位；不配置则不下发 pt_focus 预置报文。
+  corner-home-pt-focus: 100
   # 公共报文头中的发送方系统 ID。
   tx-sys-id: 999
   # 公共报文头中的发送方设备类型。
