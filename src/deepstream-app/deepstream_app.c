@@ -1546,6 +1546,7 @@ process_cuav_corner_zoom_cycle(AppCtx *appCtx,
     gboolean home_visible_preset_valid = FALSE;
     gboolean home_visible_focal_valid = FALSE;
     gboolean home_visible_focus_valid = FALSE;
+    gboolean home_loc_configured = FALSE;
     gdouble home_visible_focal = 500.0;
     guint home_visible_focus = 100;
     guint min_gap_ms = 1;
@@ -1577,6 +1578,8 @@ process_cuav_corner_zoom_cycle(AppCtx *appCtx,
                                           control_config->state_stale_timeout_ms)) * 1000;
     home_visible_focal_valid = !isnan(control_config->corner_home_pt_focal);
     home_visible_focus_valid = control_config->corner_home_pt_focus != G_MAXUINT;
+    home_loc_configured = !isnan(control_config->corner_home_loc_h_deg) &&
+                          !isnan(control_config->corner_home_loc_v_deg);
     home_visible_preset_valid = visible_enabled &&
                                 (home_visible_focal_valid || home_visible_focus_valid);
     if (home_visible_focal_valid)
@@ -1750,7 +1753,20 @@ process_cuav_corner_zoom_cycle(AppCtx *appCtx,
                                                                           &state_snapshot,
                                                                           control_config))
         {
-            g_print("[cuav][corner-zoom][warn] home settle timeout, continue to next stage\n");
+            if (home_loc_configured)
+                g_print("[cuav][corner-zoom][warn] home settle timeout at preset, continue to next stage\n");
+            else
+                g_print("[cuav][corner-zoom][warn] home settle timeout, continue to next stage\n");
+        }
+
+        if (state_snapshot.return_home_before_zoom)
+        {
+            g_mutex_lock(&appCtx->cuav_control_lock);
+            appCtx->cuav_corner_zoom_cycle_state.phase = CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_HOME_SERVO;
+            appCtx->cuav_corner_zoom_cycle_state.phase_started_us = now_us;
+            appCtx->cuav_corner_zoom_cycle_state.last_command_sent_us = now_us;
+            g_mutex_unlock(&appCtx->cuav_control_lock);
+            return TRUE;
         }
 
         g_mutex_lock(&appCtx->cuav_control_lock);
@@ -1816,11 +1832,7 @@ process_cuav_corner_zoom_cycle(AppCtx *appCtx,
             appCtx->cuav_corner_zoom_cycle_state.last_command_sent_us = now_us;
             appCtx->cuav_corner_zoom_cycle_state.phase_started_us = now_us;
             appCtx->cuav_corner_zoom_cycle_state.phase =
-                state_snapshot.return_home_before_zoom ?
-                    CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_ZOOM_IN :
-                    (state_snapshot.resume_cycle_after_home ?
-                        CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_CORNER :
-                        CUAV_CORNER_ZOOM_CYCLE_PHASE_COMPLETE);
+                CUAV_CORNER_ZOOM_CYCLE_PHASE_HOLD_HOME_VISIBLE_PRESET;
             g_mutex_unlock(&appCtx->cuav_control_lock);
 
             if (control_config->debug)
@@ -1835,6 +1847,21 @@ process_cuav_corner_zoom_cycle(AppCtx *appCtx,
                         home_visible_focus);
             }
         }
+        return TRUE;
+
+    case CUAV_CORNER_ZOOM_CYCLE_PHASE_HOLD_HOME_VISIBLE_PRESET:
+        if ((now_us - state_snapshot.phase_started_us) < home_settle_timeout_us)
+            return TRUE;
+
+        g_mutex_lock(&appCtx->cuav_control_lock);
+        appCtx->cuav_corner_zoom_cycle_state.phase =
+            state_snapshot.return_home_before_zoom ?
+                CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_ZOOM_IN :
+                (state_snapshot.resume_cycle_after_home ?
+                    CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_CORNER :
+                    CUAV_CORNER_ZOOM_CYCLE_PHASE_COMPLETE);
+        appCtx->cuav_corner_zoom_cycle_state.phase_started_us = now_us;
+        g_mutex_unlock(&appCtx->cuav_control_lock);
         return TRUE;
 
     case CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_CORNER:
@@ -1983,6 +2010,15 @@ process_cuav_corner_zoom_cycle(AppCtx *appCtx,
             (now_us - state_snapshot.last_command_sent_us) < min_gap_us)
             return TRUE;
 
+        /* 新的绝对焦距方式保留在这里，后续需要切回时直接恢复：
+         * sent = send_cuav_visible_light_command_with_en(appCtx,
+         *                                                1,
+         *                                                100.0,
+         *                                                0,
+         *                                                visible_focus,
+         *                                                2,
+         *                                                0);
+         */
         sent = send_cuav_visible_light_command_with_en(appCtx,
                                                        3,
                                                        visible_focal_cmd,
@@ -2045,6 +2081,15 @@ process_cuav_corner_zoom_cycle(AppCtx *appCtx,
             (now_us - state_snapshot.last_command_sent_us) < min_gap_us)
             return TRUE;
 
+        /* 新的绝对焦距方式保留在这里，后续需要切回时直接恢复：
+         * sent = send_cuav_visible_light_command_with_en(appCtx,
+         *                                                1,
+         *                                                19.0,
+         *                                                0,
+         *                                                visible_focus,
+         *                                                2,
+         *                                                0);
+         */
         sent = send_cuav_visible_light_command_with_en(appCtx,
                                                        4,
                                                        visible_focal_cmd,

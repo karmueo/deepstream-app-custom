@@ -155,9 +155,9 @@ cuav-control:
   # 开启后会优先于 auto-track。
   corner-zoom-cycle-enable: 1
   # 单轮四角循环次数。
-  corner-cycle-count: 2
+  corner-cycle-count: 1
   # 整套“四角 + 变焦”流程重复次数。
-  sequence-repeat-count: 3
+  sequence-repeat-count: 1
   # 四角相对当前中心位置的水平偏移量，单位度。
   corner-offset-h-deg: 15.0
   # 四角相对当前中心位置的垂直偏移量，单位度。
@@ -172,9 +172,9 @@ cuav-control:
   zoom-out-duration-ms: 1000
   # 可选：程序启动和每轮回位的初始伺服位置；不配置则默认使用首个有效反馈位置。
   corner-home-loc-h-deg: 54.0
-  corner-home-loc-v-deg: -1.0
+  corner-home-loc-v-deg: 3.0
   # 可选：程序启动和每轮回位时的可见光焦距预置位；不配置则不下发 pt_focal 预置报文。
-  corner-home-pt-focal: 50.0
+  corner-home-pt-focal: 40.0
   # 可选：程序启动和每轮回位时的可见光聚焦预置位；不配置则不下发 pt_focus 预置报文。
   corner-home-pt-focus: 100
   # 公共报文头中的发送方系统 ID。
