@@ -287,6 +287,7 @@ typedef struct
     guint control_source_id;
     guint64 locked_object_id;
     gint64 last_target_seen_us;
+    gint64 target_stable_since_us;
     gint64 last_servo_send_us;
     gint64 last_visible_send_us;
     gint64 last_infrared_send_us;
@@ -301,6 +302,8 @@ typedef struct
     guint last_pt_focus;
     gboolean visible_initialized;
     gboolean lost_zoom_active;
+    gint64 lost_zoom_start_us;
+    gboolean lost_zoom_hold_complete;
     gboolean last_infrared_valid;
     gdouble last_ir_focal;
     guint last_ir_focus;

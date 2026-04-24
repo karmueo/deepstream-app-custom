@@ -24,10 +24,10 @@ cuav-control:
   compat-cmd-wrapper: 0
   # 是否打印控制发送调试日志。
   # 开启后会输出每次发出的控制信息，便于联调但日志会明显增多。
-  debug: 1
+  debug: 0
   # 是否打印上游 gst-udpjsonmeta 中转下来的状态报文。
   # 开启后便于确认设备反馈是否进入自动控制闭环。
-  print-upstream-state: 1
+  print-upstream-state: 0
   # pipeline 启动后是否立即发送固定测试报文。
   # 仅用于快速联通性验证；启用自动跟随或真实设备测试时通常建议关闭。
   send-test-on-startup: 0
@@ -42,7 +42,7 @@ cuav-control:
   control-source-id: 0
   # 自动控制最小发送周期，单位毫秒。
   # 值越小控制越频繁，但更容易造成云台/镜头抖动和日志增加。
-  control-period-ms: 80
+  control-period-ms: 120
   # 目标丢失后的保持时间，单位毫秒。
   # 在该时间窗口内会保持最近一次锁定状态，超过后才清空自动控制状态。
   target-lost-hold-ms: 1000
@@ -51,20 +51,20 @@ cuav-control:
   tracking-history-size: 5
   # 水平中心死区，归一化到 [-1, 1]。
   # 目标误差落在该范围内时，水平伺服不会主动修正。
-  center-deadband-x: 0.01
+  center-deadband-x: 0.05
   # 垂直中心死区，归一化到 [-1, 1]。
   # 目标误差落在该范围内时，垂直伺服不会主动修正。
-  center-deadband-y: 0.01
+  center-deadband-y: 0.05
   # 水平伺服位置误差比例增益。
   # 越大表示对目标水平偏差越敏感，过大可能导致摆动。
-  servo-kp-x: 3
+  servo-kp-x: 1.2
   # 垂直伺服位置误差比例增益。
-  servo-kp-y: 3
+  servo-kp-y: 1.2
   # 水平伺服速度前馈增益。
   # 目标移动较快时用于提前补偿。
-  servo-kv-x: 0.35
+  servo-kv-x: 0.1
   # 垂直伺服速度前馈增益。
-  servo-kv-y: 0.35
+  servo-kv-y: 0.1
   # 水平伺服方向。
   # 1 表示目标向右偏时按正方向修正，-1 表示方向相反。
   servo-dir-x: 1
@@ -73,28 +73,28 @@ cuav-control:
   servo-dir-y: -1
   # 单次水平伺服位置最大调整量，单位度。
   # 用于限制单次动作幅度，防止大步长造成冲击。
-  servo-max-step-h: 3
+  servo-max-step-h: 0.8
   # 单次垂直伺服位置最大调整量，单位度。
-  servo-max-step-v: 2
+  servo-max-step-v: 0.5
   # 是否按可见光焦距自适应降低伺服灵敏度。
   # 焦距越大视场角越小，开启后会自动减小单次伺服步长和速度，降低目标被甩出画面的概率。
   servo-focal-adaptive-enable: 1
   # 最大焦距时的伺服步长缩放下限。
-  # 0.25 表示焦距接近 pt-focal-max 时，servo-max-step-h/v 最多缩到原来的 25%。
+  # 表示焦距接近 pt-focal-max 时，servo-max-step-h/v 最多缩到原来的多少比例
   servo-focal-max-step-scale-min: 0.15
   # 最大焦距时的伺服速度缩放下限。
-  # 0.50 表示焦距接近 pt-focal-max 时，伺服速度增量最多缩到原来的 50%。
+  # 表示焦距接近 pt-focal-max 时，伺服速度增量最多缩到原来的比例
   servo-focal-speed-scale-min: 0.30
   # 伺服控制允许使用的最小速度。
-  servo-min-speed: 10
+  servo-min-speed: 5
   # 伺服控制允许使用的最大速度。
-  servo-max-speed: 100
+  servo-max-speed: 40
   # 自动变焦目标区间下限。
   # 目标框高度占画面高度低于该值时，会尝试放大。
-  zoom-target-ratio-min: 0.015
+  zoom-target-ratio-min: 0.019
   # 自动变焦目标区间上限。
   # 目标框高度占画面高度高于该值时，会尝试缩小。
-  zoom-target-ratio-max: 0.03
+  zoom-target-ratio-max: 0.04
   # 变焦死区。
   # 在目标占比接近上下限时留出缓冲，减少镜头来回抽动。
   zoom-deadband: 0.001
@@ -106,7 +106,7 @@ cuav-control:
   zoom-max-step: 400.0
   # 自动可见光变焦命令保持时间，单位毫秒。
   # 发送 pt_focal_en 后，超过该时间会强制补发 pt_focal_en=0 停止连续变焦。
-  visible-focal-hold-ms: 200
+  visible-focal-hold-ms: 500
   # 是否发送可见光控制报文。
   # 1 时自动控制/测试链路会发送 0x7205；0 时不发送可见光控制。
   visible-light-control-enable: 1
@@ -187,7 +187,7 @@ cuav-control:
   corner-home-loc-v-deg: 4.0
   # 可选：程序启动时先下发 pt_focal_en=4，把可见光焦距调到最小；随后按保持时间再下发 pt_focal_en=0 停止。
   # 0=关闭，1=开启。
-  startup-pt-focal-min-enable: 1
+  startup-pt-focal-min-enable: 0
   # 上述最小焦距命令保持时间，单位毫秒。
   # 默认 3000，即 3 秒。
   startup-pt-focal-min-hold-ms: 10000

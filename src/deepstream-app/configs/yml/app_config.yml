@@ -105,6 +105,8 @@ videorecognition:
   sampling-rate: 5
   # 推理刷新间隔（每隔多少帧执行一次推理，0=使用sampling-rate）
   infer-interval: 25
+  # 类别锁定延迟（秒）：同一跟踪目标持续指定秒数后类别不再变化，0=禁用
+  class-lock-after-sec: 10
   # TensorRT引擎文件路径
   trt-engine-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/gst-videorecognition/models/x3d.engine
   # 分类标签文件路径

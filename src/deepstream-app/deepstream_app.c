@@ -950,7 +950,10 @@ cuav_reset_auto_control_state(CuavAutoControlState *state, gboolean keep_last_co
     state->has_lock = FALSE;
     state->locked_object_id = 0;
     state->last_target_seen_us = 0;
-    state->visible_initialized = FALSE;
+    state->target_stable_since_us = 0;
+    state->lost_zoom_active = FALSE;
+    state->lost_zoom_start_us = 0;
+    state->lost_zoom_hold_complete = FALSE;
     state->history_len = 0;
     state->history_next = 0;
     memset(state->history, 0, sizeof(state->history));
@@ -960,7 +963,7 @@ cuav_reset_auto_control_state(CuavAutoControlState *state, gboolean keep_last_co
         state->last_servo_valid = FALSE;
         state->last_visible_valid = FALSE;
         state->last_pt_focal_en = 0;
-        state->lost_zoom_active = FALSE;
+        state->visible_initialized = FALSE;
         state->last_loc_h = 180.0;
         state->last_loc_v = 0.0;
         state->last_speed_h = 0;
@@ -1263,6 +1266,7 @@ cuav_compute_visible_light_command(const NvDsCuavControlConfig *control_config,
                                    guint *pt_focus)
 {
     guint focal_en = 0;
+    gint64 zoom_in_stable_us = 0;
 
     if (!control_config || !auto_state || !sample || !pt_focal_en || !pt_focal || !pt_focus)
         return FALSE;
@@ -1282,6 +1286,15 @@ cuav_compute_visible_light_command(const NvDsCuavControlConfig *control_config,
     if (sample->target_ratio < (control_config->zoom_target_ratio_min - control_config->zoom_deadband))
     {
         focal_en = 3;
+        zoom_in_stable_us =
+            ((gint64)MAX(control_config->visible_focal_hold_ms,
+                         control_config->control_period_ms *
+                            MAX(control_config->tracking_history_size, 1U))) * 1000;
+        if (auto_state->target_stable_since_us <= 0 ||
+            sample->sample_time_us - auto_state->target_stable_since_us < zoom_in_stable_us)
+        {
+            focal_en = 0;
+        }
     }
     else if (sample->target_ratio > (control_config->zoom_target_ratio_max + control_config->zoom_deadband))
     {
@@ -1564,6 +1577,7 @@ send_cuav_visible_light_command_with_en(AppCtx *appCtx,
 {
     GstStructure *payload = NULL;
     gboolean result = FALSE;
+    guint effective_pt_focus_mode = pt_focal_en == 0 ? 0 : pt_focus_mode;
 
     payload = gst_structure_new("cuav-visible-light-control",
                                 "pt-dev-en", G_TYPE_INT, 1,
@@ -1583,7 +1597,7 @@ send_cuav_visible_light_command_with_en(AppCtx *appCtx,
                                 "pt-ctrs", G_TYPE_INT, 0,
                                 "pt-ofr-en", G_TYPE_INT, 0,
                                 "pt-ofr", G_TYPE_INT, 0,
-                                "pt-focus-mode", G_TYPE_INT, (gint)pt_focus_mode,
+                                "pt-focus-mode", G_TYPE_INT, (gint)effective_pt_focus_mode,
                                 "pt-zoom", G_TYPE_INT, (gint)pt_zoom,
                                 NULL);
 
@@ -2634,6 +2648,8 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
     guint64 locked_object_id = 0;
     gint64 now_us = 0;
     gint64 hold_deadline_us = 0;
+    gint64 lost_zoom_hold_us = 0;
+    gint64 lost_zoom_elapsed_us = 0;
     gboolean startup_preset_required = FALSE;
     CuavTrackSample sample;
     CuavFeedbackState feedback_snapshot;
@@ -2648,6 +2664,7 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
     gboolean motion_cmd_sent = FALSE;
     gboolean had_tracking_before_reset = FALSE;
     gboolean lost_zoom_active = FALSE;
+    gboolean lost_zoom_stop_due = FALSE;
     gdouble loc_h = 0.0;
     gdouble loc_v = 0.0;
     guint speed_h = 0;
@@ -2790,8 +2807,21 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
                 cuav_reset_auto_control_state(&appCtx->cuav_auto_control_state, TRUE);
                 appCtx->cuav_auto_control_state.has_lock = TRUE;
                 appCtx->cuav_auto_control_state.locked_object_id = sample.object_id;
+                appCtx->cuav_auto_control_state.target_stable_since_us = now_us;
+            }
+            else if (appCtx->cuav_auto_control_state.last_target_seen_us <= 0 ||
+                     (now_us - appCtx->cuav_auto_control_state.last_target_seen_us) >
+                        ((gint64)MAX(control_config->control_period_ms * 2U, 1U) * 1000))
+            {
+                appCtx->cuav_auto_control_state.target_stable_since_us = now_us;
+            }
+            else if (appCtx->cuav_auto_control_state.target_stable_since_us <= 0)
+            {
+                appCtx->cuav_auto_control_state.target_stable_since_us = now_us;
             }
             appCtx->cuav_auto_control_state.last_target_seen_us = now_us;
+            appCtx->cuav_auto_control_state.lost_zoom_start_us = 0;
+            appCtx->cuav_auto_control_state.lost_zoom_hold_complete = FALSE;
             cuav_push_track_sample(&appCtx->cuav_auto_control_state,
                                    control_config->tracking_history_size,
                                    &sample);
@@ -3002,18 +3032,73 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
         state_snapshot = appCtx->cuav_auto_control_state;
         g_mutex_unlock(&appCtx->cuav_control_lock);
 
-        lost_zoom_active = had_tracking_before_reset ||
-                           state_snapshot.lost_zoom_active;
+        lost_zoom_hold_us =
+            ((gint64)control_config->startup_pt_focal_min_hold_ms) * 1000;
+        lost_zoom_active = !state_snapshot.lost_zoom_hold_complete &&
+                           lost_zoom_hold_us > 0 &&
+                           (had_tracking_before_reset ||
+                            state_snapshot.lost_zoom_active ||
+                            !state_snapshot.has_lock);
+        if (state_snapshot.lost_zoom_start_us > 0)
+        {
+            lost_zoom_elapsed_us = now_us - state_snapshot.lost_zoom_start_us;
+            lost_zoom_stop_due = lost_zoom_elapsed_us >= lost_zoom_hold_us;
+        }
         if (cuav_visible_control_enabled(control_config) && lost_zoom_active)
         {
             motion_spacing_ok = (state_snapshot.last_motion_send_us <= 0) ||
                 ((now_us - state_snapshot.last_motion_send_us) >=
                  CUAV_MOTION_CMD_MIN_SPACING_USEC);
-            if ((state_snapshot.last_pt_focal_en != 4 ||
-                 state_snapshot.last_visible_send_us <= 0 ||
-                 (now_us - state_snapshot.last_visible_send_us) >=
-                    ((gint64)MAX(control_config->control_period_ms, 1U) * 1000)) &&
-                motion_spacing_ok)
+            if (lost_zoom_stop_due)
+            {
+                if (state_snapshot.last_pt_focal_en == 4 && motion_spacing_ok)
+                {
+                    visible_sent = send_cuav_visible_light_command_with_en(appCtx,
+                                                                            0,
+                                                                            0.0,
+                                                                            0,
+                                                                            0,
+                                                                            0,
+                                                                            0);
+                    if (visible_sent)
+                    {
+                        g_mutex_lock(&appCtx->cuav_control_lock);
+                        appCtx->cuav_auto_control_state.last_visible_valid = TRUE;
+                        appCtx->cuav_auto_control_state.last_pt_focal_en = 0;
+                        appCtx->cuav_auto_control_state.last_pt_focal = 0.0;
+                        appCtx->cuav_auto_control_state.last_pt_focus = 0;
+                        appCtx->cuav_auto_control_state.lost_zoom_active = FALSE;
+                        appCtx->cuav_auto_control_state.lost_zoom_hold_complete = TRUE;
+                        appCtx->cuav_auto_control_state.last_visible_send_us = now_us;
+                        appCtx->cuav_auto_control_state.visible_initialized = TRUE;
+                        appCtx->cuav_auto_control_state.last_motion_send_us = now_us;
+                        appCtx->cuav_auto_control_state.last_motion_type = CUAV_MOTION_CMD_VISIBLE;
+                        g_mutex_unlock(&appCtx->cuav_control_lock);
+
+                        if (debug_enabled)
+                        {
+                            g_print("[cuav][control][lost] stop zoom-out after %u ms without target\n",
+                                    control_config->startup_pt_focal_min_hold_ms);
+                        }
+                    }
+                }
+                else if (state_snapshot.last_pt_focal_en != 4)
+                {
+                    g_mutex_lock(&appCtx->cuav_control_lock);
+                    appCtx->cuav_auto_control_state.lost_zoom_active = FALSE;
+                    appCtx->cuav_auto_control_state.lost_zoom_hold_complete = TRUE;
+                    g_mutex_unlock(&appCtx->cuav_control_lock);
+                }
+                else if (debug_enabled && !motion_spacing_ok)
+                {
+                    g_print("[cuav][control][lost] zoom-out stop blocked by 70ms spacing\n");
+                }
+            }
+            else if ((state_snapshot.last_pt_focal_en != 4 ||
+                      state_snapshot.last_visible_send_us <= 0 ||
+                      (now_us - state_snapshot.last_visible_send_us) >=
+                        ((gint64)MAX(control_config->control_period_ms, 1U) * 1000)) &&
+                     motion_spacing_ok)
             {
                 visible_sent = send_cuav_visible_light_command_with_en(appCtx,
                                                                         4,
@@ -3030,6 +3115,9 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
                     appCtx->cuav_auto_control_state.last_pt_focal = 0.0;
                     appCtx->cuav_auto_control_state.last_pt_focus = 0;
                     appCtx->cuav_auto_control_state.lost_zoom_active = TRUE;
+                    if (appCtx->cuav_auto_control_state.lost_zoom_start_us <= 0)
+                        appCtx->cuav_auto_control_state.lost_zoom_start_us = now_us;
+                    appCtx->cuav_auto_control_state.lost_zoom_hold_complete = FALSE;
                     appCtx->cuav_auto_control_state.last_visible_send_us = now_us;
                     appCtx->cuav_auto_control_state.visible_initialized = TRUE;
                     appCtx->cuav_auto_control_state.last_motion_send_us = now_us;
@@ -3038,7 +3126,10 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
 
                     if (debug_enabled)
                     {
-                        g_print("[cuav][control][lost] target lost, zoom out focal_en=4\n");
+                        g_print("[cuav][control][lost] no target, zoom out focal_en=4 elapsed=%" G_GINT64_FORMAT "/%" G_GINT64_FORMAT " us\n",
+                                state_snapshot.lost_zoom_start_us > 0 ?
+                                    lost_zoom_elapsed_us : 0,
+                                lost_zoom_hold_us);
                     }
                 }
             }
@@ -3104,8 +3195,21 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
         cuav_reset_auto_control_state(&appCtx->cuav_auto_control_state, TRUE);
         appCtx->cuav_auto_control_state.has_lock = TRUE;
         appCtx->cuav_auto_control_state.locked_object_id = sample.object_id;
+        appCtx->cuav_auto_control_state.target_stable_since_us = now_us;
+    }
+    else if (appCtx->cuav_auto_control_state.last_target_seen_us <= 0 ||
+             (now_us - appCtx->cuav_auto_control_state.last_target_seen_us) >
+                ((gint64)MAX(control_config->control_period_ms * 2U, 1U) * 1000))
+    {
+        appCtx->cuav_auto_control_state.target_stable_since_us = now_us;
+    }
+    else if (appCtx->cuav_auto_control_state.target_stable_since_us <= 0)
+    {
+        appCtx->cuav_auto_control_state.target_stable_since_us = now_us;
     }
     appCtx->cuav_auto_control_state.last_target_seen_us = now_us;
+    appCtx->cuav_auto_control_state.lost_zoom_start_us = 0;
+    appCtx->cuav_auto_control_state.lost_zoom_hold_complete = FALSE;
     cuav_push_track_sample(&appCtx->cuav_auto_control_state,
                            control_config->tracking_history_size,
                            &sample);
@@ -3131,6 +3235,8 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
             appCtx->cuav_auto_control_state.last_pt_focal = 0.0;
             appCtx->cuav_auto_control_state.last_pt_focus = 0;
             appCtx->cuav_auto_control_state.lost_zoom_active = FALSE;
+            appCtx->cuav_auto_control_state.lost_zoom_start_us = 0;
+            appCtx->cuav_auto_control_state.lost_zoom_hold_complete = FALSE;
             appCtx->cuav_auto_control_state.last_visible_send_us = now_us;
             appCtx->cuav_auto_control_state.visible_initialized = TRUE;
             appCtx->cuav_auto_control_state.last_motion_send_us = now_us;
@@ -3362,13 +3468,16 @@ static void on_cuav_guidance(const CUAVCommonHeader *header,
     if (!header || !guidance)
         return;
 
-    g_print("[cuav][guidance] msg_sn=%u time=%u-%02u-%02u %02u:%02u:%02u.%.0f "
-            "tar_id=%u cat=%u stat=%u enu_a=%.2f enu_e=%.2f lon=%.6f lat=%.6f alt=%.2f\n",
-            header->msg_sn,
-            guidance->yr, guidance->mo, guidance->dy,
-            guidance->h, guidance->min, guidance->sec, guidance->msec,
-            guidance->tar_id, guidance->tar_category, guidance->guid_stat,
-            guidance->enu_a, guidance->enu_e, guidance->lon, guidance->lat, guidance->alt);
+    if (appCtx && appCtx->config.udpjsonmeta_config.enable_cuav_debug)
+    {
+        g_print("[cuav][guidance] msg_sn=%u time=%u-%02u-%02u %02u:%02u:%02u.%.0f "
+                "tar_id=%u cat=%u stat=%u enu_a=%.2f enu_e=%.2f lon=%.6f lat=%.6f alt=%.2f\n",
+                header->msg_sn,
+                guidance->yr, guidance->mo, guidance->dy,
+                guidance->h, guidance->min, guidance->sec, guidance->msec,
+                guidance->tar_id, guidance->tar_category, guidance->guid_stat,
+                guidance->enu_a, guidance->enu_e, guidance->lon, guidance->lat, guidance->alt);
+    }
 
     g_snprintf(line, sizeof(line),
                "[cuav][guidance] msg_id=0x%04X msg_sn=%u msg_type=%u tar_id=%u cat=%u stat=%u "
@@ -3412,12 +3521,15 @@ static void on_cuav_eo_system(const CUAVCommonHeader *header,
     if (!header || !eo_param)
         return;
 
-    g_print("[cuav][eo-system] msg_sn=%u sv_stat=%u st_loc_h=%.2f st_loc_v=%.2f "
-            "pt_focal=%.1f ir_focal=%.1f trk_dev=%u trk_stat=%u\n",
-            header->msg_sn,
-            eo_param->sv_stat, eo_param->st_loc_h, eo_param->st_loc_v,
-            eo_param->pt_focal, eo_param->ir_focal,
-            eo_param->trk_dev, eo_param->trk_stat);
+    if (appCtx && appCtx->config.udpjsonmeta_config.enable_cuav_debug)
+    {
+        g_print("[cuav][eo-system] msg_sn=%u sv_stat=%u st_loc_h=%.2f st_loc_v=%.2f "
+                "pt_focal=%.1f ir_focal=%.1f trk_dev=%u trk_stat=%u\n",
+                header->msg_sn,
+                eo_param->sv_stat, eo_param->st_loc_h, eo_param->st_loc_v,
+                eo_param->pt_focal, eo_param->ir_focal,
+                eo_param->trk_dev, eo_param->trk_stat);
+    }
 
     g_snprintf(line, sizeof(line),
                "[cuav][eo-system] msg_id=0x%04X msg_sn=%u msg_type=%u "
@@ -3488,11 +3600,14 @@ static void on_cuav_servo_control(const CUAVCommonHeader *header,
     if (!header || !servo)
         return;
 
-    g_print("[cuav][servo] msg_sn=%u dev_id=%u ctrl_en=%u mode_h=%u mode_v=%u "
-            "loc_h=%.2f loc_v=%.2f speed_h=%u speed_v=%u\n",
-            header->msg_sn, servo->dev_id, servo->ctrl_en,
-            servo->mode_h, servo->mode_v,
-            servo->loc_h, servo->loc_v, servo->speed_h, servo->speed_v);
+    if (appCtx && appCtx->config.udpjsonmeta_config.enable_cuav_debug)
+    {
+        g_print("[cuav][servo] msg_sn=%u dev_id=%u ctrl_en=%u mode_h=%u mode_v=%u "
+                "loc_h=%.2f loc_v=%.2f speed_h=%u speed_v=%u\n",
+                header->msg_sn, servo->dev_id, servo->ctrl_en,
+                servo->mode_h, servo->mode_v,
+                servo->loc_h, servo->loc_v, servo->speed_h, servo->speed_v);
+    }
 
     g_snprintf(line, sizeof(line),
                "[cuav][servo] msg_id=0x%04X msg_sn=%u msg_type=%u "

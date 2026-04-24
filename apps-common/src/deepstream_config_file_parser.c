@@ -1176,6 +1176,7 @@ parse_videorecognition(NvDsVideoRecognitionConfig *config, GKeyFile *key_file)
 
     // 默认值：0 = multi-frame image classification
     config->model_type = 0;
+    config->class_lock_after_sec = 0;
 
     keys = g_key_file_get_keys(key_file, CONFIG_GROUP_VIDEORECOGNITION, NULL, &error);
     CHECK_ERROR(error);
@@ -1249,6 +1250,13 @@ parse_videorecognition(NvDsVideoRecognitionConfig *config, GKeyFile *key_file)
             config->model_sampling_rate =
                 g_key_file_get_integer(key_file, CONFIG_GROUP_VIDEORECOGNITION,
                                        "sampling-rate", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "class-lock-after-sec"))
+        {
+            config->class_lock_after_sec =
+                g_key_file_get_integer(key_file, CONFIG_GROUP_VIDEORECOGNITION,
+                                       "class-lock-after-sec", &error);
             CHECK_ERROR(error);
         }
         else if (!g_strcmp0(*key, "trt-engine-file"))

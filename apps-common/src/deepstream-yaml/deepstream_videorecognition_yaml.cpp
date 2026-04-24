@@ -29,6 +29,7 @@ parse_videorecognition_yaml (NvDsVideoRecognitionConfig *config, gchar *cfg_file
   // 设置默认值
   config->model_type = 0;  // 0 = multi-frame image classification (default)
   config->enable = FALSE;
+  config->class_lock_after_sec = 0;
 
   for(YAML::const_iterator itr = configyml["videorecognition"].begin();
      itr != configyml["videorecognition"].end(); ++itr)
@@ -58,6 +59,8 @@ parse_videorecognition_yaml (NvDsVideoRecognitionConfig *config, gchar *cfg_file
       config->model_sampling_rate = itr->second.as<guint>();
     } else if (paramKey == "infer-interval") {
       config->infer_interval = itr->second.as<guint>();
+    } else if (paramKey == "class-lock-after-sec") {
+      config->class_lock_after_sec = itr->second.as<guint>();
     } else if (paramKey == "trt-engine-file") {
       std::string temp = itr->second.as<std::string>();
       char* str = (char*) malloc(sizeof(char) * 1024);
