@@ -76,7 +76,7 @@ property:
 class-attrs-all:
   # 聚类前置信度阈值（低于此值的检测框将被过滤）
   # 注：此参数已替代旧版 threshold 参数
-  pre-cluster-threshold: 0.5
+  pre-cluster-threshold: 0.45
 
   # 检测框最小宽度（像素），小于此值的框将被过滤
   # detected-min-w: 32

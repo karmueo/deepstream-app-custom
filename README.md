@@ -248,6 +248,8 @@ ls /opt/nvidia/deepstream/deepstream/sot_plugin/models/nanotrack_backbone_search
 | videorecognition | 视频识别模块配置（多帧动作/行为识别），详见配置文件注释 |
 | udpjsonmeta | UDP 组播json报文接收配置，注意不同机器/板子网卡名称需要根据实际情况修改 |
 
+如果你要看“真实检测目标进入后，云台伺服和光电如何自动跟踪”的完整运行说明，请参考 [docs/cuav-auto-track-runtime-guide.md](docs/cuav-auto-track-runtime-guide.md)。
+
 更多配置情参考[Deepstream 7.1 官方文档](https://docs.nvidia.com/metropolis/deepstream/7.1/text/DS_ref_app_deepstream.html)
 
 ### 4.2.1 视频源配置

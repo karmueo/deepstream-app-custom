@@ -1478,6 +1478,9 @@ parse_cuav_control(NvDsCuavControlConfig *config, GKeyFile *key_file)
     config->servo_dir_y = -1;
     config->servo_max_step_h = 1.5;
     config->servo_max_step_v = 1.0;
+    config->servo_focal_adaptive_enable = TRUE;
+    config->servo_focal_max_step_scale_min = 0.25;
+    config->servo_focal_speed_scale_min = 0.50;
     config->servo_min_speed = 10;
     config->servo_max_speed = 60;
     config->zoom_target_ratio_min = 0.20;
@@ -1485,6 +1488,7 @@ parse_cuav_control(NvDsCuavControlConfig *config, GKeyFile *key_file)
     config->zoom_deadband = 0.02;
     config->zoom_kp = 2500.0;
     config->zoom_max_step = 400.0;
+    config->visible_focal_hold_ms = 300;
     config->visible_light_control_enable = TRUE;
     config->infrared_control_enable = FALSE;
     config->servo_dev_id = 2;
@@ -1517,7 +1521,8 @@ parse_cuav_control(NvDsCuavControlConfig *config, GKeyFile *key_file)
     config->zoom_out_duration_ms = 1000;
     config->corner_home_loc_h_deg = NAN;
     config->corner_home_loc_v_deg = NAN;
-    config->corner_home_pt_focal = NAN;
+    config->startup_pt_focal_min_enable = FALSE;
+    config->startup_pt_focal_min_hold_ms = 3000;
     config->corner_home_pt_focus = G_MAXUINT;
 
     keys = g_key_file_get_keys(key_file, CONFIG_GROUP_CUAV_CONTROL, NULL, &error);
@@ -1684,6 +1689,21 @@ parse_cuav_control(NvDsCuavControlConfig *config, GKeyFile *key_file)
             config->servo_max_step_v = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, "servo-max-step-v", &error);
             CHECK_ERROR(error);
         }
+        else if (!g_strcmp0(*key, "servo-focal-adaptive-enable"))
+        {
+            config->servo_focal_adaptive_enable = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "servo-focal-adaptive-enable", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "servo-focal-max-step-scale-min"))
+        {
+            config->servo_focal_max_step_scale_min = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, "servo-focal-max-step-scale-min", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "servo-focal-speed-scale-min"))
+        {
+            config->servo_focal_speed_scale_min = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, "servo-focal-speed-scale-min", &error);
+            CHECK_ERROR(error);
+        }
         else if (!g_strcmp0(*key, "servo-min-speed"))
         {
             config->servo_min_speed = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "servo-min-speed", &error);
@@ -1717,6 +1737,11 @@ parse_cuav_control(NvDsCuavControlConfig *config, GKeyFile *key_file)
         else if (!g_strcmp0(*key, "zoom-max-step"))
         {
             config->zoom_max_step = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, "zoom-max-step", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "visible-focal-hold-ms"))
+        {
+            config->visible_focal_hold_ms = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "visible-focal-hold-ms", &error);
             CHECK_ERROR(error);
         }
         else if (!g_strcmp0(*key, "visible-light-control-enable"))
@@ -1881,9 +1906,14 @@ parse_cuav_control(NvDsCuavControlConfig *config, GKeyFile *key_file)
             config->corner_home_loc_v_deg = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, *key, &error);
             CHECK_ERROR(error);
         }
-        else if (!g_strcmp0(*key, "corner-home-pt-focal"))
+        else if (!g_strcmp0(*key, "startup-pt-focal-min-enable"))
         {
-            config->corner_home_pt_focal = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, "corner-home-pt-focal", &error);
+            config->startup_pt_focal_min_enable = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "startup-pt-focal-min-enable", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "startup-pt-focal-min-hold-ms"))
+        {
+            config->startup_pt_focal_min_hold_ms = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "startup-pt-focal-min-hold-ms", &error);
             CHECK_ERROR(error);
         }
         else if (!g_strcmp0(*key, "corner-home-pt-focus"))
@@ -2917,6 +2947,9 @@ parse_sink(NvDsSinkSubBinConfig *config, GKeyFile *key_file, gchar *group,
     config->cuav_control_config.servo_dir_y = -1;
     config->cuav_control_config.servo_max_step_h = 1.5;
     config->cuav_control_config.servo_max_step_v = 1.0;
+    config->cuav_control_config.servo_focal_adaptive_enable = TRUE;
+    config->cuav_control_config.servo_focal_max_step_scale_min = 0.25;
+    config->cuav_control_config.servo_focal_speed_scale_min = 0.50;
     config->cuav_control_config.servo_min_speed = 10;
     config->cuav_control_config.servo_max_speed = 60;
     config->cuav_control_config.zoom_target_ratio_min = 0.20;
@@ -3447,6 +3480,24 @@ parse_sink(NvDsSinkSubBinConfig *config, GKeyFile *key_file, gchar *group,
         {
             config->cuav_control_config.servo_max_speed =
                 g_key_file_get_integer(key_file, group, "servo-max-speed", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "servo-focal-adaptive-enable"))
+        {
+            config->cuav_control_config.servo_focal_adaptive_enable =
+                g_key_file_get_integer(key_file, group, "servo-focal-adaptive-enable", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "servo-focal-max-step-scale-min"))
+        {
+            config->cuav_control_config.servo_focal_max_step_scale_min =
+                g_key_file_get_double(key_file, group, "servo-focal-max-step-scale-min", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "servo-focal-speed-scale-min"))
+        {
+            config->cuav_control_config.servo_focal_speed_scale_min =
+                g_key_file_get_double(key_file, group, "servo-focal-speed-scale-min", &error);
             CHECK_ERROR(error);
         }
         else if (!g_strcmp0(*key, "zoom-target-ratio-min"))

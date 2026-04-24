@@ -150,6 +150,7 @@ sink4:
   zoom-deadband: 0.02
   zoom-kp: 2500.0
   zoom-max-step: 400.0
+  visible-focal-hold-ms: 300
   pt-focal-min: 134.0
   pt-focal-max: 16298.0
   simulate-target-amplitude-x: 0.35

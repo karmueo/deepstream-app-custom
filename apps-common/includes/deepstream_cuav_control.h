@@ -44,6 +44,9 @@ typedef struct
     gint servo_dir_y; /* 垂直控制方向，1 或 -1 */
     gdouble servo_max_step_h; /* 单次水平位置最大调整量（度） */
     gdouble servo_max_step_v; /* 单次垂直位置最大调整量（度） */
+    gboolean servo_focal_adaptive_enable; /* 是否按可见光焦距自适应降低伺服灵敏度 */
+    gdouble servo_focal_max_step_scale_min; /* 最大焦距时伺服步长缩放下限 */
+    gdouble servo_focal_speed_scale_min; /* 最大焦距时伺服速度缩放下限 */
     guint servo_min_speed; /* 伺服最小速度 */
     guint servo_max_speed; /* 伺服最大速度 */
     gdouble zoom_target_ratio_min; /* 目标高度占比下限 */
@@ -51,6 +54,7 @@ typedef struct
     gdouble zoom_deadband; /* 变倍死区 */
     gdouble zoom_kp; /* 焦距闭环增益 */
     gdouble zoom_max_step; /* 单次焦距最大调整量 */
+    guint visible_focal_hold_ms; /* 自动变焦命令保持时间（毫秒） */
     gboolean visible_light_control_enable; /* 是否发送可见光控制 */
     gboolean infrared_control_enable; /* 是否发送红外控制 */
     guint servo_dev_id; /* 伺服报文 dev_id，0=可见光 1=热成像 2=两者 */
@@ -83,7 +87,8 @@ typedef struct
     guint zoom_out_duration_ms; /* 拉远焦距持续时间（毫秒） */
     gdouble corner_home_loc_h_deg; /* 程序启动及每轮回位的水平位置（可选，NaN=使用首个有效反馈） */
     gdouble corner_home_loc_v_deg; /* 程序启动及每轮回位的垂直位置（可选，NaN=使用首个有效反馈） */
-    gdouble corner_home_pt_focal; /* 程序启动及每轮回位的可见光焦距预置位（可选，NaN=不设置） */
+    gboolean startup_pt_focal_min_enable; /* 程序启动时是否先下发可见光拉到最小焦距，再停止 */
+    guint startup_pt_focal_min_hold_ms; /* 启动后保持最小焦距命令的时间（毫秒） */
     guint corner_home_pt_focus; /* 程序启动及每轮回位的可见光聚焦预置位（可选，G_MAXUINT=不设置） */
 } NvDsCuavControlConfig;
 

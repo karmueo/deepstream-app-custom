@@ -68,6 +68,9 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
     config->cuav_control_config.servo_dir_y = -1;
     config->cuav_control_config.servo_max_step_h = 1.5;
     config->cuav_control_config.servo_max_step_v = 1.0;
+    config->cuav_control_config.servo_focal_adaptive_enable = TRUE;
+    config->cuav_control_config.servo_focal_max_step_scale_min = 0.25;
+    config->cuav_control_config.servo_focal_speed_scale_min = 0.50;
     config->cuav_control_config.servo_min_speed = 10;
     config->cuav_control_config.servo_max_speed = 60;
     config->cuav_control_config.zoom_target_ratio_min = 0.20;
@@ -75,6 +78,7 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
     config->cuav_control_config.zoom_deadband = 0.02;
     config->cuav_control_config.zoom_kp = 2500.0;
     config->cuav_control_config.zoom_max_step = 400.0;
+    config->cuav_control_config.visible_focal_hold_ms = 300;
     config->cuav_control_config.visible_light_control_enable = TRUE;
     config->cuav_control_config.infrared_control_enable = FALSE;
     config->cuav_control_config.servo_dev_id = 2;
@@ -107,7 +111,8 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
     config->cuav_control_config.zoom_out_duration_ms = 1000;
     config->cuav_control_config.corner_home_loc_h_deg = NAN;
     config->cuav_control_config.corner_home_loc_v_deg = NAN;
-    config->cuav_control_config.corner_home_pt_focal = NAN;
+    config->cuav_control_config.startup_pt_focal_min_enable = FALSE;
+    config->cuav_control_config.startup_pt_focal_min_hold_ms = 3000;
     config->cuav_control_config.corner_home_pt_focus = G_MAXUINT;
 
     if (sink_node["enable"])
@@ -491,6 +496,18 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
         {
             config->cuav_control_config.servo_max_step_v = itr->second.as<gdouble>();
         }
+        else if (paramKey == "servo-focal-adaptive-enable")
+        {
+            config->cuav_control_config.servo_focal_adaptive_enable = itr->second.as<gboolean>();
+        }
+        else if (paramKey == "servo-focal-max-step-scale-min")
+        {
+            config->cuav_control_config.servo_focal_max_step_scale_min = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "servo-focal-speed-scale-min")
+        {
+            config->cuav_control_config.servo_focal_speed_scale_min = itr->second.as<gdouble>();
+        }
         else if (paramKey == "servo-min-speed")
         {
             config->cuav_control_config.servo_min_speed = itr->second.as<guint>();
@@ -518,6 +535,10 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
         else if (paramKey == "zoom-max-step")
         {
             config->cuav_control_config.zoom_max_step = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "visible-focal-hold-ms")
+        {
+            config->cuav_control_config.visible_focal_hold_ms = itr->second.as<guint>();
         }
         else if (paramKey == "visible-light-control-enable")
         {
@@ -649,9 +670,13 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
         {
             config->cuav_control_config.corner_home_loc_v_deg = itr->second.as<gdouble>();
         }
-        else if (paramKey == "corner-home-pt-focal")
+        else if (paramKey == "startup-pt-focal-min-enable")
         {
-            config->cuav_control_config.corner_home_pt_focal = itr->second.as<gdouble>();
+            config->cuav_control_config.startup_pt_focal_min_enable = itr->second.as<gboolean>();
+        }
+        else if (paramKey == "startup-pt-focal-min-hold-ms")
+        {
+            config->cuav_control_config.startup_pt_focal_min_hold_ms = itr->second.as<guint>();
         }
         else if (paramKey == "corner-home-pt-focus")
         {

@@ -296,13 +296,17 @@ typedef struct
     guint last_speed_h;
     guint last_speed_v;
     gboolean last_visible_valid;
+    guint last_pt_focal_en;
     gdouble last_pt_focal;
     guint last_pt_focus;
     gboolean visible_initialized;
+    gboolean lost_zoom_active;
     gboolean last_infrared_valid;
     gdouble last_ir_focal;
     guint last_ir_focus;
     gboolean infrared_initialized;
+    gint64 last_motion_send_us;
+    guint last_motion_type;
     guint history_len;
     guint history_next;
     CuavTrackSample history[CUAV_AUTO_CONTROL_HISTORY_MAX];
@@ -333,7 +337,8 @@ typedef enum
     CUAV_STARTUP_PRESET_PHASE_SEND_HOME_SERVO = 1,
     CUAV_STARTUP_PRESET_PHASE_HOLD_HOME_SERVO = 2,
     CUAV_STARTUP_PRESET_PHASE_SEND_VISIBLE_PRESET = 3,
-    CUAV_STARTUP_PRESET_PHASE_COMPLETE = 4
+    CUAV_STARTUP_PRESET_PHASE_HOLD_VISIBLE_PRESET = 4,
+    CUAV_STARTUP_PRESET_PHASE_COMPLETE = 5
 } CuavStartupPresetPhase;
 
 typedef struct

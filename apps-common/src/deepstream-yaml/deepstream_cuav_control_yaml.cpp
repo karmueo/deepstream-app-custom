@@ -56,6 +56,9 @@ parse_cuav_control_yaml(NvDsCuavControlConfig *config, gchar *cfg_file_path)
   config->servo_dir_y = -1;
   config->servo_max_step_h = 1.5;
   config->servo_max_step_v = 1.0;
+  config->servo_focal_adaptive_enable = TRUE;
+  config->servo_focal_max_step_scale_min = 0.25;
+  config->servo_focal_speed_scale_min = 0.50;
   config->servo_min_speed = 10;
   config->servo_max_speed = 60;
   config->zoom_target_ratio_min = 0.20;
@@ -63,6 +66,7 @@ parse_cuav_control_yaml(NvDsCuavControlConfig *config, gchar *cfg_file_path)
   config->zoom_deadband = 0.02;
   config->zoom_kp = 2500.0;
   config->zoom_max_step = 400.0;
+  config->visible_focal_hold_ms = 300;
   config->visible_light_control_enable = TRUE;
   config->infrared_control_enable = FALSE;
   config->servo_dev_id = 2;
@@ -95,7 +99,8 @@ parse_cuav_control_yaml(NvDsCuavControlConfig *config, gchar *cfg_file_path)
   config->zoom_out_duration_ms = 1000;
   config->corner_home_loc_h_deg = NAN;
   config->corner_home_loc_v_deg = NAN;
-  config->corner_home_pt_focal = NAN;
+  config->startup_pt_focal_min_enable = FALSE;
+  config->startup_pt_focal_min_hold_ms = 3000;
   config->corner_home_pt_focus = G_MAXUINT;
 
   for (YAML::const_iterator itr = configyml["cuav-control"].begin();
@@ -172,6 +177,12 @@ parse_cuav_control_yaml(NvDsCuavControlConfig *config, gchar *cfg_file_path)
       config->servo_max_step_h = itr->second.as<gdouble>();
     } else if (paramKey == "servo-max-step-v") {
       config->servo_max_step_v = itr->second.as<gdouble>();
+    } else if (paramKey == "servo-focal-adaptive-enable") {
+      config->servo_focal_adaptive_enable = itr->second.as<gboolean>();
+    } else if (paramKey == "servo-focal-max-step-scale-min") {
+      config->servo_focal_max_step_scale_min = itr->second.as<gdouble>();
+    } else if (paramKey == "servo-focal-speed-scale-min") {
+      config->servo_focal_speed_scale_min = itr->second.as<gdouble>();
     } else if (paramKey == "servo-min-speed") {
       config->servo_min_speed = itr->second.as<guint>();
     } else if (paramKey == "servo-max-speed") {
@@ -186,6 +197,8 @@ parse_cuav_control_yaml(NvDsCuavControlConfig *config, gchar *cfg_file_path)
       config->zoom_kp = itr->second.as<gdouble>();
     } else if (paramKey == "zoom-max-step") {
       config->zoom_max_step = itr->second.as<gdouble>();
+    } else if (paramKey == "visible-focal-hold-ms") {
+      config->visible_focal_hold_ms = itr->second.as<guint>();
     } else if (paramKey == "visible-light-control-enable") {
       config->visible_light_control_enable = itr->second.as<gboolean>();
     } else if (paramKey == "infrared-control-enable") {
@@ -252,8 +265,10 @@ parse_cuav_control_yaml(NvDsCuavControlConfig *config, gchar *cfg_file_path)
     } else if (paramKey == "corner-home-loc-v-deg" ||
                paramKey == "corner-return-loc-v-deg") {
       config->corner_home_loc_v_deg = itr->second.as<gdouble>();
-    } else if (paramKey == "corner-home-pt-focal") {
-      config->corner_home_pt_focal = itr->second.as<gdouble>();
+    } else if (paramKey == "startup-pt-focal-min-enable") {
+      config->startup_pt_focal_min_enable = itr->second.as<gboolean>();
+    } else if (paramKey == "startup-pt-focal-min-hold-ms") {
+      config->startup_pt_focal_min_hold_ms = itr->second.as<guint>();
     } else if (paramKey == "corner-home-pt-focus") {
       config->corner_home_pt_focus = itr->second.as<guint>();
     } else {
