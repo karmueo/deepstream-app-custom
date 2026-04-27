@@ -27,7 +27,7 @@ cuav-control:
   debug: 0
   # 是否打印上游 gst-udpjsonmeta 中转下来的状态报文。
   # 开启后便于确认设备反馈是否进入自动控制闭环。
-  print-upstream-state: 0
+  print-upstream-state: 1
   # pipeline 启动后是否立即发送固定测试报文。
   # 仅用于快速联通性验证；启用自动跟随或真实设备测试时通常建议关闭。
   send-test-on-startup: 0
@@ -165,7 +165,10 @@ cuav-control:
   # 是否启用“四角伺服 + 拉近/拉远焦距”循环序列。
   # 0=关闭，1=开启。
   # 开启后会优先于 auto-track。
-  corner-zoom-cycle-enable: 0
+  corner-zoom-cycle-enable: 1
+  # 四角循环中是否执行回位和角点伺服。
+  # 0=跳过伺服，只做拉近/拉远焦距测试；1=执行完整四角伺服+变焦流程。
+  corner-servo-enable: 0
   # 单轮四角循环次数。
   corner-cycle-count: 1
   # 整套“四角 + 变焦”流程重复次数。
@@ -178,14 +181,19 @@ cuav-control:
   corner-dwell-ms: 1000
   # 四角循环使用的伺服速度。
   corner-servo-speed: 30
+  # 拉近目标焦距；只影响 corner-zoom-cycle 测试流程。
+  corner-zoom-in-focal: 300.0
+  # 拉远目标焦距；只影响 corner-zoom-cycle 测试流程。
+  corner-zoom-out-focal: 19.0
   # 拉进焦距持续时间，单位毫秒。
-  zoom-in-duration-ms: 1000
+  zoom-in-duration-ms: 5000
   # 拉远焦距持续时间，单位毫秒。
-  zoom-out-duration-ms: 1000
+  zoom-out-duration-ms: 5000
   # 可选：程序启动和每轮回位的初始伺服位置；不配置则默认使用首个有效反馈位置。
   corner-home-loc-h-deg: 54.0
   corner-home-loc-v-deg: 4.0
   # 可选：程序启动时先下发 pt_focal_en=4，把可见光焦距调到最小；随后按保持时间再下发 pt_focal_en=0 停止。
+  # 只做拉近/拉远焦距测试时建议关闭，避免启动预置命令干扰测试序列。
   # 0=关闭，1=开启。
   startup-pt-focal-min-enable: 0
   # 上述最小焦距命令保持时间，单位毫秒。

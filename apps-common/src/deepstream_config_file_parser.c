@@ -1519,12 +1519,15 @@ parse_cuav_control(NvDsCuavControlConfig *config, GKeyFile *key_file)
     config->ir_focal_effect_threshold = 10.0;
     config->state_stale_timeout_ms = 2000;
     config->corner_zoom_cycle_enable = FALSE;
+    config->corner_servo_enable = TRUE;
     config->corner_cycle_count = 1;
     config->sequence_repeat_count = 1;
     config->corner_offset_h_deg = 15.0;
     config->corner_offset_v_deg = 10.0;
     config->corner_dwell_ms = 1000;
     config->corner_servo_speed = 30;
+    config->corner_zoom_in_focal = NAN;
+    config->corner_zoom_out_focal = NAN;
     config->zoom_in_duration_ms = 1000;
     config->zoom_out_duration_ms = 1000;
     config->corner_home_loc_h_deg = NAN;
@@ -1862,6 +1865,11 @@ parse_cuav_control(NvDsCuavControlConfig *config, GKeyFile *key_file)
             config->corner_zoom_cycle_enable = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "corner-zoom-cycle-enable", &error);
             CHECK_ERROR(error);
         }
+        else if (!g_strcmp0(*key, "corner-servo-enable"))
+        {
+            config->corner_servo_enable = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "corner-servo-enable", &error);
+            CHECK_ERROR(error);
+        }
         else if (!g_strcmp0(*key, "corner-cycle-count"))
         {
             config->corner_cycle_count = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "corner-cycle-count", &error);
@@ -1890,6 +1898,16 @@ parse_cuav_control(NvDsCuavControlConfig *config, GKeyFile *key_file)
         else if (!g_strcmp0(*key, "corner-servo-speed"))
         {
             config->corner_servo_speed = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "corner-servo-speed", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "corner-zoom-in-focal"))
+        {
+            config->corner_zoom_in_focal = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, "corner-zoom-in-focal", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "corner-zoom-out-focal"))
+        {
+            config->corner_zoom_out_focal = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, "corner-zoom-out-focal", &error);
             CHECK_ERROR(error);
         }
         else if (!g_strcmp0(*key, "zoom-in-duration-ms"))
@@ -2986,6 +3004,9 @@ parse_sink(NvDsSinkSubBinConfig *config, GKeyFile *key_file, gchar *group,
     config->cuav_control_config.focal_effect_threshold = 50.0;
     config->cuav_control_config.ir_focal_effect_threshold = 10.0;
     config->cuav_control_config.state_stale_timeout_ms = 2000;
+    config->cuav_control_config.corner_servo_enable = TRUE;
+    config->cuav_control_config.corner_zoom_in_focal = NAN;
+    config->cuav_control_config.corner_zoom_out_focal = NAN;
 
     if (g_key_file_get_integer(key_file, group,
                                CONFIG_GROUP_ENABLE, &error) == FALSE ||

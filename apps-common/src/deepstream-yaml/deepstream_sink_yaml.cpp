@@ -101,12 +101,15 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
     config->cuav_control_config.ir_focal_effect_threshold = 10.0;
     config->cuav_control_config.state_stale_timeout_ms = 2000;
     config->cuav_control_config.corner_zoom_cycle_enable = FALSE;
+    config->cuav_control_config.corner_servo_enable = TRUE;
     config->cuav_control_config.corner_cycle_count = 1;
     config->cuav_control_config.sequence_repeat_count = 1;
     config->cuav_control_config.corner_offset_h_deg = 15.0;
     config->cuav_control_config.corner_offset_v_deg = 10.0;
     config->cuav_control_config.corner_dwell_ms = 1000;
     config->cuav_control_config.corner_servo_speed = 30;
+    config->cuav_control_config.corner_zoom_in_focal = NAN;
+    config->cuav_control_config.corner_zoom_out_focal = NAN;
     config->cuav_control_config.zoom_in_duration_ms = 1000;
     config->cuav_control_config.zoom_out_duration_ms = 1000;
     config->cuav_control_config.corner_home_loc_h_deg = NAN;
@@ -628,6 +631,10 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
         {
             config->cuav_control_config.corner_zoom_cycle_enable = itr->second.as<gboolean>();
         }
+        else if (paramKey == "corner-servo-enable")
+        {
+            config->cuav_control_config.corner_servo_enable = itr->second.as<gboolean>();
+        }
         else if (paramKey == "corner-cycle-count")
         {
             config->cuav_control_config.corner_cycle_count = itr->second.as<guint>();
@@ -651,6 +658,14 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
         else if (paramKey == "corner-servo-speed")
         {
             config->cuav_control_config.corner_servo_speed = itr->second.as<guint>();
+        }
+        else if (paramKey == "corner-zoom-in-focal")
+        {
+            config->cuav_control_config.corner_zoom_in_focal = itr->second.as<gdouble>();
+        }
+        else if (paramKey == "corner-zoom-out-focal")
+        {
+            config->cuav_control_config.corner_zoom_out_focal = itr->second.as<gdouble>();
         }
         else if (paramKey == "zoom-in-duration-ms")
         {
