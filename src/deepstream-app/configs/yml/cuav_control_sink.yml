@@ -19,24 +19,15 @@ cuav-control:
   # 组播 TTL（Time To Live）。
   # 值越大可跨越的路由跳数越多；局域网测试通常保持 1 即可。
   ttl: 1
-  # 是否启用 0x7101 + cmd_id 兼容包装模式。
-  # 0=使用当前默认协议格式，1=兼容旧设备/旧接收端。
-  compat-cmd-wrapper: 0
   # 是否打印控制发送调试日志。
   # 开启后会输出每次发出的控制信息，便于联调但日志会明显增多。
   debug: 0
   # 是否打印上游 gst-udpjsonmeta 中转下来的状态报文。
   # 开启后便于确认设备反馈是否进入自动控制闭环。
   print-upstream-state: 1
-  # pipeline 启动后是否立即发送固定测试报文。
-  # 仅用于快速联通性验证；启用自动跟随或真实设备测试时通常建议关闭。
-  send-test-on-startup: 0
   # 是否启用基于检测/跟踪结果的自动控制。
   # 0=不根据目标自动发控制，1=根据目标位置和大小自动发伺服与变焦控制。
   auto-track-enable: 1
-  # 当前无目标时是否启用仿真目标。
-  # 1 时即使没有真实检测目标，也会构造一个模拟目标继续驱动控制闭环。
-  simulate-target-enable: 0
   # 自动控制使用的视频源 source_id。
   # 多路视频输入时，控制逻辑只会读取该路视频的检测/跟踪结果。
   control-source-id: 0
@@ -98,21 +89,12 @@ cuav-control:
   # 变焦死区。
   # 在目标占比接近上下限时留出缓冲，减少镜头来回抽动。
   zoom-deadband: 0.001
-  # 变焦比例增益。
-  # 占比误差会按该系数转换为焦距调整量。
-  zoom-kp: 2500.0
-  # 单次焦距最大调整量。
-  # 用于限制一次变焦命令的变化幅度。
-  zoom-max-step: 400.0
   # 自动可见光变焦命令保持时间，单位毫秒。
   # 发送 pt_focal_en 后，超过该时间会强制补发 pt_focal_en=0 停止连续变焦。
-  visible-focal-hold-ms: 500
+  visible-focal-hold-ms: 100
   # 是否发送可见光控制报文。
   # 1 时自动控制/测试链路会发送 0x7205；0 时不发送可见光控制。
   visible-light-control-enable: 1
-  # 是否发送红外控制报文。
-  # 1 时自动控制/测试链路会发送 0x7206；若与可见光同时为 1，则两路都会发送。
-  infrared-control-enable: 0
   # 伺服控制报文中的 dev_id。
   # 0=只选可见光，1=只选热成像，2=同时控制可见光和热成像。
   servo-dev-id: 2
@@ -122,43 +104,10 @@ cuav-control:
   # 可见光镜头允许使用的最大焦距。
   # 到达该值后不会继续放大。
   pt-focal-max: 16298.0
-  # 红外自动变焦比例增益。
-  # 红外焦距范围远小于可见光，建议单独调参，不要直接复用 zoom-kp。
-  ir-zoom-kp: 80.0
-  # 红外单次焦距最大调整量。
-  # 用于限制一次红外变焦命令的变化幅度。
-  ir-zoom-max-step: 40.0
-  # 红外镜头允许使用的最小焦距。
-  # 默认按协议范围设置，设备有差异时可再调整。
-  ir-focal-min: 851.0
-  # 红外镜头允许使用的最大焦距。
-  # 默认按协议范围设置，设备有差异时可再调整。
-  ir-focal-max: 1223.0
-  # 红外默认聚焦值。
-  # 当没有新鲜红外反馈时，会回退到该值；协议默认值为 5。
-  ir-focus-default: 5
-  # 仿真目标水平摆动幅度，归一化到画面中心坐标系。
-  # 仅在 simulate-target-enable=1 时生效。
-  simulate-target-amplitude-x: 0.35
-  # 仿真目标垂直摆动幅度，归一化到画面中心坐标系。
-  simulate-target-amplitude-y: 0.20
-  # 仿真目标最小高度占比。
-  # 用于模拟远距离目标时的大小变化。
-  simulate-target-ratio-min: 0.18
-  # 仿真目标最大高度占比。
-  # 用于模拟近距离目标时的大小变化。
-  simulate-target-ratio-max: 0.36
-  # 仿真目标完整运动周期，单位毫秒。
-  simulate-target-period-ms: 6000
   # 判定水平伺服动作“确实生效”的最小变化阈值，单位度。
   servo-effect-threshold-h: 0.5
   # 判定垂直伺服动作“确实生效”的最小变化阈值，单位度。
   servo-effect-threshold-v: 0.3
-  # 判定变焦动作“确实生效”的最小焦距变化阈值。
-  focal-effect-threshold: 50.0
-  # 判定红外变焦动作“确实生效”的最小焦距变化阈值。
-  # 红外焦距范围较小，阈值通常要低于可见光。
-  ir-focal-effect-threshold: 10.0
   # 设备状态报文的新鲜度超时，单位毫秒。
   # 超过该时间未收到新状态时，会认为反馈过期。
   state-stale-timeout-ms: 2000
@@ -170,7 +119,7 @@ cuav-control:
   # 0=跳过伺服，只做拉近/拉远焦距测试；1=执行完整四角伺服+变焦流程。
   corner-servo-enable: 0
   # 单轮四角循环次数。
-  corner-cycle-count: 1
+  corner-cycle-count: 0
   # 整套“四角 + 变焦”流程重复次数。
   sequence-repeat-count: 1
   # 四角相对当前中心位置的水平偏移量，单位度。
@@ -182,9 +131,9 @@ cuav-control:
   # 四角循环使用的伺服速度。
   corner-servo-speed: 30
   # 拉近目标焦距；只影响 corner-zoom-cycle 测试流程。
-  corner-zoom-in-focal: 300.0
+  corner-zoom-in-focal: 100.0
   # 拉远目标焦距；只影响 corner-zoom-cycle 测试流程。
-  corner-zoom-out-focal: 19.0
+  corner-zoom-out-focal: 50.0
   # 拉进焦距持续时间，单位毫秒。
   zoom-in-duration-ms: 5000
   # 拉远焦距持续时间，单位毫秒。

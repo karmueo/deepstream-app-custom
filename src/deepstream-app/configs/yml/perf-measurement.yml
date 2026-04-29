@@ -123,12 +123,10 @@ sink4:
   port: 18003
   interface: eno1
   ttl: 1
-  compat-cmd-wrapper: 0
   debug: 1
   print-upstream-state: 0
   send-test-on-startup: 0
   auto-track-enable: 1
-  simulate-target-enable: 1
   control-source-id: 0
   control-period-ms: 100
   target-lost-hold-ms: 1000
@@ -148,19 +146,11 @@ sink4:
   zoom-target-ratio-min: 0.20
   zoom-target-ratio-max: 0.35
   zoom-deadband: 0.02
-  zoom-kp: 2500.0
-  zoom-max-step: 400.0
   visible-focal-hold-ms: 300
   pt-focal-min: 134.0
   pt-focal-max: 16298.0
-  simulate-target-amplitude-x: 0.35
-  simulate-target-amplitude-y: 0.20
-  simulate-target-ratio-min: 0.18
-  simulate-target-ratio-max: 0.36
-  simulate-target-period-ms: 6000
   servo-effect-threshold-h: 0.5
   servo-effect-threshold-v: 0.3
-  focal-effect-threshold: 50.0
   state-stale-timeout-ms: 2000
   tx-sys-id: 999
   tx-dev-type: 1

@@ -29,7 +29,6 @@ parse_cuav_control_yaml(NvDsCuavControlConfig *config, gchar *cfg_file_path)
   config->port = 18003;
   config->iface = NULL;
   config->ttl = 1;
-  config->compat_cmd_wrapper = FALSE;
   config->debug = FALSE;
   config->print_upstream_state = FALSE;
   config->tx_sys_id = 999;
@@ -64,29 +63,13 @@ parse_cuav_control_yaml(NvDsCuavControlConfig *config, gchar *cfg_file_path)
   config->zoom_target_ratio_min = 0.20;
   config->zoom_target_ratio_max = 0.35;
   config->zoom_deadband = 0.02;
-  config->zoom_kp = 2500.0;
-  config->zoom_max_step = 400.0;
   config->visible_focal_hold_ms = 300;
   config->visible_light_control_enable = TRUE;
-  config->infrared_control_enable = FALSE;
   config->servo_dev_id = 2;
   config->pt_focal_min = 134.0;
   config->pt_focal_max = 16298.0;
-  config->ir_zoom_kp = 80.0;
-  config->ir_zoom_max_step = 40.0;
-  config->ir_focal_min = 851.0;
-  config->ir_focal_max = 1223.0;
-  config->ir_focus_default = 5;
-  config->simulate_target_enable = FALSE;
-  config->simulate_target_amplitude_x = 0.35;
-  config->simulate_target_amplitude_y = 0.20;
-  config->simulate_target_ratio_min = 0.18;
-  config->simulate_target_ratio_max = 0.36;
-  config->simulate_target_period_ms = 6000;
   config->servo_effect_threshold_h = 0.5;
   config->servo_effect_threshold_v = 0.3;
-  config->focal_effect_threshold = 50.0;
-  config->ir_focal_effect_threshold = 10.0;
   config->state_stale_timeout_ms = 2000;
   config->corner_zoom_cycle_enable = FALSE;
   config->corner_servo_enable = TRUE;
@@ -126,8 +109,6 @@ parse_cuav_control_yaml(NvDsCuavControlConfig *config, gchar *cfg_file_path)
       config->iface[1023] = '\0';
     } else if (paramKey == "ttl") {
       config->ttl = itr->second.as<guint>();
-    } else if (paramKey == "compat-cmd-wrapper") {
-      config->compat_cmd_wrapper = itr->second.as<gboolean>();
     } else if (paramKey == "debug") {
       config->debug = itr->second.as<gboolean>();
     } else if (paramKey == "print-upstream-state") {
@@ -196,52 +177,20 @@ parse_cuav_control_yaml(NvDsCuavControlConfig *config, gchar *cfg_file_path)
       config->zoom_target_ratio_max = itr->second.as<gdouble>();
     } else if (paramKey == "zoom-deadband") {
       config->zoom_deadband = itr->second.as<gdouble>();
-    } else if (paramKey == "zoom-kp") {
-      config->zoom_kp = itr->second.as<gdouble>();
-    } else if (paramKey == "zoom-max-step") {
-      config->zoom_max_step = itr->second.as<gdouble>();
     } else if (paramKey == "visible-focal-hold-ms") {
       config->visible_focal_hold_ms = itr->second.as<guint>();
     } else if (paramKey == "visible-light-control-enable") {
       config->visible_light_control_enable = itr->second.as<gboolean>();
-    } else if (paramKey == "infrared-control-enable") {
-      config->infrared_control_enable = itr->second.as<gboolean>();
     } else if (paramKey == "servo-dev-id") {
       config->servo_dev_id = itr->second.as<guint>();
     } else if (paramKey == "pt-focal-min") {
       config->pt_focal_min = itr->second.as<gdouble>();
     } else if (paramKey == "pt-focal-max") {
       config->pt_focal_max = itr->second.as<gdouble>();
-    } else if (paramKey == "ir-zoom-kp") {
-      config->ir_zoom_kp = itr->second.as<gdouble>();
-    } else if (paramKey == "ir-zoom-max-step") {
-      config->ir_zoom_max_step = itr->second.as<gdouble>();
-    } else if (paramKey == "ir-focal-min") {
-      config->ir_focal_min = itr->second.as<gdouble>();
-    } else if (paramKey == "ir-focal-max") {
-      config->ir_focal_max = itr->second.as<gdouble>();
-    } else if (paramKey == "ir-focus-default") {
-      config->ir_focus_default = itr->second.as<guint>();
-    } else if (paramKey == "simulate-target-enable") {
-      config->simulate_target_enable = itr->second.as<gboolean>();
-    } else if (paramKey == "simulate-target-amplitude-x") {
-      config->simulate_target_amplitude_x = itr->second.as<gdouble>();
-    } else if (paramKey == "simulate-target-amplitude-y") {
-      config->simulate_target_amplitude_y = itr->second.as<gdouble>();
-    } else if (paramKey == "simulate-target-ratio-min") {
-      config->simulate_target_ratio_min = itr->second.as<gdouble>();
-    } else if (paramKey == "simulate-target-ratio-max") {
-      config->simulate_target_ratio_max = itr->second.as<gdouble>();
-    } else if (paramKey == "simulate-target-period-ms") {
-      config->simulate_target_period_ms = itr->second.as<guint>();
     } else if (paramKey == "servo-effect-threshold-h") {
       config->servo_effect_threshold_h = itr->second.as<gdouble>();
     } else if (paramKey == "servo-effect-threshold-v") {
       config->servo_effect_threshold_v = itr->second.as<gdouble>();
-    } else if (paramKey == "focal-effect-threshold") {
-      config->focal_effect_threshold = itr->second.as<gdouble>();
-    } else if (paramKey == "ir-focal-effect-threshold") {
-      config->ir_focal_effect_threshold = itr->second.as<gdouble>();
     } else if (paramKey == "state-stale-timeout-ms") {
       config->state_stale_timeout_ms = itr->second.as<guint>();
     } else if (paramKey == "corner-zoom-cycle-enable") {

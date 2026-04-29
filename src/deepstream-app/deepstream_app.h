@@ -290,7 +290,6 @@ typedef struct
     gint64 target_stable_since_us;
     gint64 last_servo_send_us;
     gint64 last_visible_send_us;
-    gint64 last_infrared_send_us;
     gboolean last_servo_valid;
     gdouble last_loc_h;
     gdouble last_loc_v;
@@ -304,10 +303,6 @@ typedef struct
     gboolean lost_zoom_active;
     gint64 lost_zoom_start_us;
     gboolean lost_zoom_hold_complete;
-    gboolean last_infrared_valid;
-    gdouble last_ir_focal;
-    guint last_ir_focus;
-    gboolean infrared_initialized;
     gint64 last_motion_send_us;
     guint last_motion_type;
     guint history_len;

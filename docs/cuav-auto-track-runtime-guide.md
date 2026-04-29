@@ -331,8 +331,6 @@
 - `zoom-target-ratio-min`
 - `zoom-target-ratio-max`
 - `zoom-deadband`
-- `zoom-kp`
-- `zoom-max-step`
 - `pt-focal-min`
 - `pt-focal-max`
 
@@ -501,8 +499,6 @@
 | `servo-max-step-h/v` | 单次最大修正量 |
 | `servo-min-speed/max-speed` | 伺服速度上下限 |
 | `zoom-target-ratio-min/max` | 焦距控制目标占比区间 |
-| `zoom-kp` | 焦距调整增益 |
-| `zoom-max-step` | 单次焦距最大修正量 |
 | `visible-focal-hold-ms` | 发送 `pt_focal_en` 后强制补发 `pt_focal_en=0` 的等待时间 |
 | `visible-light-control-enable` | 是否发可见光控制 |
 | `infrared-control-enable` | 是否发红外控制 |

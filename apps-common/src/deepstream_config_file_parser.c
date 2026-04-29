@@ -1460,7 +1460,6 @@ parse_cuav_control(NvDsCuavControlConfig *config, GKeyFile *key_file)
     config->port = 18003;
     config->iface = NULL;
     config->ttl = 1;
-    config->compat_cmd_wrapper = FALSE;
     config->debug = FALSE;
     config->tx_sys_id = 999;
     config->tx_dev_type = 1;
@@ -1494,29 +1493,13 @@ parse_cuav_control(NvDsCuavControlConfig *config, GKeyFile *key_file)
     config->zoom_target_ratio_min = 0.20;
     config->zoom_target_ratio_max = 0.35;
     config->zoom_deadband = 0.02;
-    config->zoom_kp = 2500.0;
-    config->zoom_max_step = 400.0;
     config->visible_focal_hold_ms = 300;
     config->visible_light_control_enable = TRUE;
-    config->infrared_control_enable = FALSE;
     config->servo_dev_id = 2;
     config->pt_focal_min = 134.0;
     config->pt_focal_max = 16298.0;
-    config->ir_zoom_kp = 80.0;
-    config->ir_zoom_max_step = 40.0;
-    config->ir_focal_min = 851.0;
-    config->ir_focal_max = 1223.0;
-    config->ir_focus_default = 5;
-    config->simulate_target_enable = FALSE;
-    config->simulate_target_amplitude_x = 0.35;
-    config->simulate_target_amplitude_y = 0.20;
-    config->simulate_target_ratio_min = 0.18;
-    config->simulate_target_ratio_max = 0.36;
-    config->simulate_target_period_ms = 6000;
     config->servo_effect_threshold_h = 0.5;
     config->servo_effect_threshold_v = 0.3;
-    config->focal_effect_threshold = 50.0;
-    config->ir_focal_effect_threshold = 10.0;
     config->state_stale_timeout_ms = 2000;
     config->corner_zoom_cycle_enable = FALSE;
     config->corner_servo_enable = TRUE;
@@ -1563,11 +1546,6 @@ parse_cuav_control(NvDsCuavControlConfig *config, GKeyFile *key_file)
         else if (!g_strcmp0(*key, "ttl"))
         {
             config->ttl = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "ttl", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "compat-cmd-wrapper"))
-        {
-            config->compat_cmd_wrapper = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "compat-cmd-wrapper", &error);
             CHECK_ERROR(error);
         }
         else if (!g_strcmp0(*key, "debug"))
@@ -1740,16 +1718,6 @@ parse_cuav_control(NvDsCuavControlConfig *config, GKeyFile *key_file)
             config->zoom_deadband = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, "zoom-deadband", &error);
             CHECK_ERROR(error);
         }
-        else if (!g_strcmp0(*key, "zoom-kp"))
-        {
-            config->zoom_kp = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, "zoom-kp", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "zoom-max-step"))
-        {
-            config->zoom_max_step = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, "zoom-max-step", &error);
-            CHECK_ERROR(error);
-        }
         else if (!g_strcmp0(*key, "visible-focal-hold-ms"))
         {
             config->visible_focal_hold_ms = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "visible-focal-hold-ms", &error);
@@ -1758,11 +1726,6 @@ parse_cuav_control(NvDsCuavControlConfig *config, GKeyFile *key_file)
         else if (!g_strcmp0(*key, "visible-light-control-enable"))
         {
             config->visible_light_control_enable = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "visible-light-control-enable", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "infrared-control-enable"))
-        {
-            config->infrared_control_enable = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "infrared-control-enable", &error);
             CHECK_ERROR(error);
         }
         else if (!g_strcmp0(*key, "servo-dev-id"))
@@ -1780,61 +1743,6 @@ parse_cuav_control(NvDsCuavControlConfig *config, GKeyFile *key_file)
             config->pt_focal_max = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, "pt-focal-max", &error);
             CHECK_ERROR(error);
         }
-        else if (!g_strcmp0(*key, "ir-zoom-kp"))
-        {
-            config->ir_zoom_kp = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, "ir-zoom-kp", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "ir-zoom-max-step"))
-        {
-            config->ir_zoom_max_step = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, "ir-zoom-max-step", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "ir-focal-min"))
-        {
-            config->ir_focal_min = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, "ir-focal-min", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "ir-focal-max"))
-        {
-            config->ir_focal_max = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, "ir-focal-max", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "ir-focus-default"))
-        {
-            config->ir_focus_default = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "ir-focus-default", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "simulate-target-enable"))
-        {
-            config->simulate_target_enable = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "simulate-target-enable", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "simulate-target-amplitude-x"))
-        {
-            config->simulate_target_amplitude_x = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, "simulate-target-amplitude-x", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "simulate-target-amplitude-y"))
-        {
-            config->simulate_target_amplitude_y = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, "simulate-target-amplitude-y", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "simulate-target-ratio-min"))
-        {
-            config->simulate_target_ratio_min = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, "simulate-target-ratio-min", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "simulate-target-ratio-max"))
-        {
-            config->simulate_target_ratio_max = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, "simulate-target-ratio-max", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "simulate-target-period-ms"))
-        {
-            config->simulate_target_period_ms = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "simulate-target-period-ms", &error);
-            CHECK_ERROR(error);
-        }
         else if (!g_strcmp0(*key, "servo-effect-threshold-h"))
         {
             config->servo_effect_threshold_h = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, "servo-effect-threshold-h", &error);
@@ -1843,16 +1751,6 @@ parse_cuav_control(NvDsCuavControlConfig *config, GKeyFile *key_file)
         else if (!g_strcmp0(*key, "servo-effect-threshold-v"))
         {
             config->servo_effect_threshold_v = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, "servo-effect-threshold-v", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "focal-effect-threshold"))
-        {
-            config->focal_effect_threshold = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, "focal-effect-threshold", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "ir-focal-effect-threshold"))
-        {
-            config->ir_focal_effect_threshold = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, "ir-focal-effect-threshold", &error);
             CHECK_ERROR(error);
         }
         else if (!g_strcmp0(*key, "state-stale-timeout-ms"))
@@ -2946,7 +2844,6 @@ parse_sink(NvDsSinkSubBinConfig *config, GKeyFile *key_file, gchar *group,
     config->cuav_control_config.port = 18003;
     config->cuav_control_config.iface = NULL;
     config->cuav_control_config.ttl = 1;
-    config->cuav_control_config.compat_cmd_wrapper = FALSE;
     config->cuav_control_config.debug = FALSE;
     config->cuav_control_config.print_upstream_state = FALSE;
     config->cuav_control_config.tx_sys_id = 999;
@@ -2981,28 +2878,12 @@ parse_sink(NvDsSinkSubBinConfig *config, GKeyFile *key_file, gchar *group,
     config->cuav_control_config.zoom_target_ratio_min = 0.20;
     config->cuav_control_config.zoom_target_ratio_max = 0.35;
     config->cuav_control_config.zoom_deadband = 0.02;
-    config->cuav_control_config.zoom_kp = 2500.0;
-    config->cuav_control_config.zoom_max_step = 400.0;
     config->cuav_control_config.visible_light_control_enable = TRUE;
-    config->cuav_control_config.infrared_control_enable = FALSE;
     config->cuav_control_config.servo_dev_id = 2;
     config->cuav_control_config.pt_focal_min = 134.0;
     config->cuav_control_config.pt_focal_max = 16298.0;
-    config->cuav_control_config.ir_zoom_kp = 80.0;
-    config->cuav_control_config.ir_zoom_max_step = 40.0;
-    config->cuav_control_config.ir_focal_min = 851.0;
-    config->cuav_control_config.ir_focal_max = 1223.0;
-    config->cuav_control_config.ir_focus_default = 5;
-    config->cuav_control_config.simulate_target_enable = FALSE;
-    config->cuav_control_config.simulate_target_amplitude_x = 0.35;
-    config->cuav_control_config.simulate_target_amplitude_y = 0.20;
-    config->cuav_control_config.simulate_target_ratio_min = 0.18;
-    config->cuav_control_config.simulate_target_ratio_max = 0.36;
-    config->cuav_control_config.simulate_target_period_ms = 6000;
     config->cuav_control_config.servo_effect_threshold_h = 0.5;
     config->cuav_control_config.servo_effect_threshold_v = 0.3;
-    config->cuav_control_config.focal_effect_threshold = 50.0;
-    config->cuav_control_config.ir_focal_effect_threshold = 10.0;
     config->cuav_control_config.state_stale_timeout_ms = 2000;
     config->cuav_control_config.corner_servo_enable = TRUE;
     config->cuav_control_config.corner_zoom_in_focal = NAN;
@@ -3337,12 +3218,6 @@ parse_sink(NvDsSinkSubBinConfig *config, GKeyFile *key_file, gchar *group,
                 g_key_file_get_integer(key_file, group, "ttl", &error);
             CHECK_ERROR(error);
         }
-        else if (!g_strcmp0(*key, "compat-cmd-wrapper"))
-        {
-            config->cuav_control_config.compat_cmd_wrapper =
-                g_key_file_get_integer(key_file, group, "compat-cmd-wrapper", &error);
-            CHECK_ERROR(error);
-        }
         else if (!g_strcmp0(*key, "debug"))
         {
             config->cuav_control_config.debug =
@@ -3547,28 +3422,10 @@ parse_sink(NvDsSinkSubBinConfig *config, GKeyFile *key_file, gchar *group,
                 g_key_file_get_double(key_file, group, "zoom-deadband", &error);
             CHECK_ERROR(error);
         }
-        else if (!g_strcmp0(*key, "zoom-kp"))
-        {
-            config->cuav_control_config.zoom_kp =
-                g_key_file_get_double(key_file, group, "zoom-kp", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "zoom-max-step"))
-        {
-            config->cuav_control_config.zoom_max_step =
-                g_key_file_get_double(key_file, group, "zoom-max-step", &error);
-            CHECK_ERROR(error);
-        }
         else if (!g_strcmp0(*key, "visible-light-control-enable"))
         {
             config->cuav_control_config.visible_light_control_enable =
                 g_key_file_get_integer(key_file, group, "visible-light-control-enable", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "infrared-control-enable"))
-        {
-            config->cuav_control_config.infrared_control_enable =
-                g_key_file_get_integer(key_file, group, "infrared-control-enable", &error);
             CHECK_ERROR(error);
         }
         else if (!g_strcmp0(*key, "servo-dev-id"))
@@ -3589,72 +3446,6 @@ parse_sink(NvDsSinkSubBinConfig *config, GKeyFile *key_file, gchar *group,
                 g_key_file_get_double(key_file, group, "pt-focal-max", &error);
             CHECK_ERROR(error);
         }
-        else if (!g_strcmp0(*key, "ir-zoom-kp"))
-        {
-            config->cuav_control_config.ir_zoom_kp =
-                g_key_file_get_double(key_file, group, "ir-zoom-kp", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "ir-zoom-max-step"))
-        {
-            config->cuav_control_config.ir_zoom_max_step =
-                g_key_file_get_double(key_file, group, "ir-zoom-max-step", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "ir-focal-min"))
-        {
-            config->cuav_control_config.ir_focal_min =
-                g_key_file_get_double(key_file, group, "ir-focal-min", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "ir-focal-max"))
-        {
-            config->cuav_control_config.ir_focal_max =
-                g_key_file_get_double(key_file, group, "ir-focal-max", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "ir-focus-default"))
-        {
-            config->cuav_control_config.ir_focus_default =
-                g_key_file_get_integer(key_file, group, "ir-focus-default", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "simulate-target-enable"))
-        {
-            config->cuav_control_config.simulate_target_enable =
-                g_key_file_get_integer(key_file, group, "simulate-target-enable", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "simulate-target-amplitude-x"))
-        {
-            config->cuav_control_config.simulate_target_amplitude_x =
-                g_key_file_get_double(key_file, group, "simulate-target-amplitude-x", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "simulate-target-amplitude-y"))
-        {
-            config->cuav_control_config.simulate_target_amplitude_y =
-                g_key_file_get_double(key_file, group, "simulate-target-amplitude-y", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "simulate-target-ratio-min"))
-        {
-            config->cuav_control_config.simulate_target_ratio_min =
-                g_key_file_get_double(key_file, group, "simulate-target-ratio-min", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "simulate-target-ratio-max"))
-        {
-            config->cuav_control_config.simulate_target_ratio_max =
-                g_key_file_get_double(key_file, group, "simulate-target-ratio-max", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "simulate-target-period-ms"))
-        {
-            config->cuav_control_config.simulate_target_period_ms =
-                g_key_file_get_integer(key_file, group, "simulate-target-period-ms", &error);
-            CHECK_ERROR(error);
-        }
         else if (!g_strcmp0(*key, "servo-effect-threshold-h"))
         {
             config->cuav_control_config.servo_effect_threshold_h =
@@ -3665,18 +3456,6 @@ parse_sink(NvDsSinkSubBinConfig *config, GKeyFile *key_file, gchar *group,
         {
             config->cuav_control_config.servo_effect_threshold_v =
                 g_key_file_get_double(key_file, group, "servo-effect-threshold-v", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "focal-effect-threshold"))
-        {
-            config->cuav_control_config.focal_effect_threshold =
-                g_key_file_get_double(key_file, group, "focal-effect-threshold", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "ir-focal-effect-threshold"))
-        {
-            config->cuav_control_config.ir_focal_effect_threshold =
-                g_key_file_get_double(key_file, group, "ir-focal-effect-threshold", &error);
             CHECK_ERROR(error);
         }
         else if (!g_strcmp0(*key, "state-stale-timeout-ms"))

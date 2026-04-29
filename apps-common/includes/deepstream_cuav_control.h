@@ -17,7 +17,6 @@ typedef struct
     guint port; /* 测试/目标组播端口 */
     gchar *iface; /* 绑定网卡名 */
     guint ttl; /* 组播 TTL */
-    gboolean compat_cmd_wrapper; /* 是否使用 0x7101 + cmd_id 兼容模式 */
     gboolean debug; /* 是否打印调试日志 */
     gboolean print_upstream_state; /* 是否打印上游 udpjsonmeta 中转的状态报文 */
     guint tx_sys_id; /* 发送方系统号 */
@@ -52,29 +51,13 @@ typedef struct
     gdouble zoom_target_ratio_min; /* 目标高度占比下限 */
     gdouble zoom_target_ratio_max; /* 目标高度占比上限 */
     gdouble zoom_deadband; /* 变倍死区 */
-    gdouble zoom_kp; /* 焦距闭环增益 */
-    gdouble zoom_max_step; /* 单次焦距最大调整量 */
     guint visible_focal_hold_ms; /* 自动变焦命令保持时间（毫秒） */
     gboolean visible_light_control_enable; /* 是否发送可见光控制 */
-    gboolean infrared_control_enable; /* 是否发送红外控制 */
     guint servo_dev_id; /* 伺服报文 dev_id，0=可见光 1=热成像 2=两者 */
     gdouble pt_focal_min; /* 可见光焦距最小值 */
     gdouble pt_focal_max; /* 可见光焦距最大值 */
-    gdouble ir_zoom_kp; /* 红外焦距闭环增益 */
-    gdouble ir_zoom_max_step; /* 红外单次焦距最大调整量 */
-    gdouble ir_focal_min; /* 红外焦距最小值 */
-    gdouble ir_focal_max; /* 红外焦距最大值 */
-    guint ir_focus_default; /* 红外默认聚焦值 */
-    gboolean simulate_target_enable; /* 无目标时是否启用仿真目标 */
-    gdouble simulate_target_amplitude_x; /* 仿真目标水平摆动幅度，归一化 */
-    gdouble simulate_target_amplitude_y; /* 仿真目标垂直摆动幅度，归一化 */
-    gdouble simulate_target_ratio_min; /* 仿真目标高度占比下限 */
-    gdouble simulate_target_ratio_max; /* 仿真目标高度占比上限 */
-    guint simulate_target_period_ms; /* 仿真目标运动周期 */
     gdouble servo_effect_threshold_h; /* 水平伺服生效判定阈值 */
     gdouble servo_effect_threshold_v; /* 垂直伺服生效判定阈值 */
-    gdouble focal_effect_threshold; /* 焦距生效判定阈值 */
-    gdouble ir_focal_effect_threshold; /* 红外焦距生效判定阈值 */
     guint state_stale_timeout_ms; /* 设备状态新鲜度超时 */
     gboolean corner_zoom_cycle_enable; /* 是否启用四角伺服+变焦循环测试 */
     gboolean corner_servo_enable; /* 四角循环中是否执行回位和角点伺服 */

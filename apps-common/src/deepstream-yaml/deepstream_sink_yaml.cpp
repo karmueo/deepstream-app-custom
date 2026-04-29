@@ -41,7 +41,6 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
     config->cuav_control_config.port = 18003;
     config->cuav_control_config.iface = NULL;
     config->cuav_control_config.ttl = 1;
-    config->cuav_control_config.compat_cmd_wrapper = FALSE;
     config->cuav_control_config.debug = FALSE;
     config->cuav_control_config.print_upstream_state = FALSE;
     config->cuav_control_config.tx_sys_id = 999;
@@ -76,29 +75,13 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
     config->cuav_control_config.zoom_target_ratio_min = 0.20;
     config->cuav_control_config.zoom_target_ratio_max = 0.35;
     config->cuav_control_config.zoom_deadband = 0.02;
-    config->cuav_control_config.zoom_kp = 2500.0;
-    config->cuav_control_config.zoom_max_step = 400.0;
     config->cuav_control_config.visible_focal_hold_ms = 300;
     config->cuav_control_config.visible_light_control_enable = TRUE;
-    config->cuav_control_config.infrared_control_enable = FALSE;
     config->cuav_control_config.servo_dev_id = 2;
     config->cuav_control_config.pt_focal_min = 134.0;
     config->cuav_control_config.pt_focal_max = 16298.0;
-    config->cuav_control_config.ir_zoom_kp = 80.0;
-    config->cuav_control_config.ir_zoom_max_step = 40.0;
-    config->cuav_control_config.ir_focal_min = 851.0;
-    config->cuav_control_config.ir_focal_max = 1223.0;
-    config->cuav_control_config.ir_focus_default = 5;
-    config->cuav_control_config.simulate_target_enable = FALSE;
-    config->cuav_control_config.simulate_target_amplitude_x = 0.35;
-    config->cuav_control_config.simulate_target_amplitude_y = 0.20;
-    config->cuav_control_config.simulate_target_ratio_min = 0.18;
-    config->cuav_control_config.simulate_target_ratio_max = 0.36;
-    config->cuav_control_config.simulate_target_period_ms = 6000;
     config->cuav_control_config.servo_effect_threshold_h = 0.5;
     config->cuav_control_config.servo_effect_threshold_v = 0.3;
-    config->cuav_control_config.focal_effect_threshold = 50.0;
-    config->cuav_control_config.ir_focal_effect_threshold = 10.0;
     config->cuav_control_config.state_stale_timeout_ms = 2000;
     config->cuav_control_config.corner_zoom_cycle_enable = FALSE;
     config->cuav_control_config.corner_servo_enable = TRUE;
@@ -391,10 +374,6 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
         {
             config->cuav_control_config.ttl = itr->second.as<guint>();
         }
-        else if (paramKey == "compat-cmd-wrapper")
-        {
-            config->cuav_control_config.compat_cmd_wrapper = itr->second.as<gboolean>();
-        }
         else if (paramKey == "debug")
         {
             config->cuav_control_config.debug = itr->second.as<gboolean>();
@@ -531,14 +510,6 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
         {
             config->cuav_control_config.zoom_deadband = itr->second.as<gdouble>();
         }
-        else if (paramKey == "zoom-kp")
-        {
-            config->cuav_control_config.zoom_kp = itr->second.as<gdouble>();
-        }
-        else if (paramKey == "zoom-max-step")
-        {
-            config->cuav_control_config.zoom_max_step = itr->second.as<gdouble>();
-        }
         else if (paramKey == "visible-focal-hold-ms")
         {
             config->cuav_control_config.visible_focal_hold_ms = itr->second.as<guint>();
@@ -546,10 +517,6 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
         else if (paramKey == "visible-light-control-enable")
         {
             config->cuav_control_config.visible_light_control_enable = itr->second.as<gboolean>();
-        }
-        else if (paramKey == "infrared-control-enable")
-        {
-            config->cuav_control_config.infrared_control_enable = itr->second.as<gboolean>();
         }
         else if (paramKey == "servo-dev-id")
         {
@@ -563,50 +530,6 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
         {
             config->cuav_control_config.pt_focal_max = itr->second.as<gdouble>();
         }
-        else if (paramKey == "ir-zoom-kp")
-        {
-            config->cuav_control_config.ir_zoom_kp = itr->second.as<gdouble>();
-        }
-        else if (paramKey == "ir-zoom-max-step")
-        {
-            config->cuav_control_config.ir_zoom_max_step = itr->second.as<gdouble>();
-        }
-        else if (paramKey == "ir-focal-min")
-        {
-            config->cuav_control_config.ir_focal_min = itr->second.as<gdouble>();
-        }
-        else if (paramKey == "ir-focal-max")
-        {
-            config->cuav_control_config.ir_focal_max = itr->second.as<gdouble>();
-        }
-        else if (paramKey == "ir-focus-default")
-        {
-            config->cuav_control_config.ir_focus_default = itr->second.as<guint>();
-        }
-        else if (paramKey == "simulate-target-enable")
-        {
-            config->cuav_control_config.simulate_target_enable = itr->second.as<gboolean>();
-        }
-        else if (paramKey == "simulate-target-amplitude-x")
-        {
-            config->cuav_control_config.simulate_target_amplitude_x = itr->second.as<gdouble>();
-        }
-        else if (paramKey == "simulate-target-amplitude-y")
-        {
-            config->cuav_control_config.simulate_target_amplitude_y = itr->second.as<gdouble>();
-        }
-        else if (paramKey == "simulate-target-ratio-min")
-        {
-            config->cuav_control_config.simulate_target_ratio_min = itr->second.as<gdouble>();
-        }
-        else if (paramKey == "simulate-target-ratio-max")
-        {
-            config->cuav_control_config.simulate_target_ratio_max = itr->second.as<gdouble>();
-        }
-        else if (paramKey == "simulate-target-period-ms")
-        {
-            config->cuav_control_config.simulate_target_period_ms = itr->second.as<guint>();
-        }
         else if (paramKey == "servo-effect-threshold-h")
         {
             config->cuav_control_config.servo_effect_threshold_h = itr->second.as<gdouble>();
@@ -614,14 +537,6 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
         else if (paramKey == "servo-effect-threshold-v")
         {
             config->cuav_control_config.servo_effect_threshold_v = itr->second.as<gdouble>();
-        }
-        else if (paramKey == "focal-effect-threshold")
-        {
-            config->cuav_control_config.focal_effect_threshold = itr->second.as<gdouble>();
-        }
-        else if (paramKey == "ir-focal-effect-threshold")
-        {
-            config->cuav_control_config.ir_focal_effect_threshold = itr->second.as<gdouble>();
         }
         else if (paramKey == "state-stale-timeout-ms")
         {

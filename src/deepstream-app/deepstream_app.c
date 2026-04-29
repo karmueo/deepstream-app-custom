@@ -111,14 +111,8 @@ static gboolean send_cuav_visible_light_command(AppCtx *appCtx,
                                                 guint pt_focus,
                                                 guint pt_focus_mode,
                                                 guint pt_zoom);
-static gboolean send_cuav_infrared_command(AppCtx *appCtx,
-                                           gdouble ir_focal,
-                                           guint ir_focus,
-                                           guint ir_focus_mode,
-                                           guint ir_zoom);
 static gboolean send_cuav_servo_test_message(AppCtx *appCtx);
 static gboolean send_cuav_visible_light_test_message(AppCtx *appCtx);
-static gboolean send_cuav_infrared_test_message(AppCtx *appCtx);
 static gdouble clamp_cuav_double(gdouble value, gdouble min_value, gdouble max_value);
 static guint clamp_cuav_uint(guint value, guint min_value, guint max_value);
 static gdouble wrap_heading_360(gdouble value);
@@ -180,15 +174,6 @@ static gboolean cuav_compute_visible_light_command(const NvDsCuavControlConfig *
                                                    guint *pt_focal_en,
                                                    gdouble *pt_focal,
                                                    guint *pt_focus);
-static gboolean cuav_compute_infrared_command(const NvDsCuavControlConfig *control_config,
-                                              const CuavFeedbackState *feedback_state,
-                                              const CuavAutoControlState *auto_state,
-                                              const CuavTrackSample *sample,
-                                              gdouble *ir_focal,
-                                              guint *ir_focus);
-static void cuav_fill_simulated_sample(const NvDsCuavControlConfig *control_config,
-                                       gint64 now_us,
-                                       CuavTrackSample *sample);
 
 /**
  * @brief 根据源ID获取传感器信息
@@ -399,15 +384,6 @@ static gboolean
 cuav_visible_control_enabled(const NvDsCuavControlConfig *control_config)
 {
     return control_config && control_config->visible_light_control_enable;
-}
-
-/**
- * @brief 判断红外控制是否启用
- */
-static gboolean
-cuav_infrared_control_enabled(const NvDsCuavControlConfig *control_config)
-{
-    return control_config && control_config->infrared_control_enable;
 }
 
 /**
@@ -972,16 +948,11 @@ cuav_reset_auto_control_state(CuavAutoControlState *state, gboolean keep_last_co
         state->last_speed_v = 0;
         state->last_pt_focal = 500.0;
         state->last_pt_focus = 100;
-        state->last_infrared_valid = FALSE;
-        state->last_ir_focal = 900.0;
-        state->last_ir_focus = 5;
         state->last_servo_send_us = 0;
         state->last_visible_send_us = 0;
-        state->last_infrared_send_us = 0;
         state->last_motion_send_us = 0;
         state->last_motion_type = CUAV_MOTION_CMD_NONE;
     }
-    state->infrared_initialized = FALSE;
 }
 
 /**
@@ -1335,73 +1306,6 @@ cuav_visible_focal_stop_due(const NvDsCuavControlConfig *control_config,
 }
 
 /**
- * @brief 计算红外变焦控制指令（连续比例P控制）
- * delta = ir_zoom_kp * (target_ratio_min/max - current_ratio)
- * target_focal = base_focal + delta，限制在[ir_focal_min, ir_focal_max]
- * @param[out] ir_focal 目标红外焦距
- * @param[out] ir_focus 红外对焦值
- * @return 成功返回TRUE
- */
-static gboolean
-cuav_compute_infrared_command(const NvDsCuavControlConfig *control_config,
-                              const CuavFeedbackState *feedback_state,
-                              const CuavAutoControlState *auto_state,
-                              const CuavTrackSample *sample,
-                              gdouble *ir_focal,
-                              guint *ir_focus)
-{
-    gdouble base_focal = 900.0;
-    gdouble target_focal = 0.0;
-    gdouble delta = 0.0;
-
-    if (!control_config || !auto_state || !sample || !ir_focal || !ir_focus)
-        return FALSE;
-
-    if (feedback_state && feedback_state->valid &&
-        feedback_state->ir_focal > 0.0 &&
-        (g_get_monotonic_time() - feedback_state->updated_at_us) <= CUAV_FEEDBACK_STALE_USEC)
-    {
-        base_focal = feedback_state->ir_focal;
-        *ir_focus = feedback_state->ir_focus > 0 ?
-                        feedback_state->ir_focus :
-                        MAX(control_config->ir_focus_default, 1U);
-    }
-    else if (auto_state->last_infrared_valid)
-    {
-        base_focal = auto_state->last_ir_focal;
-        *ir_focus = auto_state->last_ir_focus > 0 ?
-                        auto_state->last_ir_focus :
-                        MAX(control_config->ir_focus_default, 1U);
-    }
-    else
-    {
-        *ir_focus = MAX(control_config->ir_focus_default, 1U);
-    }
-
-    if (sample->target_ratio < (control_config->zoom_target_ratio_min - control_config->zoom_deadband))
-    {
-        delta = control_config->ir_zoom_kp *
-                (control_config->zoom_target_ratio_min - sample->target_ratio);
-    }
-    else if (sample->target_ratio > (control_config->zoom_target_ratio_max + control_config->zoom_deadband))
-    {
-        delta = -control_config->ir_zoom_kp *
-                (sample->target_ratio - control_config->zoom_target_ratio_max);
-    }
-
-    delta = clamp_cuav_double(delta,
-                              -control_config->ir_zoom_max_step,
-                              control_config->ir_zoom_max_step);
-    target_focal = base_focal + delta;
-    target_focal = clamp_cuav_double(target_focal,
-                                     control_config->ir_focal_min,
-                                     control_config->ir_focal_max);
-
-    *ir_focal = target_focal;
-    return TRUE;
-}
-
-/**
  * @brief 通过GSignal向cuavcontrolsink元素发送控制信号
  * @param signal_name 信号名称（如send-servo-control）
  * @param payload GstStructure格式的指令载荷
@@ -1452,18 +1356,12 @@ update_cuav_eo_system_state(AppCtx *appCtx,
                                 feedback_state->pt_focal,
                                 "pt-focus", G_TYPE_INT,
                                 (gint)feedback_state->pt_focus,
-                                "ir-focal", G_TYPE_DOUBLE,
-                                feedback_state->ir_focal,
-                                "ir-focus", G_TYPE_INT,
-                                (gint)feedback_state->ir_focus,
                                 "sv-stat", G_TYPE_INT,
                                 (gint)feedback_state->sv_stat,
                                 "trk-dev", G_TYPE_INT,
                                 (gint)feedback_state->trk_dev,
                                 "pt-trk-link", G_TYPE_INT,
                                 (gint)feedback_state->pt_trk_link,
-                                "ir-trk-link", G_TYPE_INT,
-                                (gint)feedback_state->ir_trk_link,
                                 "trk-stat", G_TYPE_INT,
                                 (gint)feedback_state->trk_stat,
                                 NULL);
@@ -1625,49 +1523,6 @@ send_cuav_visible_light_command(AppCtx *appCtx,
 }
 
 /**
- * @brief 发送红外控制指令（焦距、对焦、对焦模式、变倍）
- * @param ir_focal 红外焦距目标值
- * @param ir_focus 红外对焦值
- * @param ir_focus_mode 红外对焦模式
- * @param ir_zoom 红外变倍
- * @return 发送成功返回TRUE
- */
-static gboolean
-send_cuav_infrared_command(AppCtx *appCtx,
-                           gdouble ir_focal,
-                           guint ir_focus,
-                           guint ir_focus_mode,
-                           guint ir_zoom)
-{
-    GstStructure *payload = NULL;
-    gboolean result = FALSE;
-
-    payload = gst_structure_new("cuav-infrared-control",
-                                "ir-dev-en", G_TYPE_INT, 1,
-                                "ir-ctrl-en", G_TYPE_INT, 1,
-                                "ir-fov-en", G_TYPE_INT, 0,
-                                "ir-fov-h", G_TYPE_DOUBLE, 0.0,
-                                "ir-fov-v", G_TYPE_DOUBLE, 0.0,
-                                "ir-focal-en", G_TYPE_INT, 1,
-                                "ir-focal", G_TYPE_DOUBLE, ir_focal,
-                                "ir-focus-en", G_TYPE_INT, 0,
-                                "ir-focus", G_TYPE_INT, (gint)ir_focus,
-                                "ir-speed-en", G_TYPE_INT, 0,
-                                "ir-focus-speed", G_TYPE_INT, 0,
-                                "ir-bri-en", G_TYPE_INT, 0,
-                                "ir-bri-ctrs", G_TYPE_INT, 0,
-                                "ir-ctrs-en", G_TYPE_INT, 0,
-                                "ir-ctrs", G_TYPE_INT, 0,
-                                "ir-focus-mode", G_TYPE_INT, (gint)ir_focus_mode,
-                                "ir-zoom", G_TYPE_INT, (gint)ir_zoom,
-                                NULL);
-
-    result = emit_cuav_control_signal(appCtx, "send-infrared-control", payload);
-    gst_structure_free(payload);
-    return result;
-}
-
-/**
  * @brief 创建并初始化cuavcontrolsink GStreamer元素，设置组播网络参数
  * 同时重置启动预置位和角点循环状态机
  * @param config 全局配置
@@ -1707,7 +1562,6 @@ create_cuav_control_element(NvDsConfig *config, NvDsPipeline *pipeline)
                      control_config->iface, NULL);
     g_object_set(G_OBJECT(cuav_control),
                  "ttl", control_config->ttl,
-                 "compat-cmd-wrapper", control_config->compat_cmd_wrapper,
                  "debug", control_config->debug,
                  "print-upstream-state", control_config->print_upstream_state,
                  "tx-sys-id", control_config->tx_sys_id,
@@ -1723,17 +1577,15 @@ create_cuav_control_element(NvDsConfig *config, NvDsPipeline *pipeline)
     gst_bin_add(GST_BIN(pipeline->pipeline), cuav_control);
     pipeline->common_elements.cuav_control = cuav_control;
 
-    g_print("[cuav][control] enabled via sink type=8 target=%s:%u iface=%s compat=%d startup-test=%d auto-track=%d visible=%d infrared=%d servo-dev-id=%u\n",
+    g_print("[cuav][control] enabled via sink type=8 target=%s:%u iface=%s startup-test=%d auto-track=%d visible=%d servo-dev-id=%u\n",
             control_config->multicast_ip ?
                 control_config->multicast_ip : "(default)",
             control_config->port,
             control_config->iface ?
                 control_config->iface : "(default)",
-            control_config->compat_cmd_wrapper,
             control_config->send_test_on_startup,
             control_config->auto_track_enable,
             control_config->visible_light_control_enable,
-            control_config->infrared_control_enable,
             control_config->servo_dev_id);
 
     if (pipeline->appCtx)
@@ -1812,24 +1664,7 @@ send_cuav_visible_light_test_message(AppCtx *appCtx)
 }
 
 /**
- * @brief 发送红外测试指令（固定参数: focal=900, focus=5）
- */
-static gboolean
-send_cuav_infrared_test_message(AppCtx *appCtx)
-{
-    gboolean result = FALSE;
-
-    if (!appCtx)
-        return FALSE;
-
-    result = send_cuav_infrared_command(appCtx, 900.0, 5, 0, 0);
-
-    g_print("[cuav][control-test] infrared test send result=%d\n", result);
-    return result;
-}
-
-/**
- * @brief 依次发送云台、可见光、红外测试指令（仅在启动测试模式且非自动跟踪时生效）
+ * @brief 依次发送云台、可见光测试指令（仅在启动测试模式且非自动跟踪时生效）
  * @return 全部发送成功返回TRUE
  */
 gboolean
@@ -1837,7 +1672,6 @@ send_cuav_test_messages(AppCtx *appCtx)
 {
     gboolean servo_ok = FALSE;
     gboolean visible_ok = FALSE;
-    gboolean infrared_ok = TRUE;
     NvDsSinkSubBinConfig *sink_config = NULL;
 
     if (!appCtx)
@@ -1858,10 +1692,7 @@ send_cuav_test_messages(AppCtx *appCtx)
     else
         visible_ok = TRUE;
 
-    if (sink_config->cuav_control_config.infrared_control_enable)
-        infrared_ok = send_cuav_infrared_test_message(appCtx);
-
-    return servo_ok && visible_ok && infrared_ok;
+    return servo_ok && visible_ok;
 }
 
 /**
@@ -1929,48 +1760,6 @@ cuav_select_control_target(NvDsFrameMeta *frame_meta,
     }
 
     return best;
-}
-
-/**
- * @brief 生成正弦波模拟跟踪采样数据（用于无真实目标时的闭环控制测试）
- * err_x/err_y按正弦振荡，target_ratio按低频正弦在[min,max]之间变化
- * @param control_config 控制配置（含模拟参数）
- * @param now_us 当前时间
- * @param[out] sample 填充的模拟采样数据
- */
-static void
-cuav_fill_simulated_sample(const NvDsCuavControlConfig *control_config,
-                           gint64 now_us,
-                           CuavTrackSample *sample)
-{
-    gdouble period_sec = 0.0;
-    gdouble phase = 0.0;
-    gdouble ratio_phase = 0.0;
-    gdouble ratio_mid = 0.0;
-    gdouble ratio_amp = 0.0;
-
-    if (!control_config || !sample)
-        return;
-
-    period_sec = MAX(control_config->simulate_target_period_ms, 1000U) / 1000.0;
-    phase = (2.0 * G_PI * ((now_us / 1000000.0) / period_sec));
-    ratio_phase = phase * 0.5;
-    ratio_mid = (control_config->simulate_target_ratio_min +
-                 control_config->simulate_target_ratio_max) * 0.5;
-    ratio_amp = (control_config->simulate_target_ratio_max -
-                 control_config->simulate_target_ratio_min) * 0.5;
-
-    memset(sample, 0, sizeof(*sample));
-    sample->valid = TRUE;
-    sample->object_id = 0;
-    sample->sample_time_us = now_us;
-    sample->err_x = control_config->simulate_target_amplitude_x * sin(phase);
-    sample->err_y = control_config->simulate_target_amplitude_y * sin(phase * 0.7);
-    sample->target_ratio = ratio_mid + (ratio_amp * sin(ratio_phase));
-    sample->center_x = sample->err_x;
-    sample->center_y = sample->err_y;
-    sample->width = sample->target_ratio;
-    sample->height = sample->target_ratio;
 }
 
 /**
@@ -2624,7 +2413,7 @@ process_cuav_corner_zoom_cycle(AppCtx *appCtx,
 /**
  * @brief 自动跟踪控制主入口（每帧调用）
  * 执行优先级: 启动预置位 → 角点循环 → 自动跟踪 → 模拟目标
- * 自动跟踪流程: 选择目标 → 计算采样 → 速度估计 → 计算云台/可见光/红外指令 → 发送
+ * 自动跟踪流程: 选择目标 → 计算采样 → 速度估计 → 计算云台/可见光指令 → 发送
  * @param appCtx 应用上下文
  * @param batch_meta 当前帧的批量元数据
  */
@@ -2648,7 +2437,6 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
     gdouble vel_y = 0.0;
     gboolean should_send_servo = FALSE;
     gboolean should_send_visible = FALSE;
-    gboolean should_send_infrared = FALSE;
     gboolean visible_cmd_changed = FALSE;
     gboolean motion_spacing_ok = FALSE;
     gboolean motion_cmd_sent = FALSE;
@@ -2662,8 +2450,6 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
     guint pt_focal_en = 0;
     gdouble pt_focal = 0.0;
     guint pt_focus = 100;
-    gdouble ir_focal = 0.0;
-    guint ir_focus = 5;
     gboolean visible_stop_due = FALSE;
     gdouble offset_px_x = 0.0;
     gdouble offset_px_y = 0.0;
@@ -2673,7 +2459,6 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
     gint control_frame_height = 0;
     gboolean servo_sent = FALSE;
     gboolean visible_sent = FALSE;
-    gboolean infrared_sent = FALSE;
     gboolean debug_enabled = FALSE;
 
     if (!appCtx || !batch_meta)
@@ -2781,230 +2566,8 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
     {
         if (debug_enabled)
         {
-            g_print("[cuav][control][auto] source=%u no valid tracked target, simulate=%d\n",
-                    control_config->control_source_id,
-                    control_config->simulate_target_enable);
-        }
-        if (control_config->simulate_target_enable)
-        {
-            cuav_fill_simulated_sample(control_config, now_us, &sample);
-            sample.object_id = 0;
-
-            g_mutex_lock(&appCtx->cuav_control_lock);
-            if (!appCtx->cuav_auto_control_state.has_lock ||
-                appCtx->cuav_auto_control_state.locked_object_id != sample.object_id)
-            {
-                cuav_reset_auto_control_state(&appCtx->cuav_auto_control_state, TRUE);
-                appCtx->cuav_auto_control_state.has_lock = TRUE;
-                appCtx->cuav_auto_control_state.locked_object_id = sample.object_id;
-                appCtx->cuav_auto_control_state.target_stable_since_us = now_us;
-            }
-            else if (appCtx->cuav_auto_control_state.last_target_seen_us <= 0 ||
-                     (now_us - appCtx->cuav_auto_control_state.last_target_seen_us) >
-                        ((gint64)MAX(control_config->control_period_ms * 2U, 1U) * 1000))
-            {
-                appCtx->cuav_auto_control_state.target_stable_since_us = now_us;
-            }
-            else if (appCtx->cuav_auto_control_state.target_stable_since_us <= 0)
-            {
-                appCtx->cuav_auto_control_state.target_stable_since_us = now_us;
-            }
-            appCtx->cuav_auto_control_state.last_target_seen_us = now_us;
-            appCtx->cuav_auto_control_state.lost_zoom_start_us = 0;
-            appCtx->cuav_auto_control_state.lost_zoom_hold_complete = FALSE;
-            cuav_push_track_sample(&appCtx->cuav_auto_control_state,
-                                   control_config->tracking_history_size,
-                                   &sample);
-            feedback_snapshot = appCtx->cuav_feedback_state;
-            state_snapshot = appCtx->cuav_auto_control_state;
-            g_mutex_unlock(&appCtx->cuav_control_lock);
-
-            cuav_compute_average_velocity(&state_snapshot,
-                                          control_config->tracking_history_size,
-                                          &vel_x, &vel_y);
-
-            motion_spacing_ok = (state_snapshot.last_motion_send_us <= 0) ||
-                ((now_us - state_snapshot.last_motion_send_us) >=
-                 CUAV_MOTION_CMD_MIN_SPACING_USEC);
-
-            if ((now_us - state_snapshot.last_servo_send_us) >=
-                ((gint64)control_config->control_period_ms * 1000))
-            {
-                should_send_servo = cuav_compute_servo_command(control_config,
-                                                               &feedback_snapshot,
-                                                               &state_snapshot,
-                                                               &sample,
-                                                               vel_x, vel_y,
-                                                               &loc_h, &loc_v,
-                                                               &speed_h, &speed_v,
-                                                               debug_enabled);
-            }
-            else if (debug_enabled)
-            {
-                g_print("[cuav][control][auto] source=%u target=%" G_GUINT64_FORMAT
-                        " servo suppressed by control period (%" G_GINT64_FORMAT " us remaining)\n",
-                        control_config->control_source_id,
-                        sample.object_id,
-                        (((gint64)control_config->control_period_ms * 1000) -
-                         (now_us - state_snapshot.last_servo_send_us)));
-            }
-
-            visible_stop_due = cuav_visible_focal_stop_due(control_config,
-                                                           &state_snapshot,
-                                                           now_us);
-            if (cuav_visible_control_enabled(control_config) &&
-                (!state_snapshot.visible_initialized ||
-                 visible_stop_due ||
-                 (now_us - state_snapshot.last_visible_send_us) >=
-                    ((gint64)control_config->control_period_ms * 1000)))
-            {
-                if (visible_stop_due)
-                {
-                    should_send_visible = TRUE;
-                    pt_focal_en = 0;
-                    pt_focal = 0.0;
-                }
-                else
-                {
-                    should_send_visible = cuav_compute_visible_light_command(control_config,
-                                                                             &state_snapshot,
-                                                                             &sample,
-                                                                             &pt_focal_en,
-                                                                             &pt_focal,
-                                                                             &pt_focus);
-                }
-                visible_cmd_changed = should_send_visible &&
-                    (!state_snapshot.visible_initialized ||
-                     pt_focal_en != state_snapshot.last_pt_focal_en);
-                should_send_visible = visible_cmd_changed;
-                if (should_send_visible && !motion_spacing_ok && !visible_stop_due && debug_enabled)
-                {
-                    g_print("[cuav][control][auto] source=%u target=%" G_GUINT64_FORMAT
-                            " visible focus cmd suppressed by 70ms spacing (%" G_GINT64_FORMAT " us remaining)\n",
-                            control_config->control_source_id,
-                            sample.object_id,
-                            CUAV_MOTION_CMD_MIN_SPACING_USEC -
-                                (now_us - state_snapshot.last_motion_send_us));
-                }
-            }
-
-            if (cuav_infrared_control_enabled(control_config) &&
-                (!state_snapshot.infrared_initialized ||
-                 (now_us - state_snapshot.last_infrared_send_us) >=
-                    ((gint64)control_config->control_period_ms * 1000)))
-            {
-                should_send_infrared = cuav_compute_infrared_command(control_config,
-                                                                     &feedback_snapshot,
-                                                                     &state_snapshot,
-                                                                     &sample,
-                                                                     &ir_focal,
-                                                                     &ir_focus);
-                if (should_send_infrared && state_snapshot.infrared_initialized &&
-                    fabs(ir_focal - state_snapshot.last_ir_focal) <= 1.0)
-                {
-                    should_send_infrared = FALSE;
-                }
-            }
-
-            if (should_send_visible && (motion_spacing_ok || visible_stop_due))
-            {
-                visible_sent = send_cuav_visible_light_command_with_en(appCtx, pt_focal_en,
-                                                                        0.0, 0, 0, 0, 0);
-                motion_cmd_sent = visible_sent;
-                if (visible_sent && control_config->debug)
-                {
-                    g_print("[cuav][control][auto] source=%u target=%" G_GUINT64_FORMAT
-                            " ratio=%.3f focal_en=%u focus=%u%s\n",
-                            control_config->control_source_id,
-                            sample.object_id,
-                            sample.target_ratio,
-                            pt_focal_en,
-                            pt_focus,
-                            visible_stop_due ? " stop-after-hold" : "");
-                }
-            }
-            else if (should_send_visible && debug_enabled && !motion_spacing_ok && !visible_stop_due)
-            {
-                g_print("[cuav][control][auto] source=%u target=%" G_GUINT64_FORMAT
-                        " visible focus cmd blocked by 70ms spacing\n",
-                        control_config->control_source_id,
-                        sample.object_id);
-            }
-
-            if (!motion_cmd_sent && should_send_servo && motion_spacing_ok)
-            {
-                servo_sent = send_cuav_servo_command(appCtx, control_config->servo_dev_id, 1, 1, 0, 0,
-                                                     speed_h, speed_v, loc_h, loc_v);
-                if (!servo_sent && debug_enabled)
-                {
-                    g_print("[cuav][control][auto] source=%u target=%" G_GUINT64_FORMAT
-                            " servo send failed loc=(%.2f,%.2f) speed=(%u,%u)\n",
-                            control_config->control_source_id,
-                            sample.object_id,
-                            loc_h,
-                            loc_v,
-                            speed_h,
-                            speed_v);
-                }
-            }
-            else if (should_send_servo && debug_enabled && !motion_spacing_ok)
-            {
-                g_print("[cuav][control][auto] source=%u target=%" G_GUINT64_FORMAT
-                        " servo cmd blocked by 70ms spacing\n",
-                        control_config->control_source_id,
-                        sample.object_id);
-            }
-
-            if (should_send_infrared)
-            {
-                infrared_sent = send_cuav_infrared_command(appCtx, ir_focal,
-                                                           ir_focus, 0, 0);
-            }
-
-            if ((servo_sent || visible_sent || infrared_sent) && control_config->debug)
-            {
-                g_print("[cuav][control][sim] err=(%.3f,%.3f) ratio=%.3f "
-                        "servo=(%.2f,%.2f) speed=(%u,%u) pt_focal_en=%u ir_focal=%.1f\n",
-                        sample.err_x, sample.err_y, sample.target_ratio,
-                        loc_h, loc_v, speed_h, speed_v, pt_focal_en, ir_focal);
-            }
-
-            if (servo_sent || visible_sent || infrared_sent)
-            {
-                g_mutex_lock(&appCtx->cuav_control_lock);
-                if (servo_sent)
-                {
-                    appCtx->cuav_auto_control_state.last_servo_valid = TRUE;
-                    appCtx->cuav_auto_control_state.last_loc_h = loc_h;
-                    appCtx->cuav_auto_control_state.last_loc_v = loc_v;
-                    appCtx->cuav_auto_control_state.last_speed_h = speed_h;
-                    appCtx->cuav_auto_control_state.last_speed_v = speed_v;
-                    appCtx->cuav_auto_control_state.last_servo_send_us = now_us;
-                    appCtx->cuav_auto_control_state.last_motion_send_us = now_us;
-                    appCtx->cuav_auto_control_state.last_motion_type = CUAV_MOTION_CMD_SERVO;
-                }
-                if (visible_sent)
-                {
-                    appCtx->cuav_auto_control_state.last_visible_valid = TRUE;
-                    appCtx->cuav_auto_control_state.last_pt_focal_en = pt_focal_en;
-                    appCtx->cuav_auto_control_state.last_pt_focal = pt_focal;
-                    appCtx->cuav_auto_control_state.last_pt_focus = pt_focus;
-                    appCtx->cuav_auto_control_state.last_visible_send_us = now_us;
-                    appCtx->cuav_auto_control_state.visible_initialized = TRUE;
-                    appCtx->cuav_auto_control_state.last_motion_send_us = now_us;
-                    appCtx->cuav_auto_control_state.last_motion_type = CUAV_MOTION_CMD_VISIBLE;
-                }
-                if (infrared_sent)
-                {
-                    appCtx->cuav_auto_control_state.last_infrared_valid = TRUE;
-                    appCtx->cuav_auto_control_state.last_ir_focal = ir_focal;
-                    appCtx->cuav_auto_control_state.last_ir_focus = ir_focus;
-                    appCtx->cuav_auto_control_state.last_infrared_send_us = now_us;
-                    appCtx->cuav_auto_control_state.infrared_initialized = TRUE;
-                }
-                g_mutex_unlock(&appCtx->cuav_control_lock);
-            }
-            return;
+            g_print("[cuav][control][auto] source=%u no valid tracked target\n",
+                    control_config->control_source_id);
         }
 
         g_mutex_lock(&appCtx->cuav_control_lock);
@@ -3310,24 +2873,6 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
         }
     }
 
-    if (cuav_infrared_control_enabled(control_config) &&
-        (!state_snapshot.infrared_initialized ||
-         (now_us - state_snapshot.last_infrared_send_us) >=
-            ((gint64)control_config->control_period_ms * 1000)))
-    {
-        should_send_infrared = cuav_compute_infrared_command(control_config,
-                                                             &feedback_snapshot,
-                                                             &state_snapshot,
-                                                             &sample,
-                                                             &ir_focal,
-                                                             &ir_focus);
-        if (should_send_infrared && state_snapshot.infrared_initialized &&
-            fabs(ir_focal - state_snapshot.last_ir_focal) <= 1.0)
-        {
-            should_send_infrared = FALSE;
-        }
-    }
-
     if (should_send_visible && (motion_spacing_ok || visible_stop_due))
     {
         visible_sent = send_cuav_visible_light_command_with_en(appCtx, pt_focal_en,
@@ -3386,23 +2931,7 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
                 sample.object_id);
     }
 
-    if (should_send_infrared)
-    {
-        infrared_sent = send_cuav_infrared_command(appCtx, ir_focal,
-                                                   ir_focus, 0, 0);
-        if (infrared_sent && control_config->debug)
-        {
-            g_print("[cuav][control][auto] source=%u target=%" G_GUINT64_FORMAT
-                    " ratio=%.3f ir_focal=%.1f ir_focus=%u\n",
-                    control_config->control_source_id,
-                    sample.object_id,
-                    sample.target_ratio,
-                    ir_focal,
-                    ir_focus);
-        }
-    }
-
-    if (servo_sent || visible_sent || infrared_sent)
+    if (servo_sent || visible_sent)
     {
         g_mutex_lock(&appCtx->cuav_control_lock);
         if (servo_sent)
@@ -3426,14 +2955,6 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
             appCtx->cuav_auto_control_state.visible_initialized = TRUE;
             appCtx->cuav_auto_control_state.last_motion_send_us = now_us;
             appCtx->cuav_auto_control_state.last_motion_type = CUAV_MOTION_CMD_VISIBLE;
-        }
-        if (infrared_sent)
-        {
-            appCtx->cuav_auto_control_state.last_infrared_valid = TRUE;
-            appCtx->cuav_auto_control_state.last_ir_focal = ir_focal;
-            appCtx->cuav_auto_control_state.last_ir_focus = ir_focus;
-            appCtx->cuav_auto_control_state.last_infrared_send_us = now_us;
-            appCtx->cuav_auto_control_state.infrared_initialized = TRUE;
         }
         g_mutex_unlock(&appCtx->cuav_control_lock);
     }

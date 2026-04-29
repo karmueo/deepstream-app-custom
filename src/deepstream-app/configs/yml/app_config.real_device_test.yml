@@ -243,16 +243,12 @@ sink5:
   interface: eno1
   # 组播 TTL
   ttl: 1
-  # 是否兼容成 0x7101 + cmd_id 包装模式
-  compat-cmd-wrapper: 0
   # 是否打印发送调试日志
   debug: 1
   # pipeline 启动后是否发送固定测试报文；启用自动跟随后建议关闭
   send-test-on-startup: 0
   # 是否根据检测/跟踪目标自动发送伺服/可见光控制报文
   auto-track-enable: 1
-  # 当前无目标时，是否使用仿真目标继续驱动控制报文
-  simulate-target-enable: 1
   # 自动控制使用的 source_id
   control-source-id: 0
   # 自动控制最小发送周期（毫秒）
@@ -283,22 +279,13 @@ sink5:
   zoom-target-ratio-max: 0.35
   # 焦距调节死区和增益
   zoom-deadband: 0.02
-  zoom-kp: 2500.0
-  zoom-max-step: 400.0
   # 自动可见光变焦命令保持时间，单位毫秒
   visible-focal-hold-ms: 300
   # 可见光焦距范围
   pt-focal-min: 134.0
   pt-focal-max: 16298.0
-  # 仿真目标参数
-  simulate-target-amplitude-x: 0.35
-  simulate-target-amplitude-y: 0.20
-  simulate-target-ratio-min: 0.18
-  simulate-target-ratio-max: 0.36
-  simulate-target-period-ms: 6000
   servo-effect-threshold-h: 0.5
   servo-effect-threshold-v: 0.3
-  focal-effect-threshold: 50.0
   state-stale-timeout-ms: 2000
   # 公共报文头默认发送方/接收方信息
   tx-sys-id: 999
