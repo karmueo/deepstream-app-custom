@@ -1,0 +1,21 @@
+---
+# clangd configuration for deepstream-app-custom
+# Ensures consistent C++ standard and system include paths for both C and C++ compilation
+
+CompileFlags:
+  # Set C++ standard to gnu++17 to match CMake configuration
+  Add:
+    - "-std=gnu++17"
+    - "-fPIC"
+    - "-pthread"
+    - "-DPLATFORM_TEGRA"
+    - "-isystem=/usr/local/cuda/include"
+  
+  # Query system includes from both GCC and G++
+  Compiler: c++
+
+Index:
+  # Enable background indexing for faster operations
+  Background: Build
+  # Increase completion cache to avoid stale results
+  StandardLibraryMapping: std

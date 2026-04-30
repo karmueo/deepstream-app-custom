@@ -27,7 +27,8 @@
         "--background-index",
         "--clang-tidy",
         "--completion-style=detailed",
-        "--header-insertion=iwyu"
+        "--header-insertion=iwyu",
+        "--query-driver=/usr/bin/c++,/usr/bin/g++,/usr/bin/gcc,/usr/bin/aarch64-linux-gnu-*"
     ],
     "files.associations": {
         "*.pbtxt": "plaintext",
