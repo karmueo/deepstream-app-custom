@@ -1,3 +1,12 @@
+/**
+ * @file deepstream_app_callbacks.h
+ * @brief DeepStream 应用程序 GStreamer 回调函数声明。
+ *
+ * 声明 GStreamer 总线回调、appsink 控制数据回调、
+ * 传感器流增删回调、推理完成回调、性能统计回调、
+ * 消息订阅回调等，以及 FPS 统计相关的全局变量。
+ */
+
 #ifndef DEEPSTREAM_APP_CALLBACKS_H
 #define DEEPSTREAM_APP_CALLBACKS_H
 

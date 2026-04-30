@@ -72,21 +72,18 @@ parse_cuav_control_yaml(NvDsCuavControlConfig *config, gchar *cfg_file_path)
   config->servo_effect_threshold_v = 0.3;
   config->state_stale_timeout_ms = 2000;
   config->corner_zoom_cycle_enable = FALSE;
-  config->corner_servo_enable = TRUE;
   config->corner_cycle_count = 1;
   config->sequence_repeat_count = 1;
   config->corner_offset_h_deg = 15.0;
   config->corner_offset_v_deg = 10.0;
   config->corner_dwell_ms = 1000;
   config->corner_servo_speed = 30;
-  config->corner_zoom_in_focal = NAN;
-  config->corner_zoom_out_focal = NAN;
-  config->zoom_in_duration_ms = 1000;
-  config->zoom_out_duration_ms = 1000;
   config->corner_home_loc_h_deg = NAN;
   config->corner_home_loc_v_deg = NAN;
   config->startup_pt_focal_min_enable = FALSE;
-  config->startup_pt_focal_min_hold_ms = 3000;
+  config->startup_pt_focal = 20.0;
+  config->startup_pt_focus = 100;
+  config->lost_target_focal_min_hold_ms = 3000;
   config->corner_home_pt_focus = G_MAXUINT;
 
   for (YAML::const_iterator itr = configyml["cuav-control"].begin();
@@ -195,8 +192,6 @@ parse_cuav_control_yaml(NvDsCuavControlConfig *config, gchar *cfg_file_path)
       config->state_stale_timeout_ms = itr->second.as<guint>();
     } else if (paramKey == "corner-zoom-cycle-enable") {
       config->corner_zoom_cycle_enable = itr->second.as<gboolean>();
-    } else if (paramKey == "corner-servo-enable") {
-      config->corner_servo_enable = itr->second.as<gboolean>();
     } else if (paramKey == "corner-cycle-count") {
       config->corner_cycle_count = itr->second.as<guint>();
     } else if (paramKey == "sequence-repeat-count") {
@@ -209,14 +204,6 @@ parse_cuav_control_yaml(NvDsCuavControlConfig *config, gchar *cfg_file_path)
       config->corner_dwell_ms = itr->second.as<guint>();
     } else if (paramKey == "corner-servo-speed") {
       config->corner_servo_speed = itr->second.as<guint>();
-    } else if (paramKey == "corner-zoom-in-focal") {
-      config->corner_zoom_in_focal = itr->second.as<gdouble>();
-    } else if (paramKey == "corner-zoom-out-focal") {
-      config->corner_zoom_out_focal = itr->second.as<gdouble>();
-    } else if (paramKey == "zoom-in-duration-ms") {
-      config->zoom_in_duration_ms = itr->second.as<guint>();
-    } else if (paramKey == "zoom-out-duration-ms") {
-      config->zoom_out_duration_ms = itr->second.as<guint>();
     } else if (paramKey == "corner-home-loc-h-deg" ||
                paramKey == "corner-return-loc-h-deg") {
       config->corner_home_loc_h_deg = itr->second.as<gdouble>();
@@ -225,8 +212,12 @@ parse_cuav_control_yaml(NvDsCuavControlConfig *config, gchar *cfg_file_path)
       config->corner_home_loc_v_deg = itr->second.as<gdouble>();
     } else if (paramKey == "startup-pt-focal-min-enable") {
       config->startup_pt_focal_min_enable = itr->second.as<gboolean>();
-    } else if (paramKey == "startup-pt-focal-min-hold-ms") {
-      config->startup_pt_focal_min_hold_ms = itr->second.as<guint>();
+    } else if (paramKey == "startup-pt-focal") {
+      config->startup_pt_focal = itr->second.as<gdouble>();
+    } else if (paramKey == "startup-pt-focus") {
+      config->startup_pt_focus = itr->second.as<guint>();
+    } else if (paramKey == "lost-target-focal-min-hold-ms") {
+      config->lost_target_focal_min_hold_ms = itr->second.as<guint>();
     } else if (paramKey == "corner-home-pt-focus") {
       config->corner_home_pt_focus = itr->second.as<guint>();
     } else {

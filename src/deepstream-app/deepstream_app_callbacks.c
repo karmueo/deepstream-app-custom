@@ -1,13 +1,10 @@
-/*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+/**
+ * @file deepstream_app_callbacks.c
+ * @brief DeepStream 应用程序 GStreamer 回调函数实现。
  *
- * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
- * property and proprietary rights in and to this material, related
- * documentation and any modifications thereto. Any use, reproduction,
- * disclosure or distribution of this material and related documentation
- * without an express license agreement from NVIDIA CORPORATION or
- * its affiliates is strictly prohibited.
+ * 实现 GStreamer 总线消息处理、控制通道 appsink 数据接收与解析、
+ * 传感器流增删管理、推理完成后的元数据处理、FPS 性能统计打印、
+ * 消息 broker 订阅回调等功能。
  */
 
 #include "deepstream_app_callbacks.h"

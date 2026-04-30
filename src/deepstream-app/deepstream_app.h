@@ -1,14 +1,10 @@
-/*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2024 NVIDIA CORPORATION &
- * AFFILIATES. All rights reserved. SPDX-License-Identifier:
- * LicenseRef-NvidiaProprietary
+/**
+ * @file deepstream_app.h
+ * @brief DeepStream 应用程序核心数据结构与公共接口定义。
  *
- * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
- * property and proprietary rights in and to this material, related
- * documentation and any modifications thereto. Any use, reproduction,
- * disclosure or distribution of this material and related documentation
- * without an express license agreement from NVIDIA CORPORATION or
- * its affiliates is strictly prohibited.
+ * 定义应用程序上下文 (AppCtx)、GStreamer 分析流水线结构体、
+ * 配置结构体、C-UAV 自动控制相关状态结构体，以及流水线
+ * 创建/销毁/暂停/恢复等公共 API。
  */
 
 #ifndef __NVGSTDS_APP_H__
@@ -320,11 +316,7 @@ typedef enum
     CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_CORNER = 5,
     CUAV_CORNER_ZOOM_CYCLE_PHASE_HOLD_CORNER = 6,
     CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_SERVO_STOP = 7,
-    CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_ZOOM_IN = 8,
-    CUAV_CORNER_ZOOM_CYCLE_PHASE_HOLD_ZOOM_IN = 9,
-    CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_ZOOM_OUT = 10,
-    CUAV_CORNER_ZOOM_CYCLE_PHASE_HOLD_ZOOM_OUT = 11,
-    CUAV_CORNER_ZOOM_CYCLE_PHASE_COMPLETE = 12
+    CUAV_CORNER_ZOOM_CYCLE_PHASE_COMPLETE = 8
 } CuavCornerZoomCyclePhase;
 
 typedef enum
@@ -366,9 +358,6 @@ typedef struct
     gdouble home_loc_v;
     gdouble base_loc_h;
     gdouble base_loc_v;
-    gboolean return_home_before_zoom;
-    gboolean resume_cycle_after_home;
-    gboolean increment_repeat_after_home;
     gdouble last_loc_h;
     gdouble last_loc_v;
 } CuavCornerZoomCycleState;
@@ -461,7 +450,7 @@ struct _AppCtx
     CuavStartupPresetState cuav_startup_preset_state; /**< 启动预置位状态 */
     CuavFeedbackState cuav_feedback_state; /**< 最近一次光电系统反馈 */
     CuavAutoControlState cuav_auto_control_state; /**< 自动控制运行时状态 */
-    CuavCornerZoomCycleState cuav_corner_zoom_cycle_state; /**< 角点+变焦循环状态 */
+    CuavCornerZoomCycleState cuav_corner_zoom_cycle_state; /**< 角点循环状态 */
 };
 
 /**

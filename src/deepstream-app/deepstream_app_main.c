@@ -1,14 +1,10 @@
-/*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2024 NVIDIA CORPORATION &
- * AFFILIATES. All rights reserved. SPDX-License-Identifier:
- * LicenseRef-NvidiaProprietary
+/**
+ * @file deepstream_app_main.c
+ * @brief DeepStream 应用程序入口及运行时交互逻辑。
  *
- * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
- * property and proprietary rights in and to this material, related
- * documentation and any modifications thereto. Any use, reproduction,
- * disclosure or distribution of this material and related documentation
- * without an express license agreement from NVIDIA CORPORATION or
- * its affiliates is strictly prohibited.
+ * 包含 main() 函数、命令行参数解析、X11 窗口事件处理、
+ * 键盘交互、智能录像触发、事件消息元数据生成与发送、
+ * 图形叠加绘制（角标框、标签、鹰眼缩略图）等运行时功能。
  */
 
 #include "deepstream_app.h"

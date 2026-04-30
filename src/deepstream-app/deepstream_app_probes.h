@@ -1,13 +1,9 @@
-/*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+/**
+ * @file deepstream_app_probes.h
+ * @brief DeepStream 应用程序 GStreamer Pad 探针回调声明。
  *
- * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
- * property and proprietary rights in and to this material, related
- * documentation and any modifications thereto. Any use, reproduction,
- * disclosure or distribution of this material and related documentation
- * without an express license agreement from NVIDIA CORPORATION or
- * its affiliates is strictly prohibited.
+ * 声明主推理完成后、全部推理完成后、跟踪分析完成后、
+ * 以及端到端延迟统计等 Pad 探针回调函数。
  */
 
 #ifndef __DEEPSTREAM_APP_PROBES_H__

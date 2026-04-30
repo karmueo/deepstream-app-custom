@@ -1,14 +1,12 @@
-/*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+/**
+ * @file deepstream_app_config_parser.c
+ * @brief DeepStream 应用程序 INI 格式配置文件解析器。
  *
- * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
- * property and proprietary rights in and to this material, related
- * documentation and any modifications thereto. Any use, reproduction,
- * disclosure or distribution of this material and related documentation
- * without an express license agreement from NVIDIA CORPORATION or
- * its affiliates is strictly prohibited.
+ * 从 GKeyFile 格式的配置文件中解析应用程序、视频源、
+ * 推理引擎、跟踪器、OSD、Sink 等各组件的配置参数，
+ * 并填充到 NvDsConfig 结构体中。
  */
+
 #include <string.h>
 #include "deepstream_app.h"
 #include "deepstream_config_file_parser.h"

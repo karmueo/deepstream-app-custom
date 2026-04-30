@@ -111,16 +111,13 @@ cuav-control:
   # 设备状态报文的新鲜度超时，单位毫秒。
   # 超过该时间未收到新状态时，会认为反馈过期。
   state-stale-timeout-ms: 2000
-  # 是否启用“四角伺服 + 拉近/拉远焦距”循环序列。
+  # 是否启用“四角伺服”循环序列。
   # 0=关闭，1=开启。
   # 开启后会优先于 auto-track。
   corner-zoom-cycle-enable: 1
-  # 四角循环中是否执行回位和角点伺服。
-  # 0=跳过伺服，只做拉近/拉远焦距测试；1=执行完整四角伺服+变焦流程。
-  corner-servo-enable: 0
   # 单轮四角循环次数。
-  corner-cycle-count: 0
-  # 整套“四角 + 变焦”流程重复次数。
+  corner-cycle-count: 1
+  # 整套四角流程重复次数。
   sequence-repeat-count: 1
   # 四角相对当前中心位置的水平偏移量，单位度。
   corner-offset-h-deg: 15.0
@@ -130,24 +127,19 @@ cuav-control:
   corner-dwell-ms: 1000
   # 四角循环使用的伺服速度。
   corner-servo-speed: 30
-  # 拉近目标焦距；只影响 corner-zoom-cycle 测试流程。
-  corner-zoom-in-focal: 100.0
-  # 拉远目标焦距；只影响 corner-zoom-cycle 测试流程。
-  corner-zoom-out-focal: 50.0
-  # 拉进焦距持续时间，单位毫秒。
-  zoom-in-duration-ms: 5000
-  # 拉远焦距持续时间，单位毫秒。
-  zoom-out-duration-ms: 5000
   # 可选：程序启动和每轮回位的初始伺服位置；不配置则默认使用首个有效反馈位置。
   corner-home-loc-h-deg: 54.0
   corner-home-loc-v-deg: 4.0
-  # 可选：程序启动时先下发 pt_focal_en=4，把可见光焦距调到最小；随后按保持时间再下发 pt_focal_en=0 停止。
-  # 只做拉近/拉远焦距测试时建议关闭，避免启动预置命令干扰测试序列。
+  # 可选：程序启动时一次性下发可见光焦距/聚焦预置。
   # 0=关闭，1=开启。
-  startup-pt-focal-min-enable: 0
-  # 上述最小焦距命令保持时间，单位毫秒。
-  # 默认 3000，即 3 秒。
-  startup-pt-focal-min-hold-ms: 10000
+  startup-pt-focal-min-enable: 1
+  # 启动预置下发的可见光焦距值；仅在 startup-pt-focal-min-enable=1 时生效。
+  startup-pt-focal: 20
+  # 启动预置下发的可见光聚焦值；仅在 startup-pt-focal-min-enable=1 时生效。
+  startup-pt-focus: 100
+  # 目标丢失后连续缩小焦距的保持时间，单位毫秒。
+  # 默认 3000，即 3 秒；设为 0 可关闭无目标缩焦保持。
+  lost-target-focal-min-hold-ms: 10000
   # 可选：程序启动和每轮回位时的可见光聚焦预置位；不配置则不下发 pt_focus 预置报文。
   # corner-home-pt-focus: 100
   # 公共报文头中的发送方系统 ID。

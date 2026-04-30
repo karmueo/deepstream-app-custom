@@ -26,7 +26,7 @@
 - 保持最近一次控制状态一段时间
 - 走仿真目标继续驱动闭环
 - 启动时发送预置位报文
-- 做角点 + 变焦循环测试
+- 做角点循环测试
 
 ## 2. 启动前提
 
@@ -71,7 +71,7 @@
 程序不是一上来就自动跟踪真实目标，而是按优先级处理：
 
 1. 启动预置位
-2. 四角 + 变焦循环
+2. 四角循环
 3. 自动目标跟踪
 4. 发送测试报文
 
@@ -85,19 +85,20 @@
 - `corner-home-loc-v-deg`
 - `corner-home-pt-focus`
 - `startup-pt-focal-min-enable`
-- `startup-pt-focal-min-hold-ms`
+- `startup-pt-focal`
+- `startup-pt-focus`
 
 程序会先做“回到预置位”的流程，再进入后续控制。
 
 对于云台位置，程序会发送一条 `0x7204`，把水平和垂直位置拉到预置值。
 
-对于可见光，`startup-pt-focal-min-enable=1` 时会在启动时先发送一条 `0x7205`，把焦距拉到最小；随后等待 `startup-pt-focal-min-hold-ms` 指定的时间，再发送 `pt_focal_en=0` 停止。`corner-home-pt-focus` 仍然只负责聚焦预置。
+对于可见光，`startup-pt-focal-min-enable=1` 时会在启动时发送一条 `0x7205`，使用 `startup-pt-focal` 和 `startup-pt-focus` 作为 `pt_focal`、`pt_focus` 的预置值；启动预置不会再延时发送 `pt_focal_en=0`。
 
 启动预置是否完成，取决于反馈是否达到阈值，或者等待超时。
 
-### 4.2 四角 + 变焦循环
+### 4.2 四角循环
 
-如果开启 `corner-zoom-cycle-enable=1`，程序会优先进入四角测试逻辑，自动在四个角点之间切换，并配合焦距拉近/拉远。
+如果开启 `corner-zoom-cycle-enable=1`，程序会优先进入四角测试逻辑，自动在四个角点之间切换，不再发送拉近/拉远焦距报文。
 
 这个模式主要用于联调和校准，不属于真实目标自动跟踪主流程。四角回位阶段不再读取数值型焦距预置，只保留 `corner-home-pt-focus`。
 
@@ -338,11 +339,11 @@
 
 如果之前已经发过可见光控制，并且反馈/本地状态还有效，程序会基于最近一次焦距继续修正。
 
-如果需要在启动时先把镜头拉到最小焦距，就开启 `startup-pt-focal-min-enable`，并用 `startup-pt-focal-min-hold-ms` 调整保持时间。
+如果需要在启动时先设置固定焦距和聚焦值，就开启 `startup-pt-focal-min-enable`，并用 `startup-pt-focal`、`startup-pt-focus` 配置预置值。
 
-程序会先发送 `pt_focal_en=4`，随后按 `startup-pt-focal-min-hold-ms` 指定的时间发送 `pt_focal_en=0`。
+程序会发送 `pt_focal_en=1`、`pt_focus_en=1`，发送成功后启动预置直接完成。
 
-数值型焦距预置已废弃，不再读取。
+目标丢失后的连续缩焦保持时间由 `lost-target-focal-min-hold-ms` 控制。
 
 ### 8.4 可见光报文实际发什么
 
@@ -545,7 +546,7 @@
 - `[cuav][control][auto]`
 - `[cuav][control][sim]`
 - `[cuav][startup-preset]`
-- `[cuav][corner-zoom]`
+- `[cuav][corner-cycle]`
 - `[cuav][eo-system]`
 - `[cuav][servo]`
 

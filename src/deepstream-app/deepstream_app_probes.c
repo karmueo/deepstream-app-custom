@@ -1,13 +1,10 @@
-/*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+/**
+ * @file deepstream_app_probes.c
+ * @brief DeepStream 应用程序 GStreamer Pad 探针回调实现。
  *
- * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
- * property and proprietary rights in and to this material, related
- * documentation and any modifications thereto. Any use, reproduction,
- * disclosure or distribution of this material and related documentation
- * without an express license agreement from NVIDIA CORPORATION or
- * its affiliates is strictly prohibited.
+ * 实现主推理完成后 NMS 去重与框修正、全部推理完成后元数据处理、
+ * 跟踪分析后静态目标过滤与 KITTI 输出、以及端到端/demux 分支
+ * 延迟统计等 Pad 探针回调。
  */
 
 #include <gst/gst.h>
@@ -23,14 +20,15 @@
 static guint demux_batch_num = 0;  // demux 延迟统计批次计数
 static guint64 last_pts = 0;       // 上一次保存对象的时间戳
 
-// 获取目标框中心点与尺寸信息。
-//
-// Args:
-//   obj: 目标元数据指针。
-//   cx: 输出中心点 X。
-//   cy: 输出中心点 Y。
-//   w: 输出宽度。
-//   h: 输出高度。
+/**
+ * @brief 获取目标边界框的中心点与尺寸信息。
+ *
+ * @param obj 目标元数据指针。
+ * @param cx  输出中心点 X 坐标。
+ * @param cy  输出中心点 Y 坐标。
+ * @param w   输出宽度。
+ * @param h   输出高度。
+ */
 static void get_obj_bbox_center(const NvDsObjectMeta *obj,
                                 gfloat *cx,
                                 gfloat *cy,
@@ -48,32 +46,30 @@ static void get_obj_bbox_center(const NvDsObjectMeta *obj,
     *h = height;
 }
 
-// 判断目标尺寸是否稳定。
-//
-// Args:
-//   last_size: 上一帧尺寸。
-//   curr_size: 当前帧尺寸。
-//   ratio_thresh: 尺寸变化比例阈值。
-//
-// Returns:
-//   gboolean: 尺寸变化是否在阈值内。
+/**
+ * @brief 判断目标尺寸是否稳定。
+ *
+ * @param last_size    上一帧尺寸。
+ * @param curr_size    当前帧尺寸。
+ * @param ratio_thresh 尺寸变化比例阈值。
+ * @return gboolean 尺寸变化是否在阈值内。
+ */
 static gboolean is_size_stable(gfloat last_size, gfloat curr_size, gfloat ratio_thresh)
 {
     gfloat base = (last_size > 1.0f) ? last_size : 1.0f;
     return (fabsf(curr_size - last_size) / base) <= ratio_thresh;
 }
 
-// 判断目标中心点是否稳定。
-//
-// Args:
-//   last_cx: 上一帧中心点 X。
-//   last_cy: 上一帧中心点 Y。
-//   cx: 当前帧中心点 X。
-//   cy: 当前帧中心点 Y。
-//   center_thresh: 中心点变化阈值。
-//
-// Returns:
-//   gboolean: 中心点变化是否在阈值内。
+/**
+ * @brief 判断目标中心点是否稳定。
+ *
+ * @param last_cx       上一帧中心点 X。
+ * @param last_cy       上一帧中心点 Y。
+ * @param cx            当前帧中心点 X。
+ * @param cy            当前帧中心点 Y。
+ * @param center_thresh 中心点变化阈值。
+ * @return gboolean 中心点变化是否在阈值内。
+ */
 static gboolean is_center_stable(gfloat last_cx,
                                  gfloat last_cy,
                                  gfloat cx,
@@ -84,10 +80,11 @@ static gboolean is_center_stable(gfloat last_cx,
            (fabsf(cy - last_cy) <= center_thresh);
 }
 
-// 重置静态目标过滤状态。
-//
-// Args:
-//   state: 静态目标过滤状态指针。
+/**
+ * @brief 重置静态目标过滤状态。
+ *
+ * @param state 静态目标过滤状态指针。
+ */
 static void reset_static_target_state(StaticTargetFilterState *state)
 {
     state->active = FALSE;
@@ -97,16 +94,15 @@ static void reset_static_target_state(StaticTargetFilterState *state)
     state->consecutive_count = 0;
 }
 
-// 判断目标是否处于静态区域内。
-//
-// Args:
-//   obj: 目标元数据指针。
-//   state: 静态目标过滤状态指针。
-//   center_thresh: 中心点变化阈值。
-//   size_thresh: 尺寸变化阈值。
-//
-// Returns:
-//   gboolean: 是否处于静态区域内。
+/**
+ * @brief 判断目标是否处于静态区域内。
+ *
+ * @param obj           目标元数据指针。
+ * @param state         静态目标过滤状态指针。
+ * @param center_thresh 中心点变化阈值。
+ * @param size_thresh   尺寸变化阈值。
+ * @return gboolean 是否处于静态区域内。
+ */
 static gboolean is_obj_in_static_region(const NvDsObjectMeta *obj,
                                         const StaticTargetFilterState *state,
                                         gfloat center_thresh,
@@ -134,11 +130,12 @@ static gboolean is_obj_in_static_region(const NvDsObjectMeta *obj,
     return TRUE;
 }
 
-// 按 KITTI 格式输出检测框数据。
-//
-// Args:
-//   appCtx: 应用上下文。
-//   batch_meta: 批量元数据。
+/**
+ * @brief 按 KITTI 格式输出检测框数据。
+ *
+ * @param appCtx     应用上下文。
+ * @param batch_meta 批量元数据。
+ */
 static void write_kitti_output(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
 {
     gchar bbox_file[1024] = {0};
@@ -178,11 +175,12 @@ static void write_kitti_output(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
     }
 }
 
-// 主要检测后对检测框做自定义变换（示例：扩大一倍）。
-//
-// Args:
-//   appCtx: 应用上下文。
-//   batch_meta: 批量元数据。
+/**
+ * @brief 主推理后对检测框做自定义变换（示例：膨胀扩大）。
+ *
+ * @param appCtx     应用上下文。
+ * @param batch_meta 批量元数据。
+ */
 static void change_gieoutput(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
 {
     // 遍历每一帧
@@ -233,11 +231,12 @@ static void change_gieoutput(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
     }
 }
 
-// 输出过去轨迹数据到文件。
-//
-// Args:
-//   appCtx: 应用上下文。
-//   batch_meta: 批量元数据。
+/**
+ * @brief 输出过去轨迹数据到 KITTI 格式文件。
+ *
+ * @param appCtx     应用上下文。
+ * @param batch_meta 批量元数据。
+ */
 static void write_kitti_past_track_output(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
 {
     if (!appCtx->config.kitti_track_dir_path)
@@ -295,11 +294,12 @@ static void write_kitti_past_track_output(AppCtx *appCtx, NvDsBatchMeta *batch_m
     }
 }
 
-// 输出包含跟踪 ID 的 KITTI 标签。
-//
-// Args:
-//   appCtx: 应用上下文。
-//   batch_meta: 批量元数据。
+/**
+ * @brief 输出包含跟踪 ID 的 KITTI 标签文件。
+ *
+ * @param appCtx     应用上下文。
+ * @param batch_meta 批量元数据。
+ */
 static void write_kitti_track_output(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
 {
     gchar bbox_file[1024] = {0};
@@ -371,14 +371,13 @@ static void write_kitti_track_output(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
     }
 }
 
-// 分类器组件排序比较函数。
-//
-// Args:
-//   a: 第一个比较元素。
-//   b: 第二个比较元素。
-//
-// Returns:
-//   gint: 比较结果。
+/**
+ * @brief 分类器组件 ID 排序比较函数。
+ *
+ * @param a 第一个比较元素。
+ * @param b 第二个比较元素。
+ * @return gint 比较结果（-1/0/1）。
+ */
 static gint component_id_compare_func(gconstpointer a, gconstpointer b)
 {
     NvDsClassifierMeta *cmetaa = (NvDsClassifierMeta *)a;
@@ -391,11 +390,12 @@ static gint component_id_compare_func(gconstpointer a, gconstpointer b)
     return 0;
 }
 
-// 处理附加元数据（显示文字、颜色等）。
-//
-// Args:
-//   appCtx: 应用上下文。
-//   batch_meta: 批量元数据。
+/**
+ * @brief 处理附加元数据（显示文字、颜色、边界框样式等）。
+ *
+ * @param appCtx     应用上下文。
+ * @param batch_meta 批量元数据。
+ */
 static void process_meta(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
 {
     // For single source always display text either with demuxer or with tiler
@@ -529,12 +529,13 @@ static void process_meta(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
     }
 }
 
-// 处理推理缓冲区与元数据，并触发应用层回调。
-//
-// Args:
-//   buf: GstBuffer。
-//   appCtx: 应用上下文。
-//   index: 源索引。
+/**
+ * @brief 处理推理缓冲区与元数据，并触发应用层回调。
+ *
+ * @param buf     GStreamer 缓冲区。
+ * @param appCtx  应用上下文。
+ * @param index   源索引。
+ */
 static void process_buffer(GstBuffer *buf, AppCtx *appCtx, guint index)
 {
     NvDsBatchMeta *batch_meta = gst_buffer_get_nvds_batch_meta(buf);
@@ -569,15 +570,14 @@ static void process_buffer(GstBuffer *buf, AppCtx *appCtx, guint index)
     }
 }
 
-// 主推理完成后的探针回调，提供 NMS、框修正与可选保存。
-//
-// Args:
-//   pad: 触发探针的 pad。
-//   info: 探针信息，包含 GstBuffer 等数据。
-//   u_data: 用户数据，通常为 AppCtx 指针。
-//
-// Returns:
-//   GstPadProbeReturn: 继续或丢弃 buffer 的处理结果。
+/**
+ * @brief 主推理完成后的探针回调，执行 NMS 去重、框修正与可选保存。
+ *
+ * @param pad    触发探针的 pad。
+ * @param info   探针信息，包含 GstBuffer 等数据。
+ * @param u_data 用户数据，通常为 AppCtx 指针。
+ * @return GstPadProbeReturn 继续或丢弃 buffer 的处理结果。
+ */
 GstPadProbeReturn gie_primary_processing_done_buf_prob(GstPad *pad,
                                                        GstPadProbeInfo *info,
                                                        gpointer u_data)
@@ -860,15 +860,14 @@ GstPadProbeReturn gie_primary_processing_done_buf_prob(GstPad *pad,
     return GST_PAD_PROBE_OK;
 }
 
-// 全部推理完成后的探针回调，进入 OSD 或 sink 前执行。
-//
-// Args:
-//   pad: 触发探针的 pad。
-//   info: 探针信息，包含 GstBuffer 等数据。
-//   u_data: 用户数据，通常为 NvDsInstanceBin 指针。
-//
-// Returns:
-//   GstPadProbeReturn: 继续或丢弃 buffer 的处理结果。
+/**
+ * @brief 全部推理完成后的探针回调，进入 OSD 或 sink 前执行。
+ *
+ * @param pad    触发探针的 pad。
+ * @param info   探针信息，包含 GstBuffer 等数据。
+ * @param u_data 用户数据，通常为 NvDsInstanceBin 指针。
+ * @return GstPadProbeReturn 继续或丢弃 buffer 的处理结果。
+ */
 GstPadProbeReturn gie_processing_done_buf_prob(GstPad *pad,
                                                GstPadProbeInfo *info,
                                                gpointer u_data)
@@ -883,15 +882,14 @@ GstPadProbeReturn gie_processing_done_buf_prob(GstPad *pad,
     return GST_PAD_PROBE_OK;
 }
 
-// 跟踪之后的 buffer 探针回调。
-//
-// Args:
-//   pad: 触发探针的 pad。
-//   info: 探针信息，包含 GstBuffer 等数据。
-//   u_data: 用户数据，通常为 NvDsInstanceBin 指针。
-//
-// Returns:
-//   GstPadProbeReturn: 继续或丢弃 buffer 的处理结果。
+/**
+ * @brief 跟踪分析完成后的探针回调，执行静态目标过滤与 KITTI 输出。
+ *
+ * @param pad    触发探针的 pad。
+ * @param info   探针信息，包含 GstBuffer 等数据。
+ * @param u_data 用户数据，通常为 NvDsInstanceBin 指针。
+ * @return GstPadProbeReturn 继续或丢弃 buffer 的处理结果。
+ */
 GstPadProbeReturn analytics_done_buf_prob(GstPad *pad,
                                           GstPadProbeInfo *info,
                                           gpointer u_data)
@@ -1058,15 +1056,14 @@ GstPadProbeReturn analytics_done_buf_prob(GstPad *pad,
     return GST_PAD_PROBE_OK;
 }
 
-// 主 pipeline 延迟统计的探针回调。
-//
-// Args:
-//   pad: 触发探针的 pad。
-//   info: 探针信息，包含 GstBuffer 等数据。
-//   u_data: 用户数据，通常为 AppCtx 指针。
-//
-// Returns:
-//   GstPadProbeReturn: 继续或丢弃 buffer 的处理结果。
+/**
+ * @brief 主 pipeline 延迟统计的探针回调。
+ *
+ * @param pad    触发探针的 pad。
+ * @param info   探针信息，包含 GstBuffer 等数据。
+ * @param u_data 用户数据，通常为 AppCtx 指针。
+ * @return GstPadProbeReturn 继续或丢弃 buffer 的处理结果。
+ */
 GstPadProbeReturn latency_measurement_buf_prob(GstPad *pad,
                                                GstPadProbeInfo *info,
                                                gpointer u_data)
@@ -1097,15 +1094,14 @@ GstPadProbeReturn latency_measurement_buf_prob(GstPad *pad,
     return GST_PAD_PROBE_OK;
 }
 
-// demux 分支延迟统计的探针回调。
-//
-// Args:
-//   pad: 触发探针的 pad。
-//   info: 探针信息，包含 GstBuffer 等数据。
-//   u_data: 用户数据，通常为 AppCtx 指针。
-//
-// Returns:
-//   GstPadProbeReturn: 继续或丢弃 buffer 的处理结果。
+/**
+ * @brief demux 分支延迟统计的探针回调。
+ *
+ * @param pad    触发探针的 pad。
+ * @param info   探针信息，包含 GstBuffer 等数据。
+ * @param u_data 用户数据，通常为 AppCtx 指针。
+ * @return GstPadProbeReturn 继续或丢弃 buffer 的处理结果。
+ */
 GstPadProbeReturn demux_latency_measurement_buf_prob(GstPad *pad,
                                                      GstPadProbeInfo *info,
                                                      gpointer u_data)

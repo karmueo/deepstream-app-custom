@@ -59,22 +59,19 @@ typedef struct
     gdouble servo_effect_threshold_h; /* 水平伺服生效判定阈值 */
     gdouble servo_effect_threshold_v; /* 垂直伺服生效判定阈值 */
     guint state_stale_timeout_ms; /* 设备状态新鲜度超时 */
-    gboolean corner_zoom_cycle_enable; /* 是否启用四角伺服+变焦循环测试 */
-    gboolean corner_servo_enable; /* 四角循环中是否执行回位和角点伺服 */
+    gboolean corner_zoom_cycle_enable; /* 是否启用四角伺服循环测试 */
     guint corner_cycle_count; /* 单轮四角循环次数 */
-    guint sequence_repeat_count; /* 整套四角+变焦流程重复次数 */
+    guint sequence_repeat_count; /* 整套四角流程重复次数 */
     gdouble corner_offset_h_deg; /* 角点水平偏移量（度） */
     gdouble corner_offset_v_deg; /* 角点垂直偏移量（度） */
     guint corner_dwell_ms; /* 每个角点停留时间（毫秒） */
     guint corner_servo_speed; /* 四角循环使用的伺服速度 */
-    gdouble corner_zoom_in_focal; /* 四角循环拉近目标焦距（NaN=使用pt_focal_max） */
-    gdouble corner_zoom_out_focal; /* 四角循环拉远目标焦距（NaN=使用pt_focal_min） */
-    guint zoom_in_duration_ms; /* 拉进焦距持续时间（毫秒） */
-    guint zoom_out_duration_ms; /* 拉远焦距持续时间（毫秒） */
     gdouble corner_home_loc_h_deg; /* 程序启动及每轮回位的水平位置（可选，NaN=使用首个有效反馈） */
     gdouble corner_home_loc_v_deg; /* 程序启动及每轮回位的垂直位置（可选，NaN=使用首个有效反馈） */
-    gboolean startup_pt_focal_min_enable; /* 程序启动时是否先下发可见光拉到最小焦距，再停止 */
-    guint startup_pt_focal_min_hold_ms; /* 启动后保持最小焦距命令的时间（毫秒） */
+    gboolean startup_pt_focal_min_enable; /* 程序启动时是否下发可见光焦距/对焦预置 */
+    gdouble startup_pt_focal; /* 启动可见光焦距预置值 */
+    guint startup_pt_focus; /* 启动可见光聚焦预置值 */
+    guint lost_target_focal_min_hold_ms; /* 目标丢失后保持缩小焦距命令的时间（毫秒） */
     guint corner_home_pt_focus; /* 程序启动及每轮回位的可见光聚焦预置位（可选，G_MAXUINT=不设置） */
 } NvDsCuavControlConfig;
 

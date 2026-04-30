@@ -1,13 +1,10 @@
-/*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+/**
+ * @file deepstream_app.c
+ * @brief DeepStream GStreamer 分析流水线的构建与生命周期管理。
  *
- * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
- * property and proprietary rights in and to this material, related
- * documentation and any modifications thereto. Any use, reproduction,
- * disclosure or distribution of this material and related documentation
- * without an express license agreement from NVIDIA CORPORATION or
- * its affiliates is strictly prohibited.
+ * 负责根据配置创建完整的 GStreamer 流水线，包括视频源、推理引擎、
+ * 跟踪器、OSD、Sink 等组件的创建与链接，以及流水线的暂停、恢复、
+ * 销毁等生命周期操作。同时包含 C-UAV 自动控制逻辑的实现。
  */
 
 #include <gst/gst.h>
@@ -422,14 +419,12 @@ static gboolean
 cuav_startup_preset_has_home_target(const NvDsCuavControlConfig *control_config)
 {
     return control_config &&
-           !(control_config->corner_zoom_cycle_enable &&
-             !control_config->corner_servo_enable) &&
            (!isnan(control_config->corner_home_loc_h_deg) ||
             !isnan(control_config->corner_home_loc_v_deg));
 }
 
 /**
- * @brief 判断启动预置位是否配置了可见光预置（焦距缩到最小或对焦值）
+ * @brief 判断启动预置位是否配置了可见光预置（启动焦距/对焦或对焦值）
  */
 static gboolean
 cuav_startup_preset_has_visible_preset(const NvDsCuavControlConfig *control_config)
@@ -480,8 +475,6 @@ process_cuav_startup_preset(AppCtx *appCtx,
     gdouble home_loc_v = 0.0;
     gboolean home_reached = FALSE;
     gint64 settle_timeout_us = 0;
-    gint64 visible_hold_us = 0;
-    gint64 visible_repeat_gap_us = 0;
     gboolean sent = FALSE;
 
     if (!appCtx || !control_config)
@@ -499,8 +492,6 @@ process_cuav_startup_preset(AppCtx *appCtx,
         return TRUE;
 
     settle_timeout_us = ((gint64)MAX(control_config->state_stale_timeout_ms, 1U)) * 1000;
-    visible_hold_us = ((gint64)MAX(control_config->startup_pt_focal_min_hold_ms, 0U)) * 1000;
-    visible_repeat_gap_us = ((gint64)MAX(control_config->control_period_ms, 1U)) * 1000;
 
     g_mutex_lock(&appCtx->cuav_control_lock);
     if (!appCtx->cuav_startup_preset_state.initialized)
@@ -648,10 +639,15 @@ process_cuav_startup_preset(AppCtx *appCtx,
             return TRUE;
 
         sent = send_cuav_visible_light_command_with_en(appCtx,
-                                                       control_config->startup_pt_focal_min_enable ? 4 : 0,
-                                                       control_config->startup_pt_focal_min_enable ? 8.0 : 0.0,
-                                                       control_config->corner_home_pt_focus != G_MAXUINT ? 1 : 0,
-                                                       control_config->corner_home_pt_focus != G_MAXUINT ? control_config->corner_home_pt_focus : 100,
+                                                       control_config->startup_pt_focal_min_enable ? 1 : 0,
+                                                       control_config->startup_pt_focal_min_enable ?
+                                                           control_config->startup_pt_focal : 0.0,
+                                                       control_config->startup_pt_focal_min_enable ||
+                                                           control_config->corner_home_pt_focus != G_MAXUINT ? 1 : 0,
+                                                       control_config->startup_pt_focal_min_enable ?
+                                                           control_config->startup_pt_focus :
+                                                           (control_config->corner_home_pt_focus != G_MAXUINT ?
+                                                                control_config->corner_home_pt_focus : 100),
                                                        1,
                                                        0);
         if (sent)
@@ -660,85 +656,30 @@ process_cuav_startup_preset(AppCtx *appCtx,
             appCtx->cuav_startup_preset_state.visible_applied = TRUE;
             appCtx->cuav_startup_preset_state.last_command_sent_us = now_us;
             appCtx->cuav_startup_preset_state.phase_started_us = now_us;
-            appCtx->cuav_startup_preset_state.phase =
-                control_config->startup_pt_focal_min_enable ?
-                    CUAV_STARTUP_PRESET_PHASE_HOLD_VISIBLE_PRESET :
-                    CUAV_STARTUP_PRESET_PHASE_COMPLETE;
+            appCtx->cuav_startup_preset_state.phase = CUAV_STARTUP_PRESET_PHASE_COMPLETE;
             g_mutex_unlock(&appCtx->cuav_control_lock);
 
             if (control_config->debug)
             {
-                g_print("[cuav][startup-preset] send visible focal_en=%u focus_en=%u\n",
-                        control_config->startup_pt_focal_min_enable ? 4U : 0U,
-                        control_config->corner_home_pt_focus != G_MAXUINT ? 1U : 0U);
+                g_print("[cuav][startup-preset] send visible focal_en=%u focal=%.1f focus_en=%u focus=%u\n",
+                        control_config->startup_pt_focal_min_enable ? 1U : 0U,
+                        control_config->startup_pt_focal_min_enable ?
+                            control_config->startup_pt_focal : 0.0,
+                        (control_config->startup_pt_focal_min_enable ||
+                         control_config->corner_home_pt_focus != G_MAXUINT) ? 1U : 0U,
+                        control_config->startup_pt_focal_min_enable ?
+                            control_config->startup_pt_focus :
+                            (control_config->corner_home_pt_focus != G_MAXUINT ?
+                                 control_config->corner_home_pt_focus : 100U));
             }
         }
         return TRUE;
 
     case CUAV_STARTUP_PRESET_PHASE_HOLD_VISIBLE_PRESET:
-        if (!control_config->startup_pt_focal_min_enable)
-        {
-            g_mutex_lock(&appCtx->cuav_control_lock);
-            appCtx->cuav_startup_preset_state.phase = CUAV_STARTUP_PRESET_PHASE_COMPLETE;
-            appCtx->cuav_startup_preset_state.phase_started_us = now_us;
-            g_mutex_unlock(&appCtx->cuav_control_lock);
-            return TRUE;
-        }
-
-        if ((now_us - state_snapshot.phase_started_us) < visible_hold_us)
-        {
-            if (state_snapshot.last_command_sent_us <= 0 ||
-                (now_us - state_snapshot.last_command_sent_us) >= visible_repeat_gap_us)
-            {
-                sent = send_cuav_visible_light_command_with_en(appCtx,
-                                                               4,
-                                                               8.0,
-                                                               0,
-                                                               0,
-                                                               1,
-                                                               0);
-                if (sent)
-                {
-                    g_mutex_lock(&appCtx->cuav_control_lock);
-                    appCtx->cuav_startup_preset_state.last_command_sent_us = now_us;
-                    g_mutex_unlock(&appCtx->cuav_control_lock);
-
-                    if (control_config->debug)
-                    {
-                        g_print("[cuav][startup-preset] repeat visible focal_min focal_en=4 elapsed=%" G_GINT64_FORMAT "/%" G_GINT64_FORMAT " us\n",
-                                now_us - state_snapshot.phase_started_us,
-                                visible_hold_us);
-                    }
-                }
-            }
-            return TRUE;
-        }
-
-        if (state_snapshot.last_command_sent_us > 0 &&
-            (now_us - state_snapshot.last_command_sent_us) < 1000)
-            return TRUE;
-
-        sent = send_cuav_visible_light_command_with_en(appCtx,
-                                                       0,
-                                                       0.0,
-                                                       0,
-                                                       0,
-                                                       1,
-                                                       0);
-        if (sent)
-        {
-            g_mutex_lock(&appCtx->cuav_control_lock);
-            appCtx->cuav_startup_preset_state.last_command_sent_us = now_us;
-            appCtx->cuav_startup_preset_state.phase_started_us = now_us;
-            appCtx->cuav_startup_preset_state.phase = CUAV_STARTUP_PRESET_PHASE_COMPLETE;
-            g_mutex_unlock(&appCtx->cuav_control_lock);
-
-            if (control_config->debug)
-            {
-                g_print("[cuav][startup-preset] stop visible focal after %u ms\n",
-                        control_config->startup_pt_focal_min_hold_ms);
-            }
-        }
+        g_mutex_lock(&appCtx->cuav_control_lock);
+        appCtx->cuav_startup_preset_state.phase = CUAV_STARTUP_PRESET_PHASE_COMPLETE;
+        appCtx->cuav_startup_preset_state.phase_started_us = now_us;
+        g_mutex_unlock(&appCtx->cuav_control_lock);
         return TRUE;
 
     case CUAV_STARTUP_PRESET_PHASE_COMPLETE:
@@ -810,7 +751,7 @@ cuav_corner_zoom_cycle_home_reached(const CuavFeedbackState *feedback_state,
 }
 
 /**
- * @brief 重置角点变焦循环状态机到初始阶段
+ * @brief 重置角点循环状态机到初始阶段
  */
 static void
 cuav_reset_corner_zoom_cycle_state(CuavCornerZoomCycleState *state,
@@ -828,9 +769,6 @@ cuav_reset_corner_zoom_cycle_state(CuavCornerZoomCycleState *state,
     state->home_loc_v = 0.0;
     state->base_loc_h = 180.0;
     state->base_loc_v = 0.0;
-    state->return_home_before_zoom = FALSE;
-    state->resume_cycle_after_home = FALSE;
-    state->increment_repeat_after_home = FALSE;
     state->last_loc_h = 180.0;
     state->last_loc_v = 0.0;
 
@@ -1478,6 +1416,7 @@ send_cuav_visible_light_command_with_en(AppCtx *appCtx,
     GstStructure *payload = NULL;
     gboolean result = FALSE;
     guint effective_pt_focus_mode = pt_focal_en == 0 ? 0 : pt_focus_mode;
+    gint pt_focal_int = (gint)(pt_focal + 0.5);
 
     payload = gst_structure_new("cuav-visible-light-control",
                                 "pt-dev-en", G_TYPE_INT, 1,
@@ -1486,7 +1425,7 @@ send_cuav_visible_light_command_with_en(AppCtx *appCtx,
                                 "pt-fov-h", G_TYPE_DOUBLE, 0.0,
                                 "pt-fov-v", G_TYPE_DOUBLE, 0.0,
                                 "pt-focal-en", G_TYPE_INT, (gint)pt_focal_en,
-                                "pt-focal", G_TYPE_DOUBLE, pt_focal,
+                                "pt-focal", G_TYPE_INT, pt_focal_int,
                                 "pt-focus-en", G_TYPE_INT, (gint)pt_focus_en,
                                 "pt-focus", G_TYPE_INT, (gint)pt_focus,
                                 "pt-speed-en", G_TYPE_INT, 0,
@@ -1605,17 +1544,14 @@ create_cuav_control_element(NvDsConfig *config, NvDsPipeline *pipeline)
     }
     if (control_config->corner_zoom_cycle_enable)
     {
-        g_print("[cuav][corner-zoom] enabled repeat=%u servo=%u corner-cycle=%u offset=(%.1f,%.1f) dwell=%u ms zoom-in=%u ms zoom-out=%u ms speed=%u\n",
+        g_print("[cuav][corner-cycle] enabled repeat=%u corner-cycle=%u offset=(%.1f,%.1f) dwell=%u ms speed=%u\n",
                 control_config->sequence_repeat_count,
-                control_config->corner_servo_enable ? 1U : 0U,
                 control_config->corner_cycle_count,
                 control_config->corner_offset_h_deg,
                 control_config->corner_offset_v_deg,
                 control_config->corner_dwell_ms,
-                control_config->zoom_in_duration_ms,
-                control_config->zoom_out_duration_ms,
                 control_config->corner_servo_speed);
-        g_print("[cuav][corner-zoom] home target loc=(%.1f,%.1f) preset_focus_en=%u\n",
+        g_print("[cuav][corner-cycle] home target loc=(%.1f,%.1f) preset_focus_en=%u\n",
                 control_config->corner_home_loc_h_deg,
                 control_config->corner_home_loc_v_deg,
                 control_config->corner_home_pt_focus != G_MAXUINT ? 1U : 0U);
@@ -1763,7 +1699,7 @@ cuav_select_control_target(NvDsFrameMeta *frame_meta,
 }
 
 /**
- * @brief 处理角点变焦循环测试状态机
+ * @brief 处理角点循环测试状态机
  * 流程: 回预置位 → 四角循环运动 → 回预置位 → 可见光预置 → 拉到最大焦距 → 拉到最小焦距 → 重复
  * @param appCtx 应用上下文
  * @param control_config 控制配置
@@ -1794,8 +1730,6 @@ process_cuav_corner_zoom_cycle(AppCtx *appCtx,
     gdouble base_loc_v = 0.0;
     gdouble target_loc_h = 180.0;
     gdouble target_loc_v = 0.0;
-    guint visible_focus = 100;
-    gdouble visible_focal_target = 0.0;
     gboolean home_visible_preset_valid = FALSE;
     gboolean home_visible_focus_valid = FALSE;
     gboolean home_loc_configured = FALSE;
@@ -1804,8 +1738,6 @@ process_cuav_corner_zoom_cycle(AppCtx *appCtx,
     gint64 min_gap_us = 0;
     gint64 corner_dwell_us = 0;
     gint64 home_settle_timeout_us = 0;
-    gint64 zoom_in_hold_us = 0;
-    gint64 zoom_out_hold_us = 0;
     gboolean visible_enabled = FALSE;
 
     if (!appCtx || !control_config || !appCtx->pipeline.common_elements.cuav_control)
@@ -1815,8 +1747,6 @@ process_cuav_corner_zoom_cycle(AppCtx *appCtx,
     min_gap_ms = MAX(control_config->control_period_ms, 1U);
     min_gap_us = ((gint64)min_gap_ms) * 1000;
     corner_dwell_us = ((gint64)MAX(control_config->corner_dwell_ms, 1U)) * 1000;
-    zoom_in_hold_us = ((gint64)MAX(control_config->zoom_in_duration_ms, 1U)) * 1000;
-    zoom_out_hold_us = ((gint64)MAX(control_config->zoom_out_duration_ms, 1U)) * 1000;
     repeat_limit = MAX(control_config->sequence_repeat_count, 1U);
     corner_cycle_limit = MAX(control_config->corner_cycle_count, 1U);
     corner_servo_speed = clamp_cuav_uint(MAX(control_config->corner_servo_speed, 1U),
@@ -1841,19 +1771,10 @@ process_cuav_corner_zoom_cycle(AppCtx *appCtx,
                                            control_config);
         appCtx->cuav_corner_zoom_cycle_state.initialized = TRUE;
         startup_snapshot = appCtx->cuav_startup_preset_state;
-        if (!control_config->corner_servo_enable)
-        {
-            appCtx->cuav_corner_zoom_cycle_state.return_home_before_zoom = TRUE;
-            appCtx->cuav_corner_zoom_cycle_state.phase =
-                CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_ZOOM_IN;
-        }
-        else
-        {
-            appCtx->cuav_corner_zoom_cycle_state.phase =
-                startup_snapshot.servo_applied ?
-                    CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_CORNER :
-                    CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_HOME_SERVO;
-        }
+        appCtx->cuav_corner_zoom_cycle_state.phase =
+            startup_snapshot.servo_applied ?
+                CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_CORNER :
+                CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_HOME_SERVO;
         appCtx->cuav_corner_zoom_cycle_state.phase_started_us = now_us;
         appCtx->cuav_corner_zoom_cycle_state.last_command_sent_us = 0;
     }
@@ -1869,7 +1790,7 @@ process_cuav_corner_zoom_cycle(AppCtx *appCtx,
     {
         if (!state_snapshot.final_logged)
         {
-            g_print("[cuav][corner-zoom] complete repeat=%u/%u\n",
+            g_print("[cuav][corner-cycle] complete repeat=%u/%u\n",
                     MIN(state_snapshot.outer_repeat_index + 1, repeat_limit),
                     repeat_limit);
             g_mutex_lock(&appCtx->cuav_control_lock);
@@ -1889,16 +1810,6 @@ process_cuav_corner_zoom_cycle(AppCtx *appCtx,
         return TRUE;
 
     case CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_HOME_SERVO:
-        if (!control_config->corner_servo_enable)
-        {
-            g_mutex_lock(&appCtx->cuav_control_lock);
-            appCtx->cuav_corner_zoom_cycle_state.phase =
-                CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_ZOOM_IN;
-            appCtx->cuav_corner_zoom_cycle_state.phase_started_us = now_us;
-            g_mutex_unlock(&appCtx->cuav_control_lock);
-            return TRUE;
-        }
-
         if (state_snapshot.last_command_sent_us > 0 &&
             (now_us - state_snapshot.last_command_sent_us) < min_gap_us)
             return TRUE;
@@ -1930,10 +1841,9 @@ process_cuav_corner_zoom_cycle(AppCtx *appCtx,
 
             if (control_config->debug)
             {
-                g_print("[cuav][corner-zoom] home start repeat=%u/%u home=(%.2f,%.2f) "
+                g_print("[cuav][corner-cycle] home start repeat=%u/%u home=(%.2f,%.2f) "
                         "corner_cycle=%u offset=(%.1f,%.1f) preset_focus_en=%u\n",
-                        state_snapshot.outer_repeat_index +
-                            (state_snapshot.increment_repeat_after_home ? 1 : 0) + 1,
+                        state_snapshot.outer_repeat_index + 1,
                         repeat_limit,
                         home_loc_h, home_loc_v,
                         corner_cycle_limit,
@@ -1965,9 +1875,8 @@ process_cuav_corner_zoom_cycle(AppCtx *appCtx,
 
             if (control_config->debug)
             {
-                g_print("[cuav][corner-zoom] send home repeat=%u/%u loc=(%.2f,%.2f) speed=%u\n",
-                        state_snapshot.outer_repeat_index +
-                            (state_snapshot.increment_repeat_after_home ? 1 : 0) + 1,
+                g_print("[cuav][corner-cycle] send home repeat=%u/%u loc=(%.2f,%.2f) speed=%u\n",
+                        state_snapshot.outer_repeat_index + 1,
                         repeat_limit,
                         home_loc_h, home_loc_v,
                         corner_servo_speed);
@@ -1981,33 +1890,11 @@ process_cuav_corner_zoom_cycle(AppCtx *appCtx,
                                                                   control_config))
         {
             g_mutex_lock(&appCtx->cuav_control_lock);
-            if (state_snapshot.increment_repeat_after_home)
-            {
-                appCtx->cuav_corner_zoom_cycle_state.outer_repeat_index++;
-                appCtx->cuav_corner_zoom_cycle_state.increment_repeat_after_home = FALSE;
-            }
             appCtx->cuav_corner_zoom_cycle_state.phase_started_us = now_us;
-            if (state_snapshot.return_home_before_zoom)
-            {
-                appCtx->cuav_corner_zoom_cycle_state.phase =
-                    home_visible_preset_valid ?
-                        CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_HOME_VISIBLE_PRESET :
-                        CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_ZOOM_IN;
-            }
-            else if (state_snapshot.resume_cycle_after_home)
-            {
-                appCtx->cuav_corner_zoom_cycle_state.phase =
-                    home_visible_preset_valid ?
-                        CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_HOME_VISIBLE_PRESET :
-                        CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_CORNER;
-            }
-            else
-            {
-                appCtx->cuav_corner_zoom_cycle_state.phase =
-                    home_visible_preset_valid ?
-                        CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_HOME_VISIBLE_PRESET :
-                        CUAV_CORNER_ZOOM_CYCLE_PHASE_COMPLETE;
-            }
+            appCtx->cuav_corner_zoom_cycle_state.phase =
+                home_visible_preset_valid ?
+                    CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_HOME_VISIBLE_PRESET :
+                    CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_CORNER;
             g_mutex_unlock(&appCtx->cuav_control_lock);
             return TRUE;
         }
@@ -2019,49 +1906,17 @@ process_cuav_corner_zoom_cycle(AppCtx *appCtx,
                                                                           control_config))
         {
             if (home_loc_configured)
-                g_print("[cuav][corner-zoom][warn] home settle timeout at preset, continue to next stage\n");
+                g_print("[cuav][corner-cycle][warn] home settle timeout at preset, continue to next stage\n");
             else
-                g_print("[cuav][corner-zoom][warn] home settle timeout, continue to next stage\n");
-        }
-
-        if (state_snapshot.return_home_before_zoom)
-        {
-            g_mutex_lock(&appCtx->cuav_control_lock);
-            appCtx->cuav_corner_zoom_cycle_state.phase = CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_HOME_SERVO;
-            appCtx->cuav_corner_zoom_cycle_state.phase_started_us = now_us;
-            appCtx->cuav_corner_zoom_cycle_state.last_command_sent_us = now_us;
-            g_mutex_unlock(&appCtx->cuav_control_lock);
-            return TRUE;
+                g_print("[cuav][corner-cycle][warn] home settle timeout, continue to next stage\n");
         }
 
         g_mutex_lock(&appCtx->cuav_control_lock);
-        if (state_snapshot.increment_repeat_after_home)
-        {
-            appCtx->cuav_corner_zoom_cycle_state.outer_repeat_index++;
-            appCtx->cuav_corner_zoom_cycle_state.increment_repeat_after_home = FALSE;
-        }
         appCtx->cuav_corner_zoom_cycle_state.phase_started_us = now_us;
-        if (state_snapshot.return_home_before_zoom)
-        {
-            appCtx->cuav_corner_zoom_cycle_state.phase =
-                home_visible_preset_valid ?
-                    CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_HOME_VISIBLE_PRESET :
-                    CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_ZOOM_IN;
-        }
-        else if (state_snapshot.resume_cycle_after_home)
-        {
-            appCtx->cuav_corner_zoom_cycle_state.phase =
-                home_visible_preset_valid ?
-                    CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_HOME_VISIBLE_PRESET :
-                    CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_CORNER;
-        }
-        else
-        {
-            appCtx->cuav_corner_zoom_cycle_state.phase =
-                home_visible_preset_valid ?
-                    CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_HOME_VISIBLE_PRESET :
-                    CUAV_CORNER_ZOOM_CYCLE_PHASE_COMPLETE;
-        }
+        appCtx->cuav_corner_zoom_cycle_state.phase =
+            home_visible_preset_valid ?
+                CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_HOME_VISIBLE_PRESET :
+                CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_CORNER;
         g_mutex_unlock(&appCtx->cuav_control_lock);
         return TRUE;
 
@@ -2073,12 +1928,7 @@ process_cuav_corner_zoom_cycle(AppCtx *appCtx,
         if (!home_visible_preset_valid)
         {
             g_mutex_lock(&appCtx->cuav_control_lock);
-            appCtx->cuav_corner_zoom_cycle_state.phase =
-                state_snapshot.return_home_before_zoom ?
-                    CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_ZOOM_IN :
-                    (state_snapshot.resume_cycle_after_home ?
-                        CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_CORNER :
-                        CUAV_CORNER_ZOOM_CYCLE_PHASE_COMPLETE);
+            appCtx->cuav_corner_zoom_cycle_state.phase = CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_CORNER;
             appCtx->cuav_corner_zoom_cycle_state.phase_started_us = now_us;
             g_mutex_unlock(&appCtx->cuav_control_lock);
             return TRUE;
@@ -2102,9 +1952,8 @@ process_cuav_corner_zoom_cycle(AppCtx *appCtx,
 
             if (control_config->debug)
             {
-                g_print("[cuav][corner-zoom] home preset repeat=%u/%u focus_en=%u focus=%u\n",
-                        state_snapshot.outer_repeat_index +
-                            (state_snapshot.increment_repeat_after_home ? 1 : 0) + 1,
+                g_print("[cuav][corner-cycle] home preset repeat=%u/%u focus_en=%u focus=%u\n",
+                        state_snapshot.outer_repeat_index + 1,
                         repeat_limit,
                         home_visible_focus_valid ? 1 : 0,
                         home_visible_focus);
@@ -2117,12 +1966,7 @@ process_cuav_corner_zoom_cycle(AppCtx *appCtx,
             return TRUE;
 
         g_mutex_lock(&appCtx->cuav_control_lock);
-        appCtx->cuav_corner_zoom_cycle_state.phase =
-            state_snapshot.return_home_before_zoom ?
-                CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_ZOOM_IN :
-                (state_snapshot.resume_cycle_after_home ?
-                    CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_CORNER :
-                    CUAV_CORNER_ZOOM_CYCLE_PHASE_COMPLETE);
+        appCtx->cuav_corner_zoom_cycle_state.phase = CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_CORNER;
         appCtx->cuav_corner_zoom_cycle_state.phase_started_us = now_us;
         g_mutex_unlock(&appCtx->cuav_control_lock);
         return TRUE;
@@ -2161,8 +2005,6 @@ process_cuav_corner_zoom_cycle(AppCtx *appCtx,
             home_loc_v = state_snapshot.home_loc_v;
         }
 
-        visible_focus = home_visible_focus;
-
         base_loc_h = state_snapshot.base_loc_h;
         base_loc_v = state_snapshot.base_loc_v;
         corner_index = state_snapshot.corner_index;
@@ -2190,7 +2032,7 @@ process_cuav_corner_zoom_cycle(AppCtx *appCtx,
 
             if (control_config->debug)
             {
-                g_print("[cuav][corner-zoom] send corner repeat=%u/%u cycle=%u/%u corner=%s loc=(%.2f,%.2f) speed=%u\n",
+                g_print("[cuav][corner-cycle] send corner repeat=%u/%u cycle=%u/%u corner=%s loc=(%.2f,%.2f) speed=%u\n",
                         state_snapshot.outer_repeat_index + 1,
                         repeat_limit,
                         corner_cycle_index + 1,
@@ -2245,152 +2087,25 @@ process_cuav_corner_zoom_cycle(AppCtx *appCtx,
             appCtx->cuav_corner_zoom_cycle_state.phase_started_us = now_us;
             appCtx->cuav_corner_zoom_cycle_state.corner_cycle_index = 0;
             appCtx->cuav_corner_zoom_cycle_state.corner_index = 0;
-            appCtx->cuav_corner_zoom_cycle_state.return_home_before_zoom = visible_enabled;
-            appCtx->cuav_corner_zoom_cycle_state.resume_cycle_after_home =
-                !visible_enabled && ((state_snapshot.outer_repeat_index + 1) < repeat_limit);
-            appCtx->cuav_corner_zoom_cycle_state.increment_repeat_after_home =
-                appCtx->cuav_corner_zoom_cycle_state.resume_cycle_after_home;
-            appCtx->cuav_corner_zoom_cycle_state.phase = CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_HOME_SERVO;
+            if ((state_snapshot.outer_repeat_index + 1) < repeat_limit)
+            {
+                appCtx->cuav_corner_zoom_cycle_state.outer_repeat_index++;
+                appCtx->cuav_corner_zoom_cycle_state.phase = CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_HOME_SERVO;
+            }
+            else
+            {
+                appCtx->cuav_corner_zoom_cycle_state.phase = CUAV_CORNER_ZOOM_CYCLE_PHASE_COMPLETE;
+            }
             g_mutex_unlock(&appCtx->cuav_control_lock);
 
             if (control_config->debug)
             {
-                g_print("[cuav][corner-zoom] servo stop repeat=%u/%u loc=(%.2f,%.2f)\n",
+                g_print("[cuav][corner-cycle] servo stop repeat=%u/%u loc=(%.2f,%.2f)\n",
                         state_snapshot.outer_repeat_index + 1,
                         repeat_limit,
                         state_snapshot.last_loc_h,
                         state_snapshot.last_loc_v);
-                if (visible_enabled)
-                    g_print("[cuav][corner-zoom] return to home preset before zoom\n");
-                else
-                    g_print("[cuav][corner-zoom][warn] visible-light-control-enable=0, skip zoom phases\n");
             }
-        }
-        return TRUE;
-
-    case CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_ZOOM_IN:
-        if (state_snapshot.last_command_sent_us > 0 &&
-            (now_us - state_snapshot.last_command_sent_us) < min_gap_us)
-            return TRUE;
-
-        visible_focal_target = !isnan(control_config->corner_zoom_in_focal) ?
-            control_config->corner_zoom_in_focal :
-            clamp_cuav_double(control_config->pt_focal_max,
-                              control_config->pt_focal_min,
-                              control_config->pt_focal_max);
-        sent = send_cuav_visible_light_command_with_en(appCtx,
-                                                       1,
-                                                       visible_focal_target,
-                                                       0,
-                                                       visible_focus,
-                                                       2,
-                                                       0);
-        if (sent)
-        {
-            g_mutex_lock(&appCtx->cuav_control_lock);
-            appCtx->cuav_corner_zoom_cycle_state.last_command_sent_us = now_us;
-            appCtx->cuav_corner_zoom_cycle_state.phase_started_us = now_us;
-            appCtx->cuav_corner_zoom_cycle_state.phase = CUAV_CORNER_ZOOM_CYCLE_PHASE_HOLD_ZOOM_IN;
-            g_mutex_unlock(&appCtx->cuav_control_lock);
-
-            if (control_config->debug)
-            {
-                g_print("[cuav][corner-zoom] zoom-in absolute repeat=%u/%u target_focal=%.1f current_focal=%.1f wait=%u ms\n",
-                        state_snapshot.outer_repeat_index + 1,
-                        repeat_limit,
-                        visible_focal_target,
-                        feedback_snapshot.pt_focal,
-                        control_config->zoom_in_duration_ms);
-            }
-        }
-        return TRUE;
-
-    case CUAV_CORNER_ZOOM_CYCLE_PHASE_HOLD_ZOOM_IN:
-        if ((now_us - state_snapshot.phase_started_us) < zoom_in_hold_us)
-            return TRUE;
-
-        g_mutex_lock(&appCtx->cuav_control_lock);
-        appCtx->cuav_corner_zoom_cycle_state.phase = CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_ZOOM_OUT;
-        appCtx->cuav_corner_zoom_cycle_state.phase_started_us = now_us;
-        g_mutex_unlock(&appCtx->cuav_control_lock);
-        return TRUE;
-
-    case CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_ZOOM_OUT:
-        if (state_snapshot.last_command_sent_us > 0 &&
-            (now_us - state_snapshot.last_command_sent_us) < min_gap_us)
-            return TRUE;
-
-        visible_focal_target = !isnan(control_config->corner_zoom_out_focal) ?
-            control_config->corner_zoom_out_focal :
-            clamp_cuav_double(control_config->pt_focal_min,
-                              control_config->pt_focal_min,
-                              control_config->pt_focal_max);
-        sent = send_cuav_visible_light_command_with_en(appCtx,
-                                                       1,
-                                                       visible_focal_target,
-                                                       0,
-                                                       visible_focus,
-                                                       2,
-                                                       0);
-        if (sent)
-        {
-            g_mutex_lock(&appCtx->cuav_control_lock);
-            appCtx->cuav_corner_zoom_cycle_state.last_command_sent_us = now_us;
-            appCtx->cuav_corner_zoom_cycle_state.phase_started_us = now_us;
-            appCtx->cuav_corner_zoom_cycle_state.phase = CUAV_CORNER_ZOOM_CYCLE_PHASE_HOLD_ZOOM_OUT;
-            g_mutex_unlock(&appCtx->cuav_control_lock);
-
-            if (control_config->debug)
-            {
-                g_print("[cuav][corner-zoom] zoom-out absolute repeat=%u/%u target_focal=%.1f current_focal=%.1f wait=%u ms\n",
-                        state_snapshot.outer_repeat_index + 1,
-                        repeat_limit,
-                        visible_focal_target,
-                        feedback_snapshot.pt_focal,
-                        control_config->zoom_out_duration_ms);
-            }
-        }
-        return TRUE;
-
-    case CUAV_CORNER_ZOOM_CYCLE_PHASE_HOLD_ZOOM_OUT:
-        if ((now_us - state_snapshot.phase_started_us) < zoom_out_hold_us)
-            return TRUE;
-
-        g_mutex_lock(&appCtx->cuav_control_lock);
-        appCtx->cuav_corner_zoom_cycle_state.phase_started_us = now_us;
-        appCtx->cuav_corner_zoom_cycle_state.corner_cycle_index = 0;
-        appCtx->cuav_corner_zoom_cycle_state.corner_index = 0;
-        appCtx->cuav_corner_zoom_cycle_state.return_home_before_zoom = FALSE;
-        if (control_config->corner_servo_enable)
-        {
-            appCtx->cuav_corner_zoom_cycle_state.resume_cycle_after_home =
-                (state_snapshot.outer_repeat_index + 1) < repeat_limit;
-            appCtx->cuav_corner_zoom_cycle_state.increment_repeat_after_home =
-                appCtx->cuav_corner_zoom_cycle_state.resume_cycle_after_home;
-            appCtx->cuav_corner_zoom_cycle_state.phase =
-                CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_HOME_SERVO;
-        }
-        else if ((state_snapshot.outer_repeat_index + 1) < repeat_limit)
-        {
-            appCtx->cuav_corner_zoom_cycle_state.outer_repeat_index++;
-            appCtx->cuav_corner_zoom_cycle_state.phase =
-                CUAV_CORNER_ZOOM_CYCLE_PHASE_SEND_ZOOM_IN;
-        }
-        else
-        {
-            appCtx->cuav_corner_zoom_cycle_state.phase =
-                CUAV_CORNER_ZOOM_CYCLE_PHASE_COMPLETE;
-        }
-        g_mutex_unlock(&appCtx->cuav_control_lock);
-
-        if (control_config->debug)
-        {
-            g_print("[cuav][corner-zoom] zoom-out hold done repeat=%u/%u current_focal=%.1f next=%s\n",
-                    state_snapshot.outer_repeat_index + 1,
-                    repeat_limit,
-                    feedback_snapshot.pt_focal,
-                    (state_snapshot.outer_repeat_index + 1) < repeat_limit ?
-                        "home+repeat" : "home+complete");
         }
         return TRUE;
 
@@ -2400,7 +2115,7 @@ process_cuav_corner_zoom_cycle(AppCtx *appCtx,
         if (!appCtx->cuav_corner_zoom_cycle_state.final_logged)
         {
             appCtx->cuav_corner_zoom_cycle_state.final_logged = TRUE;
-            g_print("[cuav][corner-zoom] complete repeat=%u/%u\n",
+            g_print("[cuav][corner-cycle] complete repeat=%u/%u\n",
                     MIN(appCtx->cuav_corner_zoom_cycle_state.outer_repeat_index + 1,
                         repeat_limit),
                     repeat_limit);
@@ -2586,7 +2301,7 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
         g_mutex_unlock(&appCtx->cuav_control_lock);
 
         lost_zoom_hold_us =
-            ((gint64)control_config->startup_pt_focal_min_hold_ms) * 1000;
+            ((gint64)control_config->lost_target_focal_min_hold_ms) * 1000;
         lost_zoom_active = !state_snapshot.lost_zoom_hold_complete &&
                            lost_zoom_hold_us > 0 &&
                            (had_tracking_before_reset ||
@@ -2631,7 +2346,7 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
                         if (debug_enabled)
                         {
                             g_print("[cuav][control][lost] stop zoom-out after %u ms without target\n",
-                                    control_config->startup_pt_focal_min_hold_ms);
+                                    control_config->lost_target_focal_min_hold_ms);
                         }
                     }
                 }
