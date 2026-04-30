@@ -1496,8 +1496,9 @@ parse_cuav_control(NvDsCuavControlConfig *config, GKeyFile *key_file)
     config->visible_focal_hold_ms = 300;
     config->visible_light_control_enable = TRUE;
     config->servo_dev_id = 2;
-    config->pt_focal_min = 134.0;
-    config->pt_focal_max = 16298.0;
+    config->pt_focal_min = 19.0;
+    config->pt_focal_max = 4000.0;
+    config->pt_focal_step = 10.0;
     config->servo_effect_threshold_h = 0.5;
     config->servo_effect_threshold_v = 0.3;
     config->state_stale_timeout_ms = 2000;
@@ -1511,7 +1512,7 @@ parse_cuav_control(NvDsCuavControlConfig *config, GKeyFile *key_file)
     config->corner_home_loc_h_deg = NAN;
     config->corner_home_loc_v_deg = NAN;
     config->startup_pt_focal_min_enable = FALSE;
-    config->startup_pt_focal = 20.0;
+    config->startup_pt_focal = 20;
     config->startup_pt_focus = 100;
     config->lost_target_focal_min_hold_ms = 3000;
     config->corner_home_pt_focus = G_MAXUINT;
@@ -1740,6 +1741,11 @@ parse_cuav_control(NvDsCuavControlConfig *config, GKeyFile *key_file)
             config->pt_focal_max = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, "pt-focal-max", &error);
             CHECK_ERROR(error);
         }
+        else if (!g_strcmp0(*key, "pt-focal-step"))
+        {
+            config->pt_focal_step = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, "pt-focal-step", &error);
+            CHECK_ERROR(error);
+        }
         else if (!g_strcmp0(*key, "servo-effect-threshold-h"))
         {
             config->servo_effect_threshold_h = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, "servo-effect-threshold-h", &error);
@@ -1809,7 +1815,7 @@ parse_cuav_control(NvDsCuavControlConfig *config, GKeyFile *key_file)
         }
         else if (!g_strcmp0(*key, "startup-pt-focal"))
         {
-            config->startup_pt_focal = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, "startup-pt-focal", &error);
+            config->startup_pt_focal = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "startup-pt-focal", &error);
             CHECK_ERROR(error);
         }
         else if (!g_strcmp0(*key, "startup-pt-focus"))
@@ -2862,12 +2868,13 @@ parse_sink(NvDsSinkSubBinConfig *config, GKeyFile *key_file, gchar *group,
     config->cuav_control_config.zoom_deadband = 0.02;
     config->cuav_control_config.visible_light_control_enable = TRUE;
     config->cuav_control_config.servo_dev_id = 2;
-    config->cuav_control_config.pt_focal_min = 134.0;
-    config->cuav_control_config.pt_focal_max = 16298.0;
+    config->cuav_control_config.pt_focal_min = 19.0;
+    config->cuav_control_config.pt_focal_max = 4000.0;
+    config->cuav_control_config.pt_focal_step = 10.0;
     config->cuav_control_config.servo_effect_threshold_h = 0.5;
     config->cuav_control_config.servo_effect_threshold_v = 0.3;
     config->cuav_control_config.state_stale_timeout_ms = 2000;
-    config->cuav_control_config.startup_pt_focal = 20.0;
+    config->cuav_control_config.startup_pt_focal = 20;
     config->cuav_control_config.startup_pt_focus = 100;
     config->cuav_control_config.lost_target_focal_min_hold_ms = 3000;
 
@@ -3426,6 +3433,12 @@ parse_sink(NvDsSinkSubBinConfig *config, GKeyFile *key_file, gchar *group,
         {
             config->cuav_control_config.pt_focal_max =
                 g_key_file_get_double(key_file, group, "pt-focal-max", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "pt-focal-step"))
+        {
+            config->cuav_control_config.pt_focal_step =
+                g_key_file_get_double(key_file, group, "pt-focal-step", &error);
             CHECK_ERROR(error);
         }
         else if (!g_strcmp0(*key, "servo-effect-threshold-h"))

@@ -51,11 +51,12 @@ typedef struct
     gdouble zoom_target_ratio_min; /* 目标高度占比下限 */
     gdouble zoom_target_ratio_max; /* 目标高度占比上限 */
     gdouble zoom_deadband; /* 变倍死区 */
-    guint visible_focal_hold_ms; /* 自动变焦命令保持时间（毫秒） */
+    guint visible_focal_hold_ms; /* 自动可见光拉近前的最小稳定时间（毫秒） */
     gboolean visible_light_control_enable; /* 是否发送可见光控制 */
     guint servo_dev_id; /* 伺服报文 dev_id，0=可见光 1=热成像 2=两者 */
     gdouble pt_focal_min; /* 可见光焦距最小值 */
     gdouble pt_focal_max; /* 可见光焦距最大值 */
+    gdouble pt_focal_step; /* 自动变焦每次调整的焦距步长 */
     gdouble servo_effect_threshold_h; /* 水平伺服生效判定阈值 */
     gdouble servo_effect_threshold_v; /* 垂直伺服生效判定阈值 */
     guint state_stale_timeout_ms; /* 设备状态新鲜度超时 */
@@ -69,9 +70,9 @@ typedef struct
     gdouble corner_home_loc_h_deg; /* 程序启动及每轮回位的水平位置（可选，NaN=使用首个有效反馈） */
     gdouble corner_home_loc_v_deg; /* 程序启动及每轮回位的垂直位置（可选，NaN=使用首个有效反馈） */
     gboolean startup_pt_focal_min_enable; /* 程序启动时是否下发可见光焦距/对焦预置 */
-    gdouble startup_pt_focal; /* 启动可见光焦距预置值 */
+    guint startup_pt_focal; /* 启动可见光焦距预置值 */
     guint startup_pt_focus; /* 启动可见光聚焦预置值 */
-    guint lost_target_focal_min_hold_ms; /* 目标丢失后保持缩小焦距命令的时间（毫秒） */
+    guint lost_target_focal_min_hold_ms; /* [已废弃] 目标丢失后保持缩小焦距命令的时间（毫秒），现改为步进缩回至 pt_focal_min */
     guint corner_home_pt_focus; /* 程序启动及每轮回位的可见光聚焦预置位（可选，G_MAXUINT=不设置） */
 } NvDsCuavControlConfig;
 

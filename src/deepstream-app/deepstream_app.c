@@ -29,6 +29,7 @@ GQuark _dsmeta_quark;
 #define DEFAULT_CUAV_TEST_MULTICAST_PORT 18003
 #define CUAV_FEEDBACK_STALE_USEC (2 * G_USEC_PER_SEC)
 #define CUAV_MOTION_CMD_MIN_SPACING_USEC (70 * 1000)
+#define CUAV_FOCAL_REACHED_EPSILON 1.0
 
 typedef enum
 {
@@ -97,13 +98,13 @@ static gboolean send_cuav_servo_command_with_en(AppCtx *appCtx,
                                                 gdouble loc_v);
 static gboolean send_cuav_visible_light_command_with_en(AppCtx *appCtx,
                                                         guint pt_focal_en,
-                                                        gdouble pt_focal,
+                                                        guint pt_focal,
                                                         guint pt_focus_en,
                                                         guint pt_focus,
                                                         guint pt_focus_mode,
                                                         guint pt_zoom);
 static gboolean send_cuav_visible_light_command(AppCtx *appCtx,
-                                                gdouble pt_focal,
+                                                guint pt_focal,
                                                 guint pt_focus_en,
                                                 guint pt_focus,
                                                 guint pt_focus_mode,
@@ -166,11 +167,15 @@ static gboolean cuav_compute_servo_command(const NvDsCuavControlConfig *control_
                                            guint *speed_v,
                                            gboolean debug);
 static gboolean cuav_compute_visible_light_command(const NvDsCuavControlConfig *control_config,
+                                                   const CuavFeedbackState *feedback_state,
                                                    const CuavAutoControlState *auto_state,
                                                    const CuavTrackSample *sample,
                                                    guint *pt_focal_en,
                                                    gdouble *pt_focal,
                                                    guint *pt_focus);
+static gdouble cuav_get_current_pt_focal(const NvDsCuavControlConfig *control_config,
+                                         const CuavFeedbackState *feedback_state,
+                                         const CuavAutoControlState *auto_state);
 
 /**
  * @brief 根据源ID获取传感器信息
@@ -400,6 +405,50 @@ cuav_feedback_is_fresh(const CuavFeedbackState *feedback_state,
 
     timeout_us = ((gint64)(stale_timeout_ms > 0 ? stale_timeout_ms : 2000)) * 1000;
     return (g_get_monotonic_time() - feedback_state->updated_at_us) <= timeout_us;
+}
+
+/**
+ * @brief 获取当前可见光焦距，按优先级回退
+ * 1. 新鲜的设备反馈值（feedback_state->pt_focal）
+ * 2. 上次成功发送并确认的值（auto_state->last_pt_focal）
+ * 3. 配置最小值（pt_focal_min）
+ * 结果会被 clamp 到 [pt_focal_min, pt_focal_max] 区间
+ */
+static gdouble
+cuav_get_current_pt_focal(const NvDsCuavControlConfig *control_config,
+                          const CuavFeedbackState *feedback_state,
+                          const CuavAutoControlState *auto_state)
+{
+    gdouble focal_min = 19.0;
+    gdouble focal_max = 4000.0;
+    gdouble focal = 0.0;
+
+    if (control_config)
+    {
+        focal_min = control_config->pt_focal_min;
+        focal_max = control_config->pt_focal_max;
+        if (focal_max < focal_min)
+            focal_max = focal_min;
+    }
+
+    if (feedback_state &&
+        cuav_feedback_is_fresh(feedback_state,
+                               control_config ? control_config->state_stale_timeout_ms : 2000) &&
+        feedback_state->pt_focal > 0.0)
+    {
+        focal = feedback_state->pt_focal;
+    }
+    else if (auto_state && auto_state->last_visible_valid &&
+             auto_state->last_pt_focal > 0.0)
+    {
+        focal = auto_state->last_pt_focal;
+    }
+    else
+    {
+        focal = focal_min;
+    }
+
+    return clamp_cuav_double(focal, focal_min, focal_max);
 }
 
 /**
@@ -641,7 +690,7 @@ process_cuav_startup_preset(AppCtx *appCtx,
         sent = send_cuav_visible_light_command_with_en(appCtx,
                                                        control_config->startup_pt_focal_min_enable ? 1 : 0,
                                                        control_config->startup_pt_focal_min_enable ?
-                                                           control_config->startup_pt_focal : 0.0,
+                                                           control_config->startup_pt_focal : 0,
                                                        control_config->startup_pt_focal_min_enable ||
                                                            control_config->corner_home_pt_focus != G_MAXUINT ? 1 : 0,
                                                        control_config->startup_pt_focal_min_enable ?
@@ -661,10 +710,10 @@ process_cuav_startup_preset(AppCtx *appCtx,
 
             if (control_config->debug)
             {
-                g_print("[cuav][startup-preset] send visible focal_en=%u focal=%.1f focus_en=%u focus=%u\n",
+                g_print("[cuav][startup-preset] send visible focal_en=%u focal=%u focus_en=%u focus=%u\n",
                         control_config->startup_pt_focal_min_enable ? 1U : 0U,
                         control_config->startup_pt_focal_min_enable ?
-                            control_config->startup_pt_focal : 0.0,
+                            control_config->startup_pt_focal : 0U,
                         (control_config->startup_pt_focal_min_enable ||
                          control_config->corner_home_pt_focus != G_MAXUINT) ? 1U : 0U,
                         control_config->startup_pt_focal_min_enable ?
@@ -870,6 +919,8 @@ cuav_reset_auto_control_state(CuavAutoControlState *state, gboolean keep_last_co
     state->lost_zoom_active = FALSE;
     state->lost_zoom_start_us = 0;
     state->lost_zoom_hold_complete = FALSE;
+    state->pending_pt_focal_valid = FALSE;
+    state->pending_pt_focal = 0.0;
     state->history_len = 0;
     state->history_next = 0;
     memset(state->history, 0, sizeof(state->history));
@@ -1159,17 +1210,18 @@ cuav_compute_servo_command(const NvDsCuavControlConfig *control_config,
 }
 
 /**
- * @brief 计算可见光变焦控制指令
- * target_ratio < (min - deadband) → focal_en=3(放大)
- * target_ratio > (max + deadband) → focal_en=4(缩小)
- * 否则 → focal_en=0(停止)
- * @param[out] pt_focal_en 变焦使能指令(0=停止,3=放大,4=缩小)
- * @param[out] pt_focal 焦距值（当前未使用，固定0.0）
+ * @brief 计算可见光绝对焦距控制指令
+ * target_ratio < (min - deadband) → pt_focal += pt_focal_step
+ * target_ratio > (max + deadband) → pt_focal -= pt_focal_step
+ * 否则 → 不调整
+ * @param[out] pt_focal_en 变焦使能指令(0=不调整,1=设置绝对焦距)
+ * @param[out] pt_focal 焦距目标值
  * @param[out] pt_focus 对焦值
  * @return 成功返回TRUE
  */
 static gboolean
 cuav_compute_visible_light_command(const NvDsCuavControlConfig *control_config,
+                                   const CuavFeedbackState *feedback_state,
                                    const CuavAutoControlState *auto_state,
                                    const CuavTrackSample *sample,
                                    guint *pt_focal_en,
@@ -1178,6 +1230,11 @@ cuav_compute_visible_light_command(const NvDsCuavControlConfig *control_config,
 {
     guint focal_en = 0;
     gint64 zoom_in_stable_us = 0;
+    gdouble focal_min = 0.0;
+    gdouble focal_max = 0.0;
+    gdouble focal_step = 0.0;
+    gdouble current_focal = 0.0;
+    gdouble target_focal = 0.0;
 
     if (!control_config || !auto_state || !sample || !pt_focal_en || !pt_focal || !pt_focus)
         return FALSE;
@@ -1194,9 +1251,23 @@ cuav_compute_visible_light_command(const NvDsCuavControlConfig *control_config,
             *pt_focus = 100;
     }
 
+    focal_min = control_config->pt_focal_min;
+    focal_max = control_config->pt_focal_max;
+    if (focal_max < focal_min)
+        focal_max = focal_min;
+    focal_step = control_config->pt_focal_step > 0.0 ?
+                 control_config->pt_focal_step : 10.0;
+    current_focal = cuav_get_current_pt_focal(control_config,
+                                              feedback_state,
+                                              auto_state);
+    target_focal = current_focal;
+
     if (sample->target_ratio < (control_config->zoom_target_ratio_min - control_config->zoom_deadband))
     {
-        focal_en = 3;
+        focal_en = 1;
+        target_focal = clamp_cuav_double(current_focal + focal_step,
+                                         focal_min,
+                                         focal_max);
         zoom_in_stable_us =
             ((gint64)MAX(control_config->visible_focal_hold_ms,
                          control_config->control_period_ms *
@@ -1206,10 +1277,19 @@ cuav_compute_visible_light_command(const NvDsCuavControlConfig *control_config,
         {
             focal_en = 0;
         }
+        else if (fabs(target_focal - current_focal) <= CUAV_FOCAL_REACHED_EPSILON)
+        {
+            focal_en = 0;
+        }
     }
     else if (sample->target_ratio > (control_config->zoom_target_ratio_max + control_config->zoom_deadband))
     {
-        focal_en = 4;
+        focal_en = 1;
+        target_focal = clamp_cuav_double(current_focal - focal_step,
+                                         focal_min,
+                                         focal_max);
+        if (fabs(target_focal - current_focal) <= CUAV_FOCAL_REACHED_EPSILON)
+            focal_en = 0;
     }
     else
     {
@@ -1217,13 +1297,14 @@ cuav_compute_visible_light_command(const NvDsCuavControlConfig *control_config,
     }
 
     *pt_focal_en = focal_en;
-    *pt_focal = 0.0;
+    *pt_focal = target_focal;
     return TRUE;
 }
 
 /**
- * @brief 判断可见光变焦是否需要发送停止指令（hold定时器到期）
- * @return 上次发送变焦指令后超过visible_focal_hold_ms时返回TRUE
+ * @brief 判断旧连续变焦指令（focal_en=3/4）是否需要发送停止指令
+ * @note  新绝对焦距模式下 focal_en 仅为 0 或 1，此函数始终返回 FALSE
+ * @return 仅当上次发送 focal_en 为 3 或 4 且超过 visible_focal_hold_ms 时返回 TRUE
  */
 static gboolean
 cuav_visible_focal_stop_due(const NvDsCuavControlConfig *control_config,
@@ -1236,7 +1317,8 @@ cuav_visible_focal_stop_due(const NvDsCuavControlConfig *control_config,
     if (control_config->visible_focal_hold_ms == 0)
         return FALSE;
 
-    if (auto_state->last_pt_focal_en == 0 || auto_state->last_visible_send_us <= 0)
+    if ((auto_state->last_pt_focal_en != 3 && auto_state->last_pt_focal_en != 4) ||
+        auto_state->last_visible_send_us <= 0)
         return FALSE;
 
     return (now_us - auto_state->last_visible_send_us) >=
@@ -1396,7 +1478,7 @@ send_cuav_servo_command(AppCtx *appCtx,
 
 /**
  * @brief 发送可见光控制指令（含焦距、对焦、对焦模式等完整参数）
- * @param pt_focal_en 焦距控制使能(0=停止,1=绝对值,3=放大,4=缩小)
+ * @param pt_focal_en 焦距控制使能(0=不调整,1=设置绝对焦距；3/4为旧连续变焦模式，已废弃)
  * @param pt_focal 焦距目标值
  * @param pt_focus_en 对焦使能
  * @param pt_focus 对焦目标值
@@ -1407,7 +1489,7 @@ send_cuav_servo_command(AppCtx *appCtx,
 static gboolean
 send_cuav_visible_light_command_with_en(AppCtx *appCtx,
                                         guint pt_focal_en,
-                                        gdouble pt_focal,
+                                        guint pt_focal,
                                         guint pt_focus_en,
                                         guint pt_focus,
                                         guint pt_focus_mode,
@@ -1416,7 +1498,6 @@ send_cuav_visible_light_command_with_en(AppCtx *appCtx,
     GstStructure *payload = NULL;
     gboolean result = FALSE;
     guint effective_pt_focus_mode = pt_focal_en == 0 ? 0 : pt_focus_mode;
-    gint pt_focal_int = (gint)(pt_focal + 0.5);
 
     payload = gst_structure_new("cuav-visible-light-control",
                                 "pt-dev-en", G_TYPE_INT, 1,
@@ -1425,7 +1506,7 @@ send_cuav_visible_light_command_with_en(AppCtx *appCtx,
                                 "pt-fov-h", G_TYPE_DOUBLE, 0.0,
                                 "pt-fov-v", G_TYPE_DOUBLE, 0.0,
                                 "pt-focal-en", G_TYPE_INT, (gint)pt_focal_en,
-                                "pt-focal", G_TYPE_INT, pt_focal_int,
+                                "pt-focal", G_TYPE_INT, (gint)pt_focal,
                                 "pt-focus-en", G_TYPE_INT, (gint)pt_focus_en,
                                 "pt-focus", G_TYPE_INT, (gint)pt_focus,
                                 "pt-speed-en", G_TYPE_INT, 0,
@@ -1450,7 +1531,7 @@ send_cuav_visible_light_command_with_en(AppCtx *appCtx,
  */
 static gboolean
 send_cuav_visible_light_command(AppCtx *appCtx,
-                                gdouble pt_focal,
+                                guint pt_focal,
                                 guint pt_focus_en,
                                 guint pt_focus,
                                 guint pt_focus_mode,
@@ -1593,7 +1674,7 @@ send_cuav_visible_light_test_message(AppCtx *appCtx)
     if (!appCtx)
         return FALSE;
 
-    result = send_cuav_visible_light_command(appCtx, 500.0, 1, 100, 1, 0);
+    result = send_cuav_visible_light_command(appCtx, 500, 1, 100, 1, 0);
 
     g_print("[cuav][control-test] visible-light test send result=%d\n", result);
     return result;
@@ -1936,7 +2017,7 @@ process_cuav_corner_zoom_cycle(AppCtx *appCtx,
 
         sent = send_cuav_visible_light_command_with_en(appCtx,
                                                        0,
-                                                       0.0,
+                                                       0,
                                                        home_visible_focus_valid ? 1 : 0,
                                                        home_visible_focus,
                                                        1,
@@ -2142,8 +2223,6 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
     guint64 locked_object_id = 0;
     gint64 now_us = 0;
     gint64 hold_deadline_us = 0;
-    gint64 lost_zoom_hold_us = 0;
-    gint64 lost_zoom_elapsed_us = 0;
     gboolean startup_preset_required = FALSE;
     CuavTrackSample sample;
     CuavFeedbackState feedback_snapshot;
@@ -2157,7 +2236,6 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
     gboolean motion_cmd_sent = FALSE;
     gboolean had_tracking_before_reset = FALSE;
     gboolean lost_zoom_active = FALSE;
-    gboolean lost_zoom_stop_due = FALSE;
     gdouble loc_h = 0.0;
     gdouble loc_v = 0.0;
     guint speed_h = 0;
@@ -2175,6 +2253,7 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
     gboolean servo_sent = FALSE;
     gboolean visible_sent = FALSE;
     gboolean debug_enabled = FALSE;
+    gboolean visible_focal_pending = FALSE;
 
     if (!appCtx || !batch_meta)
         return;
@@ -2297,80 +2376,60 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
         {
             cuav_reset_auto_control_state(&appCtx->cuav_auto_control_state, TRUE);
         }
+        feedback_snapshot = appCtx->cuav_feedback_state;
+        if (appCtx->cuav_auto_control_state.pending_pt_focal_valid &&
+            cuav_feedback_is_fresh(&feedback_snapshot,
+                                   control_config->state_stale_timeout_ms) &&
+            fabs(feedback_snapshot.pt_focal -
+                 appCtx->cuav_auto_control_state.pending_pt_focal) <=
+                CUAV_FOCAL_REACHED_EPSILON)
+        {
+            appCtx->cuav_auto_control_state.pending_pt_focal_valid = FALSE;
+            appCtx->cuav_auto_control_state.last_pt_focal =
+                feedback_snapshot.pt_focal;
+        }
         state_snapshot = appCtx->cuav_auto_control_state;
         g_mutex_unlock(&appCtx->cuav_control_lock);
 
-        lost_zoom_hold_us =
-            ((gint64)control_config->lost_target_focal_min_hold_ms) * 1000;
         lost_zoom_active = !state_snapshot.lost_zoom_hold_complete &&
-                           lost_zoom_hold_us > 0 &&
                            (had_tracking_before_reset ||
-                            state_snapshot.lost_zoom_active ||
-                            !state_snapshot.has_lock);
-        if (state_snapshot.lost_zoom_start_us > 0)
-        {
-            lost_zoom_elapsed_us = now_us - state_snapshot.lost_zoom_start_us;
-            lost_zoom_stop_due = lost_zoom_elapsed_us >= lost_zoom_hold_us;
-        }
+                            state_snapshot.lost_zoom_active);
         if (cuav_visible_control_enabled(control_config) && lost_zoom_active)
         {
             motion_spacing_ok = (state_snapshot.last_motion_send_us <= 0) ||
                 ((now_us - state_snapshot.last_motion_send_us) >=
                  CUAV_MOTION_CMD_MIN_SPACING_USEC);
-            if (lost_zoom_stop_due)
+            if (!state_snapshot.pending_pt_focal_valid &&
+                (state_snapshot.last_pt_focal_en != 1 ||
+                 state_snapshot.last_visible_send_us <= 0 ||
+                 (now_us - state_snapshot.last_visible_send_us) >=
+                    ((gint64)MAX(control_config->control_period_ms, 1U) * 1000)) &&
+                motion_spacing_ok)
             {
-                if (state_snapshot.last_pt_focal_en == 4 && motion_spacing_ok)
-                {
-                    visible_sent = send_cuav_visible_light_command_with_en(appCtx,
-                                                                            0,
-                                                                            0.0,
-                                                                            0,
-                                                                            0,
-                                                                            0,
-                                                                            0);
-                    if (visible_sent)
-                    {
-                        g_mutex_lock(&appCtx->cuav_control_lock);
-                        appCtx->cuav_auto_control_state.last_visible_valid = TRUE;
-                        appCtx->cuav_auto_control_state.last_pt_focal_en = 0;
-                        appCtx->cuav_auto_control_state.last_pt_focal = 0.0;
-                        appCtx->cuav_auto_control_state.last_pt_focus = 0;
-                        appCtx->cuav_auto_control_state.lost_zoom_active = FALSE;
-                        appCtx->cuav_auto_control_state.lost_zoom_hold_complete = TRUE;
-                        appCtx->cuav_auto_control_state.last_visible_send_us = now_us;
-                        appCtx->cuav_auto_control_state.visible_initialized = TRUE;
-                        appCtx->cuav_auto_control_state.last_motion_send_us = now_us;
-                        appCtx->cuav_auto_control_state.last_motion_type = CUAV_MOTION_CMD_VISIBLE;
-                        g_mutex_unlock(&appCtx->cuav_control_lock);
-
-                        if (debug_enabled)
-                        {
-                            g_print("[cuav][control][lost] stop zoom-out after %u ms without target\n",
-                                    control_config->lost_target_focal_min_hold_ms);
-                        }
-                    }
-                }
-                else if (state_snapshot.last_pt_focal_en != 4)
+                gdouble current_focal =
+                    cuav_get_current_pt_focal(control_config,
+                                              &feedback_snapshot,
+                                              &state_snapshot);
+                pt_focal = clamp_cuav_double(current_focal -
+                                                 MAX(control_config->pt_focal_step, 1.0),
+                                             control_config->pt_focal_min,
+                                             control_config->pt_focal_max);
+                if (fabs(pt_focal - current_focal) <= CUAV_FOCAL_REACHED_EPSILON)
                 {
                     g_mutex_lock(&appCtx->cuav_control_lock);
                     appCtx->cuav_auto_control_state.lost_zoom_active = FALSE;
                     appCtx->cuav_auto_control_state.lost_zoom_hold_complete = TRUE;
                     g_mutex_unlock(&appCtx->cuav_control_lock);
+                    if (debug_enabled)
+                    {
+                        g_print("[cuav][control][lost] zoom-out reached pt_focal_min=%.1f\n",
+                                control_config->pt_focal_min);
+                    }
+                    return;
                 }
-                else if (debug_enabled && !motion_spacing_ok)
-                {
-                    g_print("[cuav][control][lost] zoom-out stop blocked by 70ms spacing\n");
-                }
-            }
-            else if ((state_snapshot.last_pt_focal_en != 4 ||
-                      state_snapshot.last_visible_send_us <= 0 ||
-                      (now_us - state_snapshot.last_visible_send_us) >=
-                        ((gint64)MAX(control_config->control_period_ms, 1U) * 1000)) &&
-                     motion_spacing_ok)
-            {
                 visible_sent = send_cuav_visible_light_command_with_en(appCtx,
-                                                                        4,
-                                                                        0.0,
+                                                                        1,
+                                                                        (guint)round(pt_focal),
                                                                         0,
                                                                         0,
                                                                         0,
@@ -2379,9 +2438,11 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
                 {
                     g_mutex_lock(&appCtx->cuav_control_lock);
                     appCtx->cuav_auto_control_state.last_visible_valid = TRUE;
-                    appCtx->cuav_auto_control_state.last_pt_focal_en = 4;
-                    appCtx->cuav_auto_control_state.last_pt_focal = 0.0;
+                    appCtx->cuav_auto_control_state.last_pt_focal_en = 1;
+                    appCtx->cuav_auto_control_state.last_pt_focal = pt_focal;
                     appCtx->cuav_auto_control_state.last_pt_focus = 0;
+                    appCtx->cuav_auto_control_state.pending_pt_focal_valid = TRUE;
+                    appCtx->cuav_auto_control_state.pending_pt_focal = pt_focal;
                     appCtx->cuav_auto_control_state.lost_zoom_active = TRUE;
                     if (appCtx->cuav_auto_control_state.lost_zoom_start_us <= 0)
                         appCtx->cuav_auto_control_state.lost_zoom_start_us = now_us;
@@ -2394,10 +2455,10 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
 
                     if (debug_enabled)
                     {
-                        g_print("[cuav][control][lost] no target, zoom out focal_en=4 elapsed=%" G_GINT64_FORMAT "/%" G_GINT64_FORMAT " us\n",
-                                state_snapshot.lost_zoom_start_us > 0 ?
-                                    lost_zoom_elapsed_us : 0,
-                                lost_zoom_hold_us);
+                        g_print("[cuav][control][lost] no target, zoom out focal_en=1 focal=%.1f min=%.1f step=%.1f\n",
+                                pt_focal,
+                                control_config->pt_focal_min,
+                                control_config->pt_focal_step);
                     }
                 }
             }
@@ -2482,41 +2543,53 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
                            control_config->tracking_history_size,
                            &sample);
     feedback_snapshot = appCtx->cuav_feedback_state;
+    if (appCtx->cuav_auto_control_state.pending_pt_focal_valid)
+    {
+        if (cuav_feedback_is_fresh(&feedback_snapshot,
+                                   control_config->state_stale_timeout_ms) &&
+            fabs(feedback_snapshot.pt_focal -
+                 appCtx->cuav_auto_control_state.pending_pt_focal) <=
+                CUAV_FOCAL_REACHED_EPSILON)
+        {
+            appCtx->cuav_auto_control_state.pending_pt_focal_valid = FALSE;
+            appCtx->cuav_auto_control_state.last_pt_focal =
+                feedback_snapshot.pt_focal;
+            if (debug_enabled)
+            {
+                g_print("[cuav][control][auto] focal confirmed target=%.1f feedback=%.1f\n",
+                        appCtx->cuav_auto_control_state.pending_pt_focal,
+                        feedback_snapshot.pt_focal);
+            }
+        }
+        else
+        {
+            visible_focal_pending = TRUE;
+        }
+    }
     state_snapshot = appCtx->cuav_auto_control_state;
     g_mutex_unlock(&appCtx->cuav_control_lock);
 
     if (cuav_visible_control_enabled(control_config) &&
         state_snapshot.lost_zoom_active)
     {
-        visible_sent = send_cuav_visible_light_command_with_en(appCtx,
-                                                                0,
-                                                                0.0,
-                                                                0,
-                                                                0,
-                                                                0,
-                                                                0);
-        if (visible_sent)
-        {
-            g_mutex_lock(&appCtx->cuav_control_lock);
-            appCtx->cuav_auto_control_state.last_visible_valid = TRUE;
-            appCtx->cuav_auto_control_state.last_pt_focal_en = 0;
-            appCtx->cuav_auto_control_state.last_pt_focal = 0.0;
-            appCtx->cuav_auto_control_state.last_pt_focus = 0;
-            appCtx->cuav_auto_control_state.lost_zoom_active = FALSE;
-            appCtx->cuav_auto_control_state.lost_zoom_start_us = 0;
-            appCtx->cuav_auto_control_state.lost_zoom_hold_complete = FALSE;
-            appCtx->cuav_auto_control_state.last_visible_send_us = now_us;
-            appCtx->cuav_auto_control_state.visible_initialized = TRUE;
-            appCtx->cuav_auto_control_state.last_motion_send_us = now_us;
-            appCtx->cuav_auto_control_state.last_motion_type = CUAV_MOTION_CMD_VISIBLE;
-            g_mutex_unlock(&appCtx->cuav_control_lock);
+        g_mutex_lock(&appCtx->cuav_control_lock);
+        appCtx->cuav_auto_control_state.last_pt_focal =
+            cuav_get_current_pt_focal(control_config,
+                                      &feedback_snapshot,
+                                      &state_snapshot);
+        appCtx->cuav_auto_control_state.pending_pt_focal_valid = FALSE;
+        appCtx->cuav_auto_control_state.pending_pt_focal = 0.0;
+        appCtx->cuav_auto_control_state.lost_zoom_active = FALSE;
+        appCtx->cuav_auto_control_state.lost_zoom_start_us = 0;
+        appCtx->cuav_auto_control_state.lost_zoom_hold_complete = FALSE;
+        state_snapshot = appCtx->cuav_auto_control_state;
+        visible_focal_pending = FALSE;
+        g_mutex_unlock(&appCtx->cuav_control_lock);
 
-            if (debug_enabled)
-            {
-                g_print("[cuav][control][lost] target reacquired, stop zoom-out focal_en=0 target=%" G_GUINT64_FORMAT "\n",
-                        sample.object_id);
-            }
-            return;
+        if (debug_enabled)
+        {
+            g_print("[cuav][control][lost] target reacquired, stop lost-target zoom-out target=%" G_GUINT64_FORMAT "\n",
+                    sample.object_id);
         }
     }
 
@@ -2553,6 +2626,7 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
                                                    &state_snapshot,
                                                    now_us);
     if (cuav_visible_control_enabled(control_config) &&
+        !visible_focal_pending &&
         (!state_snapshot.visible_initialized ||
          visible_stop_due ||
          (now_us - state_snapshot.last_visible_send_us) >=
@@ -2567,6 +2641,7 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
         else
         {
             should_send_visible = cuav_compute_visible_light_command(control_config,
+                                                                     &feedback_snapshot,
                                                                      &state_snapshot,
                                                                      &sample,
                                                                      &pt_focal_en,
@@ -2575,7 +2650,10 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
         }
         visible_cmd_changed = should_send_visible &&
             (!state_snapshot.visible_initialized ||
-             pt_focal_en != state_snapshot.last_pt_focal_en);
+             pt_focal_en != state_snapshot.last_pt_focal_en ||
+             (pt_focal_en == 1 &&
+              fabs(pt_focal - state_snapshot.last_pt_focal) >
+                CUAV_FOCAL_REACHED_EPSILON));
         should_send_visible = visible_cmd_changed;
         if (should_send_visible && !motion_spacing_ok && !visible_stop_due && debug_enabled)
         {
@@ -2591,16 +2669,18 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
     if (should_send_visible && (motion_spacing_ok || visible_stop_due))
     {
         visible_sent = send_cuav_visible_light_command_with_en(appCtx, pt_focal_en,
-                                                                0.0, 0, 0, 0, 0);
+                                                                (guint)round(pt_focal),
+                                                                0, 0, 0, 0);
         motion_cmd_sent = visible_sent;
         if (visible_sent && control_config->debug)
         {
             g_print("[cuav][control][auto] source=%u target=%" G_GUINT64_FORMAT
-                    " ratio=%.3f focal_en=%u focus=%u%s\n",
+                    " ratio=%.3f focal_en=%u focal=%.1f focus=%u%s\n",
                     control_config->control_source_id,
                     sample.object_id,
                     sample.target_ratio,
                     pt_focal_en,
+                    pt_focal,
                     pt_focus,
                     visible_stop_due ? " stop-after-hold" : "");
         }
@@ -2666,6 +2746,16 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
             appCtx->cuav_auto_control_state.last_pt_focal_en = pt_focal_en;
             appCtx->cuav_auto_control_state.last_pt_focal = pt_focal;
             appCtx->cuav_auto_control_state.last_pt_focus = pt_focus;
+            if (pt_focal_en == 1)
+            {
+                appCtx->cuav_auto_control_state.pending_pt_focal_valid = TRUE;
+                appCtx->cuav_auto_control_state.pending_pt_focal = pt_focal;
+            }
+            else
+            {
+                appCtx->cuav_auto_control_state.pending_pt_focal_valid = FALSE;
+                appCtx->cuav_auto_control_state.pending_pt_focal = 0.0;
+            }
             appCtx->cuav_auto_control_state.last_visible_send_us = now_us;
             appCtx->cuav_auto_control_state.visible_initialized = TRUE;
             appCtx->cuav_auto_control_state.last_motion_send_us = now_us;

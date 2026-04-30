@@ -295,6 +295,8 @@ typedef struct
     guint last_pt_focal_en;
     gdouble last_pt_focal;
     guint last_pt_focus;
+    gboolean pending_pt_focal_valid; /* 已发送的绝对焦距目标值是否等待设备反馈确认 */
+    gdouble pending_pt_focal;        /* 等待确认的焦距目标值 */
     gboolean visible_initialized;
     gboolean lost_zoom_active;
     gint64 lost_zoom_start_us;

@@ -147,8 +147,9 @@ sink4:
   zoom-target-ratio-max: 0.35
   zoom-deadband: 0.02
   visible-focal-hold-ms: 300
-  pt-focal-min: 134.0
-  pt-focal-max: 16298.0
+  pt-focal-min: 19.0
+  pt-focal-max: 4000.0
+  pt-focal-step: 10.0
   servo-effect-threshold-h: 0.5
   servo-effect-threshold-v: 0.3
   state-stale-timeout-ms: 2000

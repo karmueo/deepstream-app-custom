@@ -343,7 +343,7 @@
 
 程序会发送 `pt_focal_en=1`、`pt_focus_en=1`，发送成功后启动预置直接完成。
 
-目标丢失后的连续缩焦保持时间由 `lost-target-focal-min-hold-ms` 控制。
+目标丢失后会按 `pt-focal-step` 逐步缩小 `pt_focal`，直到重新发现目标或焦距降到 `pt-focal-min`。
 
 ### 8.4 可见光报文实际发什么
 

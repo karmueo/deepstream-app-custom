@@ -14,6 +14,128 @@
 using std::cout;
 using std::endl;
 
+static void
+parse_cuav_corner_zoom_cycle_yaml(NvDsCuavControlConfig *config,
+                                  const YAML::Node &node)
+{
+  if (!config || !node)
+    return;
+
+  if (node["enable"])
+    config->corner_zoom_cycle_enable = node["enable"].as<gboolean>();
+  if (node["corner-zoom-cycle-enable"])
+    config->corner_zoom_cycle_enable = node["corner-zoom-cycle-enable"].as<gboolean>();
+  if (node["cycle-count"])
+    config->corner_cycle_count = node["cycle-count"].as<guint>();
+  if (node["corner-cycle-count"])
+    config->corner_cycle_count = node["corner-cycle-count"].as<guint>();
+  if (node["sequence-repeat-count"])
+    config->sequence_repeat_count = node["sequence-repeat-count"].as<guint>();
+  if (node["offset-h-deg"])
+    config->corner_offset_h_deg = node["offset-h-deg"].as<gdouble>();
+  if (node["corner-offset-h-deg"])
+    config->corner_offset_h_deg = node["corner-offset-h-deg"].as<gdouble>();
+  if (node["offset-v-deg"])
+    config->corner_offset_v_deg = node["offset-v-deg"].as<gdouble>();
+  if (node["corner-offset-v-deg"])
+    config->corner_offset_v_deg = node["corner-offset-v-deg"].as<gdouble>();
+  if (node["dwell-ms"])
+    config->corner_dwell_ms = node["dwell-ms"].as<guint>();
+  if (node["corner-dwell-ms"])
+    config->corner_dwell_ms = node["corner-dwell-ms"].as<guint>();
+  if (node["servo-speed"])
+    config->corner_servo_speed = node["servo-speed"].as<guint>();
+  if (node["corner-servo-speed"])
+    config->corner_servo_speed = node["corner-servo-speed"].as<guint>();
+  if (node["home-servo"]) {
+    YAML::Node home_servo = node["home-servo"];
+    gboolean home_servo_enable = TRUE;
+
+    if (home_servo["enable"])
+      home_servo_enable = home_servo["enable"].as<gboolean>();
+    if (home_servo_enable) {
+      if (home_servo["loc-h-deg"])
+        config->corner_home_loc_h_deg = home_servo["loc-h-deg"].as<gdouble>();
+      if (home_servo["loc-v-deg"])
+        config->corner_home_loc_v_deg = home_servo["loc-v-deg"].as<gdouble>();
+      if (home_servo["home-loc-h-deg"])
+        config->corner_home_loc_h_deg = home_servo["home-loc-h-deg"].as<gdouble>();
+      if (home_servo["home-loc-v-deg"])
+        config->corner_home_loc_v_deg = home_servo["home-loc-v-deg"].as<gdouble>();
+    } else {
+      config->corner_home_loc_h_deg = NAN;
+      config->corner_home_loc_v_deg = NAN;
+    }
+  }
+  if (node["home-loc-h-deg"])
+    config->corner_home_loc_h_deg = node["home-loc-h-deg"].as<gdouble>();
+  if (node["corner-home-loc-h-deg"])
+    config->corner_home_loc_h_deg = node["corner-home-loc-h-deg"].as<gdouble>();
+  if (node["return-loc-h-deg"])
+    config->corner_home_loc_h_deg = node["return-loc-h-deg"].as<gdouble>();
+  if (node["corner-return-loc-h-deg"])
+    config->corner_home_loc_h_deg = node["corner-return-loc-h-deg"].as<gdouble>();
+  if (node["home-loc-v-deg"])
+    config->corner_home_loc_v_deg = node["home-loc-v-deg"].as<gdouble>();
+  if (node["corner-home-loc-v-deg"])
+    config->corner_home_loc_v_deg = node["corner-home-loc-v-deg"].as<gdouble>();
+  if (node["return-loc-v-deg"])
+    config->corner_home_loc_v_deg = node["return-loc-v-deg"].as<gdouble>();
+  if (node["corner-return-loc-v-deg"])
+    config->corner_home_loc_v_deg = node["corner-return-loc-v-deg"].as<gdouble>();
+  if (node["home-pt-focus"])
+    config->corner_home_pt_focus = node["home-pt-focus"].as<guint>();
+  if (node["corner-home-pt-focus"])
+    config->corner_home_pt_focus = node["corner-home-pt-focus"].as<guint>();
+}
+
+static void
+parse_cuav_startup_pt_focal_yaml(NvDsCuavControlConfig *config,
+                                 const YAML::Node &node)
+{
+  if (!config || !node)
+    return;
+
+  if (node["enable"])
+    config->startup_pt_focal_min_enable = node["enable"].as<gboolean>();
+  if (node["startup-pt-focal-min-enable"])
+    config->startup_pt_focal_min_enable = node["startup-pt-focal-min-enable"].as<gboolean>();
+  if (node["focal"])
+    config->startup_pt_focal = node["focal"].as<guint>();
+  if (node["startup-pt-focal"])
+    config->startup_pt_focal = node["startup-pt-focal"].as<guint>();
+  if (node["focus"])
+    config->startup_pt_focus = node["focus"].as<guint>();
+  if (node["startup-pt-focus"])
+    config->startup_pt_focus = node["startup-pt-focus"].as<guint>();
+}
+
+static void
+parse_cuav_home_servo_yaml(NvDsCuavControlConfig *config,
+                           const YAML::Node &node)
+{
+  gboolean home_servo_enable = TRUE;
+
+  if (!config || !node)
+    return;
+
+  if (node["enable"])
+    home_servo_enable = node["enable"].as<gboolean>();
+  if (home_servo_enable) {
+    if (node["loc-h-deg"])
+      config->corner_home_loc_h_deg = node["loc-h-deg"].as<gdouble>();
+    if (node["loc-v-deg"])
+      config->corner_home_loc_v_deg = node["loc-v-deg"].as<gdouble>();
+    if (node["home-loc-h-deg"])
+      config->corner_home_loc_h_deg = node["home-loc-h-deg"].as<gdouble>();
+    if (node["home-loc-v-deg"])
+      config->corner_home_loc_v_deg = node["home-loc-v-deg"].as<gdouble>();
+  } else {
+    config->corner_home_loc_h_deg = NAN;
+    config->corner_home_loc_v_deg = NAN;
+  }
+}
+
 gboolean
 parse_cuav_control_yaml(NvDsCuavControlConfig *config, gchar *cfg_file_path)
 {
@@ -66,8 +188,9 @@ parse_cuav_control_yaml(NvDsCuavControlConfig *config, gchar *cfg_file_path)
   config->visible_focal_hold_ms = 300;
   config->visible_light_control_enable = TRUE;
   config->servo_dev_id = 2;
-  config->pt_focal_min = 134.0;
-  config->pt_focal_max = 16298.0;
+  config->pt_focal_min = 19.0;
+  config->pt_focal_max = 4000.0;
+  config->pt_focal_step = 10.0;
   config->servo_effect_threshold_h = 0.5;
   config->servo_effect_threshold_v = 0.3;
   config->state_stale_timeout_ms = 2000;
@@ -81,7 +204,7 @@ parse_cuav_control_yaml(NvDsCuavControlConfig *config, gchar *cfg_file_path)
   config->corner_home_loc_h_deg = NAN;
   config->corner_home_loc_v_deg = NAN;
   config->startup_pt_focal_min_enable = FALSE;
-  config->startup_pt_focal = 20.0;
+  config->startup_pt_focal = 20;
   config->startup_pt_focus = 100;
   config->lost_target_focal_min_hold_ms = 3000;
   config->corner_home_pt_focus = G_MAXUINT;
@@ -184,12 +307,18 @@ parse_cuav_control_yaml(NvDsCuavControlConfig *config, gchar *cfg_file_path)
       config->pt_focal_min = itr->second.as<gdouble>();
     } else if (paramKey == "pt-focal-max") {
       config->pt_focal_max = itr->second.as<gdouble>();
+    } else if (paramKey == "pt-focal-step") {
+      config->pt_focal_step = itr->second.as<gdouble>();
     } else if (paramKey == "servo-effect-threshold-h") {
       config->servo_effect_threshold_h = itr->second.as<gdouble>();
     } else if (paramKey == "servo-effect-threshold-v") {
       config->servo_effect_threshold_v = itr->second.as<gdouble>();
     } else if (paramKey == "state-stale-timeout-ms") {
       config->state_stale_timeout_ms = itr->second.as<guint>();
+    } else if (paramKey == "corner-zoom-cycle") {
+      parse_cuav_corner_zoom_cycle_yaml(config, itr->second);
+    } else if (paramKey == "home-servo") {
+      parse_cuav_home_servo_yaml(config, itr->second);
     } else if (paramKey == "corner-zoom-cycle-enable") {
       config->corner_zoom_cycle_enable = itr->second.as<gboolean>();
     } else if (paramKey == "corner-cycle-count") {
@@ -213,7 +342,10 @@ parse_cuav_control_yaml(NvDsCuavControlConfig *config, gchar *cfg_file_path)
     } else if (paramKey == "startup-pt-focal-min-enable") {
       config->startup_pt_focal_min_enable = itr->second.as<gboolean>();
     } else if (paramKey == "startup-pt-focal") {
-      config->startup_pt_focal = itr->second.as<gdouble>();
+      if (itr->second.IsMap())
+        parse_cuav_startup_pt_focal_yaml(config, itr->second);
+      else
+        config->startup_pt_focal = itr->second.as<guint>();
     } else if (paramKey == "startup-pt-focus") {
       config->startup_pt_focus = itr->second.as<guint>();
     } else if (paramKey == "lost-target-focal-min-hold-ms") {

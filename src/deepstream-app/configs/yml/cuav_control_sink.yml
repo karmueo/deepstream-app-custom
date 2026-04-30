@@ -85,12 +85,12 @@ cuav-control:
   zoom-target-ratio-min: 0.019
   # 自动变焦目标区间上限。
   # 目标框高度占画面高度高于该值时，会尝试缩小。
-  zoom-target-ratio-max: 0.04
+  zoom-target-ratio-max: 0.03
   # 变焦死区。
   # 在目标占比接近上下限时留出缓冲，减少镜头来回抽动。
   zoom-deadband: 0.001
-  # 自动可见光变焦命令保持时间，单位毫秒。
-  # 发送 pt_focal_en 后，超过该时间会强制补发 pt_focal_en=0 停止连续变焦。
+  # 自动可见光拉近前的最小稳定时间，单位毫秒。
+  # 目标稳定时间未超过该值时不会触发拉近，防止短暂出现的目标导致误拉近。
   visible-focal-hold-ms: 100
   # 是否发送可见光控制报文。
   # 1 时自动控制/测试链路会发送 0x7205；0 时不发送可见光控制。
@@ -98,12 +98,14 @@ cuav-control:
   # 伺服控制报文中的 dev_id。
   # 0=只选可见光，1=只选热成像，2=同时控制可见光和热成像。
   servo-dev-id: 2
-  # 可见光镜头允许使用的最小焦距。
+  # 自动变焦允许使用的最小可见光焦距。
   # 到达该值后不会继续缩小。
-  pt-focal-min: 134.0
-  # 可见光镜头允许使用的最大焦距。
+  pt-focal-min: 19.0
+  # 自动变焦允许使用的最大可见光焦距。
   # 到达该值后不会继续放大。
-  pt-focal-max: 16298.0
+  pt-focal-max: 4000.0
+  # 自动变焦每次调整的焦距步长。
+  pt-focal-step: 10.0
   # 判定水平伺服动作“确实生效”的最小变化阈值，单位度。
   servo-effect-threshold-h: 0.5
   # 判定垂直伺服动作“确实生效”的最小变化阈值，单位度。
@@ -111,37 +113,38 @@ cuav-control:
   # 设备状态报文的新鲜度超时，单位毫秒。
   # 超过该时间未收到新状态时，会认为反馈过期。
   state-stale-timeout-ms: 2000
-  # 是否启用“四角伺服”循环序列。
-  # 0=关闭，1=开启。
-  # 开启后会优先于 auto-track。
-  corner-zoom-cycle-enable: 1
-  # 单轮四角循环次数。
-  corner-cycle-count: 1
-  # 整套四角流程重复次数。
-  sequence-repeat-count: 1
-  # 四角相对当前中心位置的水平偏移量，单位度。
-  corner-offset-h-deg: 15.0
-  # 四角相对当前中心位置的垂直偏移量，单位度。
-  corner-offset-v-deg: 10.0
-  # 每个角点停留时间，单位毫秒。
-  corner-dwell-ms: 1000
-  # 四角循环使用的伺服速度。
-  corner-servo-speed: 30
-  # 可选：程序启动和每轮回位的初始伺服位置；不配置则默认使用首个有效反馈位置。
-  corner-home-loc-h-deg: 54.0
-  corner-home-loc-v-deg: 4.0
-  # 可选：程序启动时一次性下发可见光焦距/聚焦预置。
-  # 0=关闭，1=开启。
-  startup-pt-focal-min-enable: 1
-  # 启动预置下发的可见光焦距值；仅在 startup-pt-focal-min-enable=1 时生效。
-  startup-pt-focal: 20
-  # 启动预置下发的可见光聚焦值；仅在 startup-pt-focal-min-enable=1 时生效。
-  startup-pt-focus: 100
-  # 目标丢失后连续缩小焦距的保持时间，单位毫秒。
-  # 默认 3000，即 3 秒；设为 0 可关闭无目标缩焦保持。
-  lost-target-focal-min-hold-ms: 10000
-  # 可选：程序启动和每轮回位时的可见光聚焦预置位；不配置则不下发 pt_focus 预置报文。
-  # corner-home-pt-focus: 100
+  corner-zoom-cycle:
+    # 是否启用“四角伺服”循环序列。
+    # 0=关闭，1=开启；开启后会优先于 auto-track。
+    enable: 0
+    # 单轮四角循环次数。
+    cycle-count: 1
+    # 整套四角流程重复次数。
+    sequence-repeat-count: 1
+    # 四角相对当前中心位置的水平偏移量，单位度。
+    offset-h-deg: 15.0
+    # 四角相对当前中心位置的垂直偏移量，单位度。
+    offset-v-deg: 10.0
+    # 每个角点停留时间，单位毫秒。
+    dwell-ms: 1000
+    # 四角循环使用的伺服速度。
+    servo-speed: 30
+    # 可选：程序启动和每轮回位时的可见光聚焦预置位；不配置则不下发 pt_focus 预置报文。
+    # home-pt-focus: 100
+  home-servo:
+    # 是否启用程序启动和每轮回位的初始伺服预置位。
+    # 0=不使用预置位，默认使用首个有效反馈位置；1=使用下方预置位置。
+    enable: 1
+    loc-h-deg: 50.0
+    loc-v-deg: 4.0
+  startup-pt-focal:
+    # 可选：程序启动时一次性下发可见光焦距/聚焦预置。
+    # 0=关闭，1=开启。
+    enable: 1
+    # 启动预置下发的可见光焦距值；仅在 enable=1 时生效。
+    focal: 19
+    # 启动预置下发的可见光聚焦值；仅在 enable=1 时生效。
+    focus: 100
   # 公共报文头中的发送方系统 ID。
   tx-sys-id: 999
   # 公共报文头中的发送方设备类型。
