@@ -32,7 +32,9 @@ build
 *.bin
 
 *.pyc
-AGENTS.md
 .worktrees
 .codex
 tmp.json
+AGENTS.md
+CLAUDE.md
+.claude
