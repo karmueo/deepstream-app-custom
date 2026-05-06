@@ -543,9 +543,6 @@ gboolean parse_config_file(NvDsConfig *config, gchar *cfg_file_path);
  */
 gboolean parse_config_file_yaml(NvDsConfig *config, gchar *cfg_file_path);
 
-gboolean send_cuav_test_messages(AppCtx *appCtx);
-void process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta);
-
 /**
  * @brief 获取指定源 ID 对应的传感器信息。
  *

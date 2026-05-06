@@ -9,6 +9,7 @@
 
 #include "deepstream_app.h"
 #include "deepstream_app_callbacks.h"
+#include "deepstream_app_cuav_control.h"
 #include "gst-nvdssr.h"
 #include "nvds_version.h"
 #include "nvdsmeta_schema.h"
