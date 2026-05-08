@@ -23,6 +23,8 @@ GST_DEBUG_CATEGORY_EXTERN(NVDS_APP);
 #define DEFAULT_CUAV_TEST_MULTICAST_PORT 18003
 #define CUAV_FEEDBACK_STALE_USEC (2 * G_USEC_PER_SEC)
 #define CUAV_MOTION_CMD_MIN_SPACING_USEC (70 * 1000)
+#define CUAV_PENDING_FOCAL_TIMEOUT_USEC (500 * 1000)
+#define CUAV_PENDING_FOCAL_PROGRESS_EPSILON 1.0
 #define CUAV_FOCAL_REACHED_EPSILON 1.0
 
 typedef enum
@@ -121,6 +123,11 @@ static gboolean cuav_compute_average_velocity(const CuavAutoControlState *state,
                                               guint history_size,
                                               gdouble *vel_x,
                                               gdouble *vel_y);
+static gboolean cuav_pending_focal_resolved(const CuavAutoControlState *state,
+                                            const CuavFeedbackState *feedback_state,
+                                            guint stale_timeout_ms,
+                                            gint64 now_us,
+                                            gboolean *timed_out);
 static gboolean cuav_compute_servo_command(const NvDsCuavControlConfig *control_config,
                                            const CuavFeedbackState *feedback_state,
                                            const CuavAutoControlState *auto_state,
@@ -874,6 +881,8 @@ cuav_reset_auto_control_state(CuavAutoControlState *state, gboolean keep_last_co
     state->lost_zoom_hold_complete = FALSE;
     state->pending_pt_focal_valid = FALSE;
     state->pending_pt_focal = 0.0;
+    state->pending_pt_focal_base = 0.0;
+    state->pending_pt_focal_sent_us = 0;
     state->history_len = 0;
     state->history_next = 0;
     memset(state->history, 0, sizeof(state->history));
@@ -978,6 +987,60 @@ cuav_compute_average_velocity(const CuavAutoControlState *state,
     *vel_x = (last->err_x - first->err_x) / dt_sec;
     *vel_y = (last->err_y - first->err_y) / dt_sec;
     return TRUE;
+}
+
+static gboolean
+cuav_pending_focal_resolved(const CuavAutoControlState *state,
+                            const CuavFeedbackState *feedback_state,
+                            guint stale_timeout_ms,
+                            gint64 now_us,
+                            gboolean *timed_out)
+{
+    gdouble feedback_delta = 0.0;
+    gdouble target_delta = 0.0;
+
+    if (timed_out)
+        *timed_out = FALSE;
+
+    if (!state || !state->pending_pt_focal_valid)
+        return TRUE;
+
+    if (!feedback_state ||
+        !cuav_feedback_is_fresh(feedback_state, stale_timeout_ms) ||
+        feedback_state->pt_focal <= 0.0)
+    {
+        if (state->pending_pt_focal_sent_us > 0 &&
+            now_us - state->pending_pt_focal_sent_us >= CUAV_PENDING_FOCAL_TIMEOUT_USEC)
+        {
+            if (timed_out)
+                *timed_out = TRUE;
+            return TRUE;
+        }
+        return FALSE;
+    }
+
+    if (fabs(feedback_state->pt_focal - state->pending_pt_focal) <= CUAV_FOCAL_REACHED_EPSILON)
+        return TRUE;
+
+    feedback_delta = feedback_state->pt_focal - state->pending_pt_focal_base;
+    target_delta = state->pending_pt_focal - state->pending_pt_focal_base;
+    if (fabs(target_delta) > CUAV_FOCAL_REACHED_EPSILON &&
+        fabs(feedback_delta) >= CUAV_PENDING_FOCAL_PROGRESS_EPSILON &&
+        ((target_delta > 0.0 && feedback_delta > 0.0) ||
+         (target_delta < 0.0 && feedback_delta < 0.0)))
+    {
+        return TRUE;
+    }
+
+    if (state->pending_pt_focal_sent_us > 0 &&
+        now_us - state->pending_pt_focal_sent_us >= CUAV_PENDING_FOCAL_TIMEOUT_USEC)
+    {
+        if (timed_out)
+            *timed_out = TRUE;
+        return TRUE;
+    }
+
+    return FALSE;
 }
 
 /**
@@ -2330,16 +2393,24 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
             cuav_reset_auto_control_state(&appCtx->cuav_auto_control_state, TRUE);
         }
         feedback_snapshot = appCtx->cuav_feedback_state;
-        if (appCtx->cuav_auto_control_state.pending_pt_focal_valid &&
-            cuav_feedback_is_fresh(&feedback_snapshot,
-                                   control_config->state_stale_timeout_ms) &&
-            fabs(feedback_snapshot.pt_focal -
-                 appCtx->cuav_auto_control_state.pending_pt_focal) <=
-                CUAV_FOCAL_REACHED_EPSILON)
+        if (appCtx->cuav_auto_control_state.pending_pt_focal_valid)
         {
-            appCtx->cuav_auto_control_state.pending_pt_focal_valid = FALSE;
-            appCtx->cuav_auto_control_state.last_pt_focal =
-                feedback_snapshot.pt_focal;
+            gboolean pending_timed_out = FALSE;
+            if (cuav_pending_focal_resolved(&appCtx->cuav_auto_control_state,
+                                            &feedback_snapshot,
+                                            control_config->state_stale_timeout_ms,
+                                            now_us,
+                                            &pending_timed_out))
+            {
+                appCtx->cuav_auto_control_state.pending_pt_focal_valid = FALSE;
+                appCtx->cuav_auto_control_state.pending_pt_focal = 0.0;
+                appCtx->cuav_auto_control_state.pending_pt_focal_base = 0.0;
+                appCtx->cuav_auto_control_state.pending_pt_focal_sent_us = 0;
+                if (feedback_snapshot.pt_focal > 0.0)
+                    appCtx->cuav_auto_control_state.last_pt_focal = feedback_snapshot.pt_focal;
+                if (pending_timed_out && debug_enabled)
+                    g_print("[cuav][control][auto] pending focal confirmation timeout, allow next command\n");
+            }
         }
         state_snapshot = appCtx->cuav_auto_control_state;
         g_mutex_unlock(&appCtx->cuav_control_lock);
@@ -2498,20 +2569,26 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
     feedback_snapshot = appCtx->cuav_feedback_state;
     if (appCtx->cuav_auto_control_state.pending_pt_focal_valid)
     {
-        if (cuav_feedback_is_fresh(&feedback_snapshot,
-                                   control_config->state_stale_timeout_ms) &&
-            fabs(feedback_snapshot.pt_focal -
-                 appCtx->cuav_auto_control_state.pending_pt_focal) <=
-                CUAV_FOCAL_REACHED_EPSILON)
+        gboolean pending_timed_out = FALSE;
+        if (cuav_pending_focal_resolved(&appCtx->cuav_auto_control_state,
+                                        &feedback_snapshot,
+                                        control_config->state_stale_timeout_ms,
+                                        now_us,
+                                        &pending_timed_out))
         {
+            gdouble pending_target = appCtx->cuav_auto_control_state.pending_pt_focal;
             appCtx->cuav_auto_control_state.pending_pt_focal_valid = FALSE;
-            appCtx->cuav_auto_control_state.last_pt_focal =
-                feedback_snapshot.pt_focal;
+            appCtx->cuav_auto_control_state.pending_pt_focal = 0.0;
+            appCtx->cuav_auto_control_state.pending_pt_focal_base = 0.0;
+            appCtx->cuav_auto_control_state.pending_pt_focal_sent_us = 0;
+            if (feedback_snapshot.pt_focal > 0.0)
+                appCtx->cuav_auto_control_state.last_pt_focal = feedback_snapshot.pt_focal;
             if (debug_enabled)
             {
-                g_print("[cuav][control][auto] focal confirmed target=%.1f feedback=%.1f\n",
-                        appCtx->cuav_auto_control_state.pending_pt_focal,
-                        feedback_snapshot.pt_focal);
+                g_print("[cuav][control][auto] focal confirmed/advanced target=%.1f feedback=%.1f%s\n",
+                        pending_target,
+                        feedback_snapshot.pt_focal,
+                        pending_timed_out ? " timeout" : "");
             }
         }
         else
@@ -2532,6 +2609,8 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
                                       &state_snapshot);
         appCtx->cuav_auto_control_state.pending_pt_focal_valid = FALSE;
         appCtx->cuav_auto_control_state.pending_pt_focal = 0.0;
+        appCtx->cuav_auto_control_state.pending_pt_focal_base = 0.0;
+        appCtx->cuav_auto_control_state.pending_pt_focal_sent_us = 0;
         appCtx->cuav_auto_control_state.lost_zoom_active = FALSE;
         appCtx->cuav_auto_control_state.lost_zoom_start_us = 0;
         appCtx->cuav_auto_control_state.lost_zoom_hold_complete = FALSE;
@@ -2703,11 +2782,16 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
             {
                 appCtx->cuav_auto_control_state.pending_pt_focal_valid = TRUE;
                 appCtx->cuav_auto_control_state.pending_pt_focal = pt_focal;
+                appCtx->cuav_auto_control_state.pending_pt_focal_base =
+                    cuav_get_current_pt_focal(control_config, &feedback_snapshot, &state_snapshot);
+                appCtx->cuav_auto_control_state.pending_pt_focal_sent_us = now_us;
             }
             else
             {
                 appCtx->cuav_auto_control_state.pending_pt_focal_valid = FALSE;
                 appCtx->cuav_auto_control_state.pending_pt_focal = 0.0;
+                appCtx->cuav_auto_control_state.pending_pt_focal_base = 0.0;
+                appCtx->cuav_auto_control_state.pending_pt_focal_sent_us = 0;
             }
             appCtx->cuav_auto_control_state.last_visible_send_us = now_us;
             appCtx->cuav_auto_control_state.visible_initialized = TRUE;
