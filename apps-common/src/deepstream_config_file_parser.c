@@ -1502,6 +1502,8 @@ parse_cuav_control(NvDsCuavControlConfig *config, GKeyFile *key_file)
     config->servo_effect_threshold_h = 0.5;
     config->servo_effect_threshold_v = 0.3;
     config->state_stale_timeout_ms = 2000;
+    config->pending_focal_timeout_ms = 500;
+    config->pending_focal_progress_epsilon = 1.0;
     config->corner_zoom_cycle_enable = FALSE;
     config->corner_cycle_count = 1;
     config->sequence_repeat_count = 1;
@@ -1759,6 +1761,16 @@ parse_cuav_control(NvDsCuavControlConfig *config, GKeyFile *key_file)
         else if (!g_strcmp0(*key, "state-stale-timeout-ms"))
         {
             config->state_stale_timeout_ms = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "state-stale-timeout-ms", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "pending-focal-timeout-ms"))
+        {
+            config->pending_focal_timeout_ms = g_key_file_get_integer(key_file, CONFIG_GROUP_CUAV_CONTROL, "pending-focal-timeout-ms", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "pending-focal-progress-epsilon"))
+        {
+            config->pending_focal_progress_epsilon = g_key_file_get_double(key_file, CONFIG_GROUP_CUAV_CONTROL, "pending-focal-progress-epsilon", &error);
             CHECK_ERROR(error);
         }
         else if (!g_strcmp0(*key, "corner-zoom-cycle-enable"))
@@ -2874,6 +2886,8 @@ parse_sink(NvDsSinkSubBinConfig *config, GKeyFile *key_file, gchar *group,
     config->cuav_control_config.servo_effect_threshold_h = 0.5;
     config->cuav_control_config.servo_effect_threshold_v = 0.3;
     config->cuav_control_config.state_stale_timeout_ms = 2000;
+    config->cuav_control_config.pending_focal_timeout_ms = 500;
+    config->cuav_control_config.pending_focal_progress_epsilon = 1.0;
     config->cuav_control_config.startup_pt_focal = 20;
     config->cuav_control_config.startup_pt_focus = 100;
     config->cuav_control_config.lost_target_focal_min_hold_ms = 3000;
@@ -3457,6 +3471,18 @@ parse_sink(NvDsSinkSubBinConfig *config, GKeyFile *key_file, gchar *group,
         {
             config->cuav_control_config.state_stale_timeout_ms =
                 g_key_file_get_integer(key_file, group, "state-stale-timeout-ms", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "pending-focal-timeout-ms"))
+        {
+            config->cuav_control_config.pending_focal_timeout_ms =
+                g_key_file_get_integer(key_file, group, "pending-focal-timeout-ms", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "pending-focal-progress-epsilon"))
+        {
+            config->cuav_control_config.pending_focal_progress_epsilon =
+                g_key_file_get_double(key_file, group, "pending-focal-progress-epsilon", &error);
             CHECK_ERROR(error);
         }
         else

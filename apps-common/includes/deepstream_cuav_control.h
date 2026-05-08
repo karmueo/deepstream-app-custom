@@ -60,6 +60,8 @@ typedef struct
     gdouble servo_effect_threshold_h; /* 水平伺服生效判定阈值 */
     gdouble servo_effect_threshold_v; /* 垂直伺服生效判定阈值 */
     guint state_stale_timeout_ms; /* 设备状态新鲜度超时 */
+    guint pending_focal_timeout_ms; /* 可见光焦距pending确认超时（毫秒） */
+    gdouble pending_focal_progress_epsilon; /* 可见光焦距pending方向性进展阈值 */
     gboolean corner_zoom_cycle_enable; /* 是否启用四角伺服循环测试 */
     guint corner_cycle_count; /* 单轮四角循环次数 */
     guint sequence_repeat_count; /* 整套四角流程重复次数 */
