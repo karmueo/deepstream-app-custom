@@ -113,6 +113,12 @@ cuav-control:
   # 设备状态报文的新鲜度超时，单位毫秒。
   # 超过该时间未收到新状态时，会认为反馈过期。
   state-stale-timeout-ms: 2000
+  # 等待焦距反馈确认的超时，单位毫秒。
+  # 超时后会释放 pending，允许下发下一条变焦命令，避免链路卡死。
+  pending-focal-timeout-ms: 500
+  # 焦距反馈方向性进展阈值。
+  # 反馈朝目标方向变化达到该阈值时，视为本次pending命令已生效。
+  pending-focal-progress-epsilon: 1.0
   corner-zoom-cycle:
     # 是否启用“四角伺服”循环序列。
     # 0=关闭，1=开启；开启后会优先于 auto-track。

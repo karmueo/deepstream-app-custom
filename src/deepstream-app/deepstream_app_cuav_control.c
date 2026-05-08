@@ -23,8 +23,6 @@ GST_DEBUG_CATEGORY_EXTERN(NVDS_APP);
 #define DEFAULT_CUAV_TEST_MULTICAST_PORT 18003
 #define CUAV_FEEDBACK_STALE_USEC (2 * G_USEC_PER_SEC)
 #define CUAV_MOTION_CMD_MIN_SPACING_USEC (70 * 1000)
-#define CUAV_PENDING_FOCAL_TIMEOUT_USEC (500 * 1000)
-#define CUAV_PENDING_FOCAL_PROGRESS_EPSILON 1.0
 #define CUAV_FOCAL_REACHED_EPSILON 1.0
 
 typedef enum
@@ -124,8 +122,8 @@ static gboolean cuav_compute_average_velocity(const CuavAutoControlState *state,
                                               gdouble *vel_x,
                                               gdouble *vel_y);
 static gboolean cuav_pending_focal_resolved(const CuavAutoControlState *state,
+                                            const NvDsCuavControlConfig *control_config,
                                             const CuavFeedbackState *feedback_state,
-                                            guint stale_timeout_ms,
                                             gint64 now_us,
                                             gboolean *timed_out);
 static gboolean cuav_compute_servo_command(const NvDsCuavControlConfig *control_config,
@@ -991,13 +989,16 @@ cuav_compute_average_velocity(const CuavAutoControlState *state,
 
 static gboolean
 cuav_pending_focal_resolved(const CuavAutoControlState *state,
+                            const NvDsCuavControlConfig *control_config,
                             const CuavFeedbackState *feedback_state,
-                            guint stale_timeout_ms,
                             gint64 now_us,
                             gboolean *timed_out)
 {
     gdouble feedback_delta = 0.0;
     gdouble target_delta = 0.0;
+    guint stale_timeout_ms = 2000;
+    gint64 pending_timeout_us = 500 * 1000;
+    gdouble pending_progress_epsilon = 1.0;
 
     if (timed_out)
         *timed_out = FALSE;
@@ -1005,12 +1006,19 @@ cuav_pending_focal_resolved(const CuavAutoControlState *state,
     if (!state || !state->pending_pt_focal_valid)
         return TRUE;
 
+    if (control_config)
+    {
+        stale_timeout_ms = control_config->state_stale_timeout_ms;
+        pending_timeout_us = ((gint64)MAX(control_config->pending_focal_timeout_ms, 1U)) * 1000;
+        pending_progress_epsilon = MAX(control_config->pending_focal_progress_epsilon, 0.0);
+    }
+
     if (!feedback_state ||
         !cuav_feedback_is_fresh(feedback_state, stale_timeout_ms) ||
         feedback_state->pt_focal <= 0.0)
     {
         if (state->pending_pt_focal_sent_us > 0 &&
-            now_us - state->pending_pt_focal_sent_us >= CUAV_PENDING_FOCAL_TIMEOUT_USEC)
+            now_us - state->pending_pt_focal_sent_us >= pending_timeout_us)
         {
             if (timed_out)
                 *timed_out = TRUE;
@@ -1025,7 +1033,7 @@ cuav_pending_focal_resolved(const CuavAutoControlState *state,
     feedback_delta = feedback_state->pt_focal - state->pending_pt_focal_base;
     target_delta = state->pending_pt_focal - state->pending_pt_focal_base;
     if (fabs(target_delta) > CUAV_FOCAL_REACHED_EPSILON &&
-        fabs(feedback_delta) >= CUAV_PENDING_FOCAL_PROGRESS_EPSILON &&
+        fabs(feedback_delta) >= pending_progress_epsilon &&
         ((target_delta > 0.0 && feedback_delta > 0.0) ||
          (target_delta < 0.0 && feedback_delta < 0.0)))
     {
@@ -1033,7 +1041,7 @@ cuav_pending_focal_resolved(const CuavAutoControlState *state,
     }
 
     if (state->pending_pt_focal_sent_us > 0 &&
-        now_us - state->pending_pt_focal_sent_us >= CUAV_PENDING_FOCAL_TIMEOUT_USEC)
+        now_us - state->pending_pt_focal_sent_us >= pending_timeout_us)
     {
         if (timed_out)
             *timed_out = TRUE;
@@ -2397,8 +2405,8 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
         {
             gboolean pending_timed_out = FALSE;
             if (cuav_pending_focal_resolved(&appCtx->cuav_auto_control_state,
+                                            control_config,
                                             &feedback_snapshot,
-                                            control_config->state_stale_timeout_ms,
                                             now_us,
                                             &pending_timed_out))
             {
@@ -2571,8 +2579,8 @@ process_cuav_auto_control(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
     {
         gboolean pending_timed_out = FALSE;
         if (cuav_pending_focal_resolved(&appCtx->cuav_auto_control_state,
+                                        control_config,
                                         &feedback_snapshot,
-                                        control_config->state_stale_timeout_ms,
                                         now_us,
                                         &pending_timed_out))
         {
