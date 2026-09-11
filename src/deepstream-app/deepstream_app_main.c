@@ -1184,25 +1184,7 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                             g_hash_table_remove_all(sot_state->tracker_stats_counts);
                         }
 
-                        /* 遍历历史队列，找出置信度最高的记录和统计每个类别的出现次数 */
-                        gfloat max_confidence = 0.0f;
-                        const gchar *best_label = NULL;
-                        
-                        for (GList *iter = sot_state->tracker_label_history->head;
-                             iter != NULL; iter = iter->next)
-                        {
-                            DetectionRecord *record = (DetectionRecord *)iter->data;
-                            if (!record) continue;
-                            
-                            /* 查找置信度最高的记录 */
-                            if (record->confidence > max_confidence)
-                            {
-                                max_confidence = record->confidence;
-                                best_label = record->label;
-                            }
-                        }
-
-                        /* 统计每个类别的出现次数（用于显示） */
+                        /* 统计每个类别的出现次数（用于显示和多数投票） */
                         for (GList *iter = sot_state->tracker_label_history->head;
                              iter != NULL; iter = iter->next)
                         {
@@ -1220,6 +1202,58 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                                 *count_ptr = 1;
                                 g_hash_table_insert(sot_state->tracker_stats_counts,
                                                   g_strdup(record->label), count_ptr);
+                            }
+                        }
+
+                        /* 优先选出现次数最多的标签；次数相同时选平均置信度更高的。
+                         * 这样可避免单次异常高分检测长时间锁定错误类别。 */
+                        guint best_count = 0;
+                        gdouble best_average_confidence = -1.0;
+                        const gchar *best_label = NULL;
+
+                        for (GList *candidate_iter =
+                                 sot_state->tracker_label_history->head;
+                             candidate_iter != NULL;
+                             candidate_iter = candidate_iter->next)
+                        {
+                            DetectionRecord *candidate =
+                                (DetectionRecord *)candidate_iter->data;
+                            guint *candidate_count_ptr;
+                            gdouble confidence_sum = 0.0;
+
+                            if (!candidate)
+                                continue;
+
+                            candidate_count_ptr = (guint *)g_hash_table_lookup(
+                                sot_state->tracker_stats_counts,
+                                candidate->label);
+                            if (!candidate_count_ptr || *candidate_count_ptr == 0)
+                                continue;
+
+                            for (GList *sum_iter =
+                                     sot_state->tracker_label_history->head;
+                                 sum_iter != NULL; sum_iter = sum_iter->next)
+                            {
+                                DetectionRecord *record =
+                                    (DetectionRecord *)sum_iter->data;
+                                if (record &&
+                                    g_strcmp0(record->label,
+                                              candidate->label) == 0)
+                                {
+                                    confidence_sum += record->confidence;
+                                }
+                            }
+
+                            gdouble average_confidence =
+                                confidence_sum / *candidate_count_ptr;
+                            if (*candidate_count_ptr > best_count ||
+                                (*candidate_count_ptr == best_count &&
+                                 average_confidence >
+                                     best_average_confidence))
+                            {
+                                best_count = *candidate_count_ptr;
+                                best_average_confidence = average_confidence;
+                                best_label = candidate->label;
                             }
                         }
 

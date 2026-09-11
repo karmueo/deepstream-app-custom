@@ -113,6 +113,8 @@ sink2:
   # multicast-iface: eno1
   # multicast-ttl=32
   fps: 2  # 可选参数，不配置时默认为25
+  sot-mode: 1
+  sot-score-threshold: 0.75
 
 osd:
   enable: 1

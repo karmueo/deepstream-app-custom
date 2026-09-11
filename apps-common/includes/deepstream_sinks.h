@@ -153,6 +153,10 @@ extern "C"
         gchar *iface;
         // 帧率
         guint fps;
+        // 单目标跟踪报文模式（仅影响目标筛选和字段取值）
+        gboolean sot_mode;
+        // SOT 正常跟踪置信度阈值
+        gfloat sot_score_threshold;
     } NvDsMyNetworkConfig;
 
     typedef struct

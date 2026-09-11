@@ -2773,6 +2773,19 @@ parse_sink(NvDsSinkSubBinConfig *config, GKeyFile *key_file, gchar *group,
                 g_key_file_get_integer(key_file, group, "fps", &error);
             CHECK_ERROR(error);
         }
+        else if (!g_strcmp0(*key, "sot-mode"))
+        {
+            config->mynetwork_config.sot_mode =
+                g_key_file_get_boolean(key_file, group, "sot-mode", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "sot-score-threshold"))
+        {
+            config->mynetwork_config.sot_score_threshold =
+                g_key_file_get_double(key_file, group,
+                                      "sot-score-threshold", &error);
+            CHECK_ERROR(error);
+        }
         else
         {
             NVGSTDS_WARN_MSG_V("Unknown key '%s' for group [%s]", *key, group);

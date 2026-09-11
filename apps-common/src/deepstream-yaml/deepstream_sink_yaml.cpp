@@ -259,6 +259,16 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
             config->mynetwork_config.fps =
                 itr->second.as<gint>();
         }
+        else if (paramKey == "sot-mode")
+        {
+            config->mynetwork_config.sot_mode =
+                itr->second.as<gboolean>();
+        }
+        else if (paramKey == "sot-score-threshold")
+        {
+            config->mynetwork_config.sot_score_threshold =
+                itr->second.as<gfloat>();
+        }
         else
         {
             cout << "[WARNING] Unknown param found in sink: " << paramKey << endl;

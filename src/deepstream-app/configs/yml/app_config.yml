@@ -234,6 +234,10 @@ sink2:
   # multicast-ttl=32
   # 输出帧率（可选参数，不配置时默认为25）
   fps: 2
+  # SOT 模式下每路只发送一个有效跟踪目标，不改变报文结构
+  sot-mode: 1
+  # 与 sot_plugin/config_sot.yml 的 scoreThreshold 保持一致
+  sot-score-threshold: 0.75
 
 # -----------------------------------------------------------------------------
 # Sink3: 本地文件录制配置

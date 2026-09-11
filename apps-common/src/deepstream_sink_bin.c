@@ -431,7 +431,12 @@ create_mynework_bin(NvDsMyNetworkConfig *config,
     }
     // 设置帧率，默认为25
     guint fps_value = config->fps > 0 ? config->fps : 25;
-    g_object_set(G_OBJECT(bin->sink), "fps", fps_value, NULL);
+    gfloat sot_score_threshold = config->sot_score_threshold > 0.0f
+                                     ? config->sot_score_threshold
+                                     : 0.75f;
+    g_object_set(G_OBJECT(bin->sink), "fps", fps_value,
+                 "sot-mode", config->sot_mode,
+                 "sot-score-threshold", sot_score_threshold, NULL);
 
     // 添加一个虚拟pad
     NVGSTDS_BIN_ADD_GHOST_PAD(bin->bin, bin->queue, "sink");
