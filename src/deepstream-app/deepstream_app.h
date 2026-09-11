@@ -255,6 +255,17 @@ typedef struct {
     guint detection_hit_count;   /**< 窗口内检测到目标的帧数 */
 } SourceDetectionState;
 
+typedef struct {
+    gboolean tracker_stats_valid;
+    guint64 tracker_stats_current_id;
+    GHashTable *tracker_stats_counts;
+    GQueue *tracker_label_history;
+    GstClockTime tracking_start_time;
+    GstClockTime last_tracking_pts;
+    guint64 last_tracked_object_id;
+    gboolean is_tracking_continuous;
+} SotSourceState;
+
 /**
  * @brief 应用程序上下文结构体，存储整个应用的核心状态与资源。
  *
@@ -319,11 +330,8 @@ struct _AppCtx
     GThread     *control_msg_thread;      /**< 后台消息解析线程 */
     gboolean     control_msg_thread_running; /**< 线程运行标志 */
 
-    /** 单目标跟踪统计 */
-    gboolean    tracker_stats_valid;      /**< 跟踪统计是否有效 */
-    guint64     tracker_stats_current_id; /**< 当前跟踪目标 ID */
-    GHashTable *tracker_stats_counts;     /**< 跟踪统计计数表，key: label, value: count */
-    GQueue     *tracker_label_history;    /**< 最近 100 次识别标签的滑动窗口 */
+    /** 按视频源隔离的单目标跟踪状态 */
+    SotSourceState sot_source_states[MAX_SOURCE_BINS];
 
     /** 检测触发录制状态 */
     gboolean    detect_record_enabled;    /**< 检测触发录制是否启用 */
@@ -331,11 +339,6 @@ struct _AppCtx
     /** ROI-based NMS 配置缓存 */
     gboolean    roi_nms_enabled;          /**< ROI NMS 是否启用 */
     GArray     *roi_centers;              /**< ROI 中心点数组，扁平格式 [cx0,cy0,cx1,cy1,...] */
-
-    /** 单目标跟踪连续性检测 */
-    GstClockTime tracking_start_time;     /**< 当前目标开始连续跟踪的时间戳 (纳秒) */
-    guint64      last_tracked_object_id;  /**< 上一次跟踪的目标 ID */
-    gboolean     is_tracking_continuous;  /**< 是否正在连续跟踪同一目标 */
 
     /** 静止目标误检过滤状态 */
     StaticTargetFilterState static_target_filter_states[MAX_SOURCE_BINS]; /**< 各源静止目标过滤状态 */

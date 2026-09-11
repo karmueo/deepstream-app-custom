@@ -15,6 +15,8 @@
 #include <string>
 #include <cstring>
 #include <iostream>
+#include <algorithm>
+#include <cctype>
 
 using std::cout;
 using std::endl;
@@ -33,6 +35,8 @@ parse_tracker_yaml (NvDsTrackerConfig *config, gchar *cfg_file_path)
   config->user_meta_pool_size = 32;
   config->sub_batches = {};
   config->sub_batch_err_recovery_trial_cnt = 0;
+  config->tracker_mode = 0;
+  config->enable_class_count_update = TRUE;
   config->enable_static_target_filter = FALSE;
   config->static_target_filter_frames = 30;
   config->static_target_filter_center_thresh = 5.0f;
@@ -103,6 +107,18 @@ parse_tracker_yaml (NvDsTrackerConfig *config, gchar *cfg_file_path)
       std::strncpy (config->sub_batches, temp.c_str(), temp.size());
     } else if(paramKey == "sub-batch-err-recovery-trial-cnt"){
       config->sub_batch_err_recovery_trial_cnt =  itr->second.as<gint>();
+    } else if(paramKey == "tracker-mode"){
+      std::string mode = itr->second.as<std::string>();
+      std::transform(mode.begin(), mode.end(), mode.begin(), ::tolower);
+      if (mode == "sot") config->tracker_mode = 1;
+      else if (mode == "mot") config->tracker_mode = 2;
+      else if (mode == "auto") config->tracker_mode = 0;
+      else {
+        g_printerr("Invalid tracker-mode '%s'; expected auto, sot or mot.\n", mode.c_str());
+        goto done;
+      }
+    } else if(paramKey == "enable-class-count-update"){
+      config->enable_class_count_update = itr->second.as<gboolean>();
     } else if(paramKey == "static-target-filter"){
       config->enable_static_target_filter = itr->second.as<gboolean>();
     } else if(paramKey == "static-target-filter-frames"){

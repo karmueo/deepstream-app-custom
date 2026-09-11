@@ -145,6 +145,7 @@ GST_DEBUG_CATEGORY(APP_CFG_PARSER_CAT);
 #define CONFIG_GROUP_TRACKER_SUB_BATCHES "sub-batches"
 #define CONFIG_GROUP_TRACKER_SUB_BATCH_ERR_RECOVERY_TRIAL_CNT "sub-batch-err-recovery-trial-cnt"
 #define CONFIG_GROUP_TRACKER_ENABLE_CLASS_COUNT_UPDATE "enable-class-count-update"
+#define CONFIG_GROUP_TRACKER_MODE "tracker-mode"
 #define CONFIG_GROUP_TRACKER_STATIC_TARGET_FILTER "static-target-filter"
 #define CONFIG_GROUP_TRACKER_STATIC_TARGET_FILTER_FRAMES "static-target-filter-frames"
 #define CONFIG_GROUP_TRACKER_STATIC_TARGET_FILTER_CENTER_THRESH "static-target-filter-center-threshold"
@@ -2197,6 +2198,7 @@ parse_tracker(NvDsTrackerConfig *config, GKeyFile *key_file,
     config->user_meta_pool_size = 32;
     config->sub_batches = NULL;
     config->sub_batch_err_recovery_trial_cnt = 0;
+    config->tracker_mode = 0;
     config->enable_class_count_update = TRUE; /* 默认启用 */
     config->enable_static_target_filter = FALSE;
     config->static_target_filter_frames = 30;
@@ -2349,6 +2351,25 @@ parse_tracker(NvDsTrackerConfig *config, GKeyFile *key_file,
                 g_key_file_get_integer(key_file, CONFIG_GROUP_TRACKER,
                                        CONFIG_GROUP_TRACKER_ENABLE_CLASS_COUNT_UPDATE, &error);
             CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, CONFIG_GROUP_TRACKER_MODE))
+        {
+            gchar *mode = g_key_file_get_string(key_file, CONFIG_GROUP_TRACKER,
+                                                CONFIG_GROUP_TRACKER_MODE, &error);
+            CHECK_ERROR(error);
+            if (!g_ascii_strcasecmp(mode, "sot"))
+                config->tracker_mode = 1;
+            else if (!g_ascii_strcasecmp(mode, "mot"))
+                config->tracker_mode = 2;
+            else if (!g_ascii_strcasecmp(mode, "auto"))
+                config->tracker_mode = 0;
+            else
+            {
+                NVGSTDS_ERR_MSG_V("Invalid tracker-mode '%s'", mode);
+                g_free(mode);
+                goto done;
+            }
+            g_free(mode);
         }
         else if (!g_strcmp0(*key, CONFIG_GROUP_TRACKER_STATIC_TARGET_FILTER))
         {

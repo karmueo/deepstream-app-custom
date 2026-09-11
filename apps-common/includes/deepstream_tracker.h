@@ -40,6 +40,7 @@ typedef struct
   guint user_meta_pool_size;
   gchar* sub_batches;
   gint sub_batch_err_recovery_trial_cnt;
+  guint tracker_mode; /* 0=auto, 1=sot, 2=mot */
   gboolean enable_class_count_update; /* 启用单目标跟踪类别计数更新，默认1 */
   gboolean enable_static_target_filter; /* 启用静止目标误检过滤 */
   guint static_target_filter_frames; /* 判定为静止目标的连续帧数 */

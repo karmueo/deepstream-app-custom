@@ -114,6 +114,48 @@ has_detection_target(const NvDsObjectMeta *obj_meta)
     return FALSE;
 }
 
+static gboolean
+is_single_object_tracker_config(const NvDsTrackerConfig *config)
+{
+    if (!config || !config->enable || config->tracker_mode == 2)
+        return FALSE;
+    if (config->tracker_mode == 1)
+        return TRUE;
+
+    const gchar *paths[] = {config->ll_lib_file, config->ll_config_file};
+    for (guint i = 0; i < G_N_ELEMENTS(paths); ++i)
+    {
+        if (!paths[i])
+            continue;
+        gchar *lower = g_ascii_strdown(paths[i], -1);
+        gboolean result = g_strstr_len(lower, -1, "libsot") ||
+                          g_strstr_len(lower, -1, "single_object") ||
+                          g_strstr_len(lower, -1, "single-target") ||
+                          g_strstr_len(lower, -1, "sot");
+        g_free(lower);
+        if (result)
+            return TRUE;
+    }
+    return FALSE;
+}
+
+static inline gboolean
+has_valid_sot_target(const NvDsObjectMeta *obj_meta)
+{
+    return obj_meta && obj_meta->object_id != UNTRACKED_OBJECT_ID &&
+           obj_meta->rect_params.width > 0.f &&
+           obj_meta->rect_params.height > 0.f &&
+           obj_meta->tracker_confidence > 0.f;
+}
+
+static inline SotSourceState *
+get_sot_source_state(AppCtx *appCtx, guint source_id)
+{
+    if (!appCtx || source_id >= MAX_SOURCE_BINS)
+        return NULL;
+    return &appCtx->sot_source_states[source_id];
+}
+
 /**
  * @brief 初始化所有视频源的滑动窗口状态
  *
@@ -263,37 +305,37 @@ free_detection_record(DetectionRecord *record)
 }
 
 static void
-clear_tracker_label_history(AppCtx *appCtx)
+clear_tracker_label_history(SotSourceState *state)
 {
-    if (!appCtx || !appCtx->tracker_label_history)
+    if (!state || !state->tracker_label_history)
         return;
 
-    while (!g_queue_is_empty(appCtx->tracker_label_history))
+    while (!g_queue_is_empty(state->tracker_label_history))
     {
         DetectionRecord *record =
-            (DetectionRecord *)g_queue_pop_head(appCtx->tracker_label_history);
+            (DetectionRecord *)g_queue_pop_head(state->tracker_label_history);
         free_detection_record(record);
     }
 }
 
 static void
-destroy_tracker_label_history(AppCtx *appCtx)
+destroy_tracker_label_history(SotSourceState *state)
 {
-    if (!appCtx || !appCtx->tracker_label_history)
+    if (!state || !state->tracker_label_history)
         return;
 
-    clear_tracker_label_history(appCtx);
-    g_queue_free(appCtx->tracker_label_history);
-    appCtx->tracker_label_history = NULL;
+    clear_tracker_label_history(state);
+    g_queue_free(state->tracker_label_history);
+    state->tracker_label_history = NULL;
 }
 
 static gboolean
-get_recent_valid_detection_confidence(const AppCtx *appCtx, gfloat *confidence)
+get_recent_valid_detection_confidence(const SotSourceState *state, gfloat *confidence)
 {
-    if (!appCtx || !appCtx->tracker_label_history || !confidence)
+    if (!state || !state->tracker_label_history || !confidence)
         return FALSE;
 
-    for (GList *iter = appCtx->tracker_label_history->tail; iter != NULL;
+    for (GList *iter = state->tracker_label_history->tail; iter != NULL;
          iter = iter->prev)
     {
         DetectionRecord *record = (DetectionRecord *)iter->data;
@@ -850,41 +892,21 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
 
     /* 判断是否为单目标跟踪器 */
     gboolean tracker_enabled = appCtx->config.tracker_config.enable;
-    gboolean single_object_tracker = FALSE;
-    if (tracker_enabled)
-    {
-        if (appCtx->config.tracker_config.ll_lib_file)
-        {
-            gchar *ll_lib_lower = g_ascii_strdown(
-                appCtx->config.tracker_config.ll_lib_file, -1);
-            if (g_strstr_len(ll_lib_lower, -1, "libsot") ||
-                g_strstr_len(ll_lib_lower, -1, "single_object") ||
-                g_strstr_len(ll_lib_lower, -1, "single-target"))
-            {
-                single_object_tracker = TRUE;
-            }
-            g_free(ll_lib_lower);
-        }
-        if (!single_object_tracker &&
-            appCtx->config.tracker_config.ll_config_file)
-        {
-            gchar *ll_cfg_lower = g_ascii_strdown(
-                appCtx->config.tracker_config.ll_config_file, -1);
-            if (g_strstr_len(ll_cfg_lower, -1, "sot") ||
-                g_strstr_len(ll_cfg_lower, -1, "single_object") ||
-                g_strstr_len(ll_cfg_lower, -1, "single-target"))
-            {
-                single_object_tracker = TRUE;
-            }
-            g_free(ll_cfg_lower);
-        }
-    }
+    gboolean single_object_tracker =
+        is_single_object_tracker_config(&appCtx->config.tracker_config);
 
     for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame != NULL;
          l_frame = l_frame->next)
     {
         NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)l_frame->data;
         stream_id = frame_meta->source_id;
+        if (stream_id >= MAX_SOURCE_BINS)
+        {
+            GST_WARNING("Ignoring out-of-range source id %u (maximum %u)",
+                        stream_id, MAX_SOURCE_BINS - 1);
+            continue;
+        }
+        SotSourceState *sot_state = get_sot_source_state(appCtx, stream_id);
 
         /* 根据 stream_id 获取正确的 src_bin，而不是使用函数参数的 index */
         NvDsSrcBin *src_bin = &bin->sub_bins[stream_id];
@@ -899,7 +921,8 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
 
             if ((src_bin->config->smart_record == 2 || src_bin->config->smart_record == 3) &&
                 is_detect_record_enabled(appCtx) &&
-                has_detection_target(obj_meta))
+                (single_object_tracker ? has_valid_sot_target(obj_meta)
+                                       : has_detection_target(obj_meta)))
             {
                 gboolean should_trigger_recording = FALSE;
 
@@ -913,13 +936,17 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                     has_valid_tracking_target = TRUE;
 
                     /* 如果连续跟踪同一目标超过3秒，触发录像 */
-                    if (appCtx->is_tracking_continuous &&
-                        appCtx->last_tracked_object_id == current_object_id)
+                    if (sot_state && sot_state->is_tracking_continuous &&
+                        sot_state->last_tracked_object_id == current_object_id &&
+                        GST_CLOCK_TIME_IS_VALID(current_time) &&
+                        current_time >= sot_state->tracking_start_time &&
+                        current_time >= sot_state->last_tracking_pts)
                     {
                         /* 计算连续跟踪时长（秒） */
                         gdouble tracking_duration_sec =
-                            (gdouble)(current_time - appCtx->tracking_start_time) /
+                            (gdouble)(current_time - sot_state->tracking_start_time) /
                             GST_SECOND;
+                        sot_state->last_tracking_pts = current_time;
 
                         if (tracking_duration_sec >= 3.0)
                         {
@@ -929,9 +956,14 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                     else
                     {
                         /* 目标发生变化或首次跟踪，重置计时 */
-                        appCtx->tracking_start_time = current_time;
-                        appCtx->last_tracked_object_id = current_object_id;
-                        appCtx->is_tracking_continuous = TRUE;
+                        if (sot_state)
+                        {
+                            sot_state->tracking_start_time = current_time;
+                            sot_state->last_tracking_pts = current_time;
+                            sot_state->last_tracked_object_id = current_object_id;
+                            sot_state->is_tracking_continuous =
+                                GST_CLOCK_TIME_IS_VALID(current_time);
+                        }
                     }
                 }
                 else
@@ -1074,29 +1106,30 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
 
             /* TODO: 单目标跟踪器：类别统计与更新（统计最近次，使用置信度最高的类别）
              * 如果有分类信息，则不进行统计更新 */
-            if (single_object_tracker && appCtx->config.tracker_config.enable_class_count_update &&
+            if (single_object_tracker && sot_state &&
+                appCtx->config.tracker_config.enable_class_count_update &&
                 !obj_meta->classifier_meta_list)
             {
                 const guint MAX_HISTORY = 50; // 最多保留最近次历史记录
                 
                 /* 初始化历史队列（使用GQueue存储DetectionRecord指针） */
-                if (!appCtx->tracker_label_history)
+                if (!sot_state->tracker_label_history)
                 {
-                    appCtx->tracker_label_history = g_queue_new();
+                    sot_state->tracker_label_history = g_queue_new();
                 }
 
                 /* 如果目标未被跟踪，清空统计 */
                 if (obj_meta->object_id == UNTRACKED_OBJECT_ID)
                 {
-                    appCtx->tracker_stats_valid = FALSE;
+                    sot_state->tracker_stats_valid = FALSE;
                     /* 清空统计计数表 */
-                    if (appCtx->tracker_stats_counts)
+                    if (sot_state->tracker_stats_counts)
                     {
-                        g_hash_table_remove_all(appCtx->tracker_stats_counts);
+                        g_hash_table_remove_all(sot_state->tracker_stats_counts);
                     }
-                    if (appCtx->tracker_label_history)
+                    if (sot_state->tracker_label_history)
                     {
-                        clear_tracker_label_history(appCtx);
+                        clear_tracker_label_history(sot_state);
                     }
                 }
                 else
@@ -1104,20 +1137,20 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                     guint64 current_tracker_id = (guint64)obj_meta->object_id;
                     
                     /* 如果跟踪ID发生变化，重置统计 */
-                    if (!appCtx->tracker_stats_valid ||
-                        appCtx->tracker_stats_current_id != current_tracker_id)
+                    if (!sot_state->tracker_stats_valid ||
+                        sot_state->tracker_stats_current_id != current_tracker_id)
                     {
                         /* 清空统计计数表 */
-                        if (appCtx->tracker_stats_counts)
+                        if (sot_state->tracker_stats_counts)
                         {
-                            g_hash_table_remove_all(appCtx->tracker_stats_counts);
+                            g_hash_table_remove_all(sot_state->tracker_stats_counts);
                         }
-                        if (appCtx->tracker_label_history)
+                        if (sot_state->tracker_label_history)
                         {
-                            clear_tracker_label_history(appCtx);
+                            clear_tracker_label_history(sot_state);
                         }
-                        appCtx->tracker_stats_current_id = current_tracker_id;
-                        appCtx->tracker_stats_valid = TRUE;
+                        sot_state->tracker_stats_current_id = current_tracker_id;
+                        sot_state->tracker_stats_valid = TRUE;
                     }
 
                     /* 获取当前对象的类别标签和置信度 */
@@ -1137,17 +1170,17 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                     }
 
                     /* 仅记录有效检测置信度，避免 tracker-only 帧的 -0.1 污染历史。 */
-                    if (appCtx->tracker_label_history && confidence >= 0.0f)
+                    if (sot_state->tracker_label_history && confidence >= 0.0f)
                     {
                         DetectionRecord *record = g_new0(DetectionRecord, 1);
                         record->label = g_strdup(label);
                         record->confidence = confidence;
-                        g_queue_push_tail(appCtx->tracker_label_history, record);
+                        g_queue_push_tail(sot_state->tracker_label_history, record);
                         
                         /* 如果超过MAX_HISTORY次，移除最旧的记录 */
-                        while (g_queue_get_length(appCtx->tracker_label_history) > MAX_HISTORY)
+                        while (g_queue_get_length(sot_state->tracker_label_history) > MAX_HISTORY)
                         {
-                            DetectionRecord *old_record = (DetectionRecord *)g_queue_pop_head(appCtx->tracker_label_history);
+                            DetectionRecord *old_record = (DetectionRecord *)g_queue_pop_head(sot_state->tracker_label_history);
                             if (old_record) {
                                 g_free(old_record->label);
                                 g_free(old_record);
@@ -1156,26 +1189,26 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                     }
 
                     /* 从最近历史中找出置信度最高的记录并更新统计表 */
-                    if (appCtx->tracker_label_history &&
-                        g_queue_get_length(appCtx->tracker_label_history) > 0)
+                    if (sot_state->tracker_label_history &&
+                        g_queue_get_length(sot_state->tracker_label_history) > 0)
                     {
                         /* 初始化统计计数哈希表（用于显示） */
-                        if (!appCtx->tracker_stats_counts)
+                        if (!sot_state->tracker_stats_counts)
                         {
-                            appCtx->tracker_stats_counts = g_hash_table_new_full(
+                            sot_state->tracker_stats_counts = g_hash_table_new_full(
                                 g_str_hash, g_str_equal, g_free, g_free);
                         }
                         else
                         {
                             /* 清空旧的统计数据 */
-                            g_hash_table_remove_all(appCtx->tracker_stats_counts);
+                            g_hash_table_remove_all(sot_state->tracker_stats_counts);
                         }
 
                         /* 遍历历史队列，找出置信度最高的记录和统计每个类别的出现次数 */
                         gfloat max_confidence = 0.0f;
                         const gchar *best_label = NULL;
                         
-                        for (GList *iter = appCtx->tracker_label_history->head; 
+                        for (GList *iter = sot_state->tracker_label_history->head;
                              iter != NULL; iter = iter->next)
                         {
                             DetectionRecord *record = (DetectionRecord *)iter->data;
@@ -1190,13 +1223,13 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                         }
 
                         /* 统计每个类别的出现次数（用于显示） */
-                        for (GList *iter = appCtx->tracker_label_history->head; 
+                        for (GList *iter = sot_state->tracker_label_history->head;
                              iter != NULL; iter = iter->next)
                         {
                             DetectionRecord *record = (DetectionRecord *)iter->data;
                             if (!record) continue;
                             
-                            guint *count_ptr = (guint *)g_hash_table_lookup(appCtx->tracker_stats_counts, record->label);
+                            guint *count_ptr = (guint *)g_hash_table_lookup(sot_state->tracker_stats_counts, record->label);
                             if (count_ptr)
                             {
                                 (*count_ptr)++;
@@ -1205,7 +1238,7 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                             {
                                 count_ptr = g_new(guint, 1);
                                 *count_ptr = 1;
-                                g_hash_table_insert(appCtx->tracker_stats_counts,
+                                g_hash_table_insert(sot_state->tracker_stats_counts,
                                                   g_strdup(record->label), count_ptr);
                             }
                         }
@@ -1377,12 +1410,13 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
         }
 
         /* 单目标跟踪连续性检测：如果当前帧没有有效跟踪目标，重置跟踪状态 */
-        if (single_object_tracker && !has_valid_tracking_target)
+        if (single_object_tracker && sot_state && !has_valid_tracking_target)
         {
             /* 当前帧没有检测到有效的跟踪目标，重置连续跟踪状态 */
-            appCtx->is_tracking_continuous = FALSE;
-            appCtx->tracking_start_time = 0;
-            appCtx->last_tracked_object_id = 0;
+            sot_state->is_tracking_continuous = FALSE;
+            sot_state->tracking_start_time = GST_CLOCK_TIME_NONE;
+            sot_state->last_tracking_pts = GST_CLOCK_TIME_NONE;
+            sot_state->last_tracked_object_id = 0;
         }
     }
 
@@ -2240,35 +2274,8 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
     //     return TRUE;
 
     gboolean tracker_enabled = appCtx->config.tracker_config.enable;
-    gboolean single_object_tracker = FALSE;
-    if (tracker_enabled)
-    {
-        if (appCtx->config.tracker_config.ll_lib_file)
-        {
-            gchar *ll_lib_lower = g_ascii_strdown(
-                appCtx->config.tracker_config.ll_lib_file, -1);
-            if (g_strstr_len(ll_lib_lower, -1, "libsot") ||
-                g_strstr_len(ll_lib_lower, -1, "single_object") ||
-                g_strstr_len(ll_lib_lower, -1, "single-target"))
-            {
-                single_object_tracker = TRUE;
-            }
-            g_free(ll_lib_lower);
-        }
-        if (!single_object_tracker &&
-            appCtx->config.tracker_config.ll_config_file)
-        {
-            gchar *ll_cfg_lower = g_ascii_strdown(
-                appCtx->config.tracker_config.ll_config_file, -1);
-            if (g_strstr_len(ll_cfg_lower, -1, "sot") ||
-                g_strstr_len(ll_cfg_lower, -1, "single_object") ||
-                g_strstr_len(ll_cfg_lower, -1, "single-target"))
-            {
-                single_object_tracker = TRUE;
-            }
-            g_free(ll_cfg_lower);
-        }
-    }
+    gboolean single_object_tracker =
+        is_single_object_tracker_config(&appCtx->config.tracker_config);
 
     GstMapInfo   surf_map = GST_MAP_INFO_INIT;
     NvBufSurface *batch_surf = NULL;
@@ -2286,6 +2293,8 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
          l_frame = l_frame->next)
     {
         NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)l_frame->data;
+        SotSourceState *sot_state =
+            get_sot_source_state(appCtx, frame_meta->source_id);
        prune_label_anchor_entries(appCtx, frame_meta->source_id,
                             frame_meta->frame_num);
         CornerLineWriter corner_writer = {
@@ -2328,7 +2337,7 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
             if (!has_det_confidence && single_object_tracker)
             {
                 has_det_confidence =
-                    get_recent_valid_detection_confidence(appCtx, &det_confidence);
+                    get_recent_valid_detection_confidence(sot_state, &det_confidence);
             }
 
             if (obj_meta->classifier_meta_list)
@@ -3140,15 +3149,15 @@ done:
             appCtx[i]->cls_agg_map = NULL;
         }
 
-        if (appCtx[i]->tracker_stats_counts)
+        for (guint source_id = 0; source_id < MAX_SOURCE_BINS; ++source_id)
         {
-            g_hash_table_destroy(appCtx[i]->tracker_stats_counts);
-            appCtx[i]->tracker_stats_counts = NULL;
-        }
-
-        if (appCtx[i]->tracker_label_history)
-        {
-            destroy_tracker_label_history(appCtx[i]);
+            SotSourceState *state = &appCtx[i]->sot_source_states[source_id];
+            if (state->tracker_stats_counts)
+            {
+                g_hash_table_destroy(state->tracker_stats_counts);
+                state->tracker_stats_counts = NULL;
+            }
+            destroy_tracker_label_history(state);
         }
 
         if (appCtx[i]->label_anchor_map)
