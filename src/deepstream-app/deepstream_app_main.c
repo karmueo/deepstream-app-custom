@@ -329,26 +329,6 @@ destroy_tracker_label_history(SotSourceState *state)
     state->tracker_label_history = NULL;
 }
 
-static gboolean
-get_recent_valid_detection_confidence(const SotSourceState *state, gfloat *confidence)
-{
-    if (!state || !state->tracker_label_history || !confidence)
-        return FALSE;
-
-    for (GList *iter = state->tracker_label_history->tail; iter != NULL;
-         iter = iter->prev)
-    {
-        DetectionRecord *record = (DetectionRecord *)iter->data;
-        if (record && record->confidence >= 0.0f)
-        {
-            *confidence = record->confidence;
-            return TRUE;
-        }
-    }
-
-    return FALSE;
-}
-
 // NTP时间戳转Unix时间戳（秒.小数）
 static double ntp_to_unix(uint64_t ntp_timestamp)
 {
@@ -2270,12 +2250,10 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
                                  NvDsBatchMeta *batch_meta, guint index)
 {
     int srcIndex = appCtx->active_source_index;
-    // if (srcIndex == -1)
-    //     return TRUE;
-
-    gboolean tracker_enabled = appCtx->config.tracker_config.enable;
     gboolean single_object_tracker =
         is_single_object_tracker_config(&appCtx->config.tracker_config);
+    // if (srcIndex == -1)
+    //     return TRUE;
 
     GstMapInfo   surf_map = GST_MAP_INFO_INIT;
     NvBufSurface *batch_surf = NULL;
@@ -2286,17 +2264,13 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
         mapped_surface = TRUE;
     }
 
-    /* 为每个对象生成完整的检测+分类标签(概率)文本，覆盖原来的
-     * bbox_generated_probe_after_analytics 中逻辑 */
-    gboolean has_any_classification = FALSE; /* 标记批次中是否有任何分类结果 */
+    /* 为每个对象生成精简的目标名称标签。 */
     for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame != NULL;
          l_frame = l_frame->next)
     {
         NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)l_frame->data;
-        SotSourceState *sot_state =
-            get_sot_source_state(appCtx, frame_meta->source_id);
-       prune_label_anchor_entries(appCtx, frame_meta->source_id,
-                            frame_meta->frame_num);
+        prune_label_anchor_entries(appCtx, frame_meta->source_id,
+                                   frame_meta->frame_num);
         CornerLineWriter corner_writer = {
             .batch_meta = batch_meta,
             .frame_meta = frame_meta,
@@ -2320,25 +2294,14 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
                 appCtx->config.videorecognition_config.unique_id;
             gboolean videorecognition_enabled =
                 appCtx->config.videorecognition_config.enable;
+            gboolean is_tracking_result =
+                single_object_tracker &&
+                has_valid_sot_target(obj_meta);
 
-            /* 构建完整标签：显式区分检测输出、videorecognition 输出与其他分类输出 */
+            /* 标签仅显示目标名称，优先使用视频识别结果。 */
             GString *gstr = g_string_new(NULL);
-
-            gboolean show_tracking_id =
-                tracker_enabled &&
-                appCtx->config.tracker_config.display_tracking_id &&
-                (obj_meta->object_id != UNTRACKED_OBJECT_ID);
-            gfloat   det_confidence = obj_meta->confidence;
-            gboolean has_det_confidence = (det_confidence >= 0.0f);
             GString *vr_str = g_string_new(NULL);
-            GString *other_cls_str = g_string_new(NULL);
             gboolean has_vr_result = FALSE;
-
-            if (!has_det_confidence && single_object_tracker)
-            {
-                has_det_confidence =
-                    get_recent_valid_detection_confidence(sot_state, &det_confidence);
-            }
 
             if (obj_meta->classifier_meta_list)
             {
@@ -2364,22 +2327,8 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
                             {
                                 g_string_append_c(vr_str, ' ');
                             }
-                            g_string_append_printf(vr_str, "VR:%s(%.2f)",
-                                                   li->result_label,
-                                                   li->result_prob);
+                            g_string_append(vr_str, li->result_label);
                         }
-                        else
-                        {
-                            if (other_cls_str->len > 0)
-                            {
-                                g_string_append_c(other_cls_str, ' ');
-                            }
-                            g_string_append_printf(
-                                other_cls_str, "CLS%d:%s(%.2f)",
-                                cl_meta->unique_component_id,
-                                li->result_label, li->result_prob);
-                        }
-                        has_any_classification = TRUE;
                     }
                 }
             }
@@ -2392,57 +2341,16 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
             {
                 if (obj_meta->obj_label[0] != '\0')
                 {
-                    if (has_det_confidence)
-                    {
-                        g_string_append_printf(gstr, "DET:%s(%.2f)",
-                                               obj_meta->obj_label,
-                                               det_confidence);
-                    }
-                    else
-                    {
-                        g_string_append_printf(gstr, "DET:%s",
-                                               obj_meta->obj_label);
-                    }
+                    g_string_append(gstr, obj_meta->obj_label);
                 }
                 else
                 {
-                    if (has_det_confidence)
-                    {
-                        g_string_append_printf(gstr, "DET:Class_%d(%.2f)",
-                                               obj_meta->class_id,
-                                               det_confidence);
-                    }
-                    else
-                    {
-                        g_string_append_printf(gstr, "DET:Class_%d",
-                                               obj_meta->class_id);
-                    }
-                }
-
-                if (other_cls_str->len > 0)
-                {
-                    g_string_append_printf(gstr, " %s", other_cls_str->str);
+                    g_string_append_printf(gstr, "Class_%d",
+                                           obj_meta->class_id);
                 }
             }
 
             g_string_free(vr_str, TRUE);
-            g_string_free(other_cls_str, TRUE);
-
-            /* 最终显示文本统一在覆盖层追加跟踪信息，避免前面 probe 的文本被覆盖。 */
-            if (show_tracking_id)
-            {
-                if (single_object_tracker)
-                {
-                    g_string_append_printf(gstr, " 跟踪(%.2f) ID:%" G_GUINT64_FORMAT,
-                                           obj_meta->tracker_confidence,
-                                           (guint64)obj_meta->object_id);
-                }
-                else
-                {
-                    g_string_append_printf(gstr, " ID:%" G_GUINT64_FORMAT,
-                                           (guint64)obj_meta->object_id);
-                }
-            }
 
             /* 设置显示文本 - 所有对象都会有标签 */
             if (gstr->len > 0)
@@ -2626,9 +2534,12 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
                     anchor->last_frame = frame_meta->frame_num;
                 }
             }
-            /* 用 L 形角标代替封闭矩形框 */
-            render_corner_box(&corner_writer, obj_meta,
-                              appCtx->config.osd_config.border_width);
+            /* SOT 中只要有有效跟踪结果就画 L 型角框，纯检测结果保留封闭框。 */
+            if (is_tracking_result)
+            {
+                render_corner_box(&corner_writer, obj_meta,
+                                  appCtx->config.osd_config.border_width);
+            }
             g_string_free(gstr, TRUE);
         }
         corner_writer_commit(&corner_writer);
