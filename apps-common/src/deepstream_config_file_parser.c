@@ -1200,6 +1200,8 @@ parse_videorecognition(NvDsVideoRecognitionConfig *config, GKeyFile *key_file)
 
     // 默认值：0 = multi-frame image classification
     config->model_type = 0;
+    config->infer_interval = 0;
+    config->classifier_threshold = 0.5F;
 
     keys = g_key_file_get_keys(key_file, CONFIG_GROUP_VIDEORECOGNITION, NULL, &error);
     CHECK_ERROR(error);
@@ -1275,6 +1277,20 @@ parse_videorecognition(NvDsVideoRecognitionConfig *config, GKeyFile *key_file)
                                        "sampling-rate", &error);
             CHECK_ERROR(error);
         }
+        else if (!g_strcmp0(*key, "infer-interval"))
+        {
+            config->infer_interval =
+                g_key_file_get_integer(key_file, CONFIG_GROUP_VIDEORECOGNITION,
+                                       "infer-interval", &error);
+            CHECK_ERROR(error);
+        }
+        else if (!g_strcmp0(*key, "classifier-threshold"))
+        {
+            config->classifier_threshold = g_key_file_get_double(
+                key_file, CONFIG_GROUP_VIDEORECOGNITION,
+                "classifier-threshold", &error);
+            CHECK_ERROR(error);
+        }
         else if (!g_strcmp0(*key, "trt-engine-file"))
         {
             config->trt_engine_name = g_key_file_get_string(
@@ -1292,6 +1308,13 @@ parse_videorecognition(NvDsVideoRecognitionConfig *config, GKeyFile *key_file)
             NVGSTDS_WARN_MSG_V("Unknown key '%s' for group [%s]", *key,
                                CONFIG_GROUP_VIDEORECOGNITION);
         }
+    }
+
+    if (config->classifier_threshold < 0.0F ||
+        config->classifier_threshold > 1.0F)
+    {
+        NVGSTDS_ERR_MSG_V("videorecognition classifier-threshold must be between 0 and 1");
+        goto done;
     }
 
     ret = TRUE;

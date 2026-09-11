@@ -78,14 +78,19 @@ create_dsvideorecognition_bin(NvDsVideoRecognitionConfig *config, NvDsVideoRecog
     }
 
     if (config->model_num_clips)
-    {
-        g_object_set(G_OBJECT(bin->elem_dsvideorecognition), "num-clips", config->model_num_clips, NULL);
-    }
+        NVGSTDS_WARN_MSG_V("videorecognition num-clips is deprecated and ignored");
+    if (config->model_type)
+        NVGSTDS_WARN_MSG_V("videorecognition model-type is deprecated and ignored");
 
     if (config->model_sampling_rate)
     {
         g_object_set(G_OBJECT(bin->elem_dsvideorecognition), "sampling-rate", config->model_sampling_rate, NULL);
     }
+
+    g_object_set(G_OBJECT(bin->elem_dsvideorecognition),
+                 "infer-interval", config->infer_interval,
+                 "classifier-threshold", config->classifier_threshold,
+                 NULL);
 
     if (config->trt_engine_name)
     {
@@ -98,9 +103,7 @@ create_dsvideorecognition_bin(NvDsVideoRecognitionConfig *config, NvDsVideoRecog
     }
 
     if (config->batch_size)
-    {
-        g_object_set(G_OBJECT(bin->elem_dsvideorecognition), "batch-size", config->batch_size, NULL);
-    }
+        NVGSTDS_WARN_MSG_V("videorecognition batch-size is deprecated and ignored; ROI batching is automatic");
     g_object_set(G_OBJECT(bin->pre_conv), "gpu-id", config->gpu_id, NULL);
 
     g_object_set(G_OBJECT(bin->pre_conv), "nvbuf-memory-type",

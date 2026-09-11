@@ -29,6 +29,8 @@ parse_videorecognition_yaml (NvDsVideoRecognitionConfig *config, gchar *cfg_file
   // 设置默认值
   config->model_type = 0;  // 0 = multi-frame image classification (default)
   config->enable = FALSE;
+  config->infer_interval = 0;
+  config->classifier_threshold = 0.5F;
 
   for(YAML::const_iterator itr = configyml["videorecognition"].begin();
      itr != configyml["videorecognition"].end(); ++itr)
@@ -56,6 +58,10 @@ parse_videorecognition_yaml (NvDsVideoRecognitionConfig *config, gchar *cfg_file
       config->model_type = itr->second.as<guint>();
     } else if (paramKey == "sampling-rate") {
       config->model_sampling_rate = itr->second.as<guint>();
+    } else if (paramKey == "infer-interval") {
+      config->infer_interval = itr->second.as<guint>();
+    } else if (paramKey == "classifier-threshold") {
+      config->classifier_threshold = itr->second.as<gfloat>();
     } else if (paramKey == "trt-engine-file") {
       std::string temp = itr->second.as<std::string>();
       char* str = (char*) malloc(sizeof(char) * 1024);
@@ -83,6 +89,12 @@ parse_videorecognition_yaml (NvDsVideoRecognitionConfig *config, gchar *cfg_file
     } else {
       cout << "Unknown key " << paramKey << " for videorecognition" << endl;
     }
+  }
+
+  if (config->classifier_threshold < 0.0F ||
+      config->classifier_threshold > 1.0F) {
+    g_printerr ("Error: videorecognition classifier-threshold must be between 0 and 1.\n");
+    goto done;
   }
 
   ret = TRUE;

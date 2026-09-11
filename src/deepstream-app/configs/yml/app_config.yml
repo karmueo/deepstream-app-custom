@@ -138,6 +138,9 @@ videorecognition:
   model-clip-length: 32
   # 采样率（每隔多少帧采样一次）
   sampling-rate: 5
+  # 每条轨迹两次推理间隔；0 表示沿用 sampling-rate
+  infer-interval: 30
+  classifier-threshold: 0.5
   # TensorRT引擎文件路径
   trt-engine-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/gst-videorecognition/models/x3d.engine
   # 分类标签文件路径
