@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+runtime_root="/opt/deepstream-app-custom"
+export GST_PLUGIN_PATH="${runtime_root}/gst-plugins:/opt/nvidia/deepstream/deepstream/lib/gst-plugins:${GST_PLUGIN_PATH:-}"
+export LD_LIBRARY_PATH="${runtime_root}/lib:${runtime_root}/gst-plugins:${LD_LIBRARY_PATH:-}"
+
+if [[ $# -eq 0 ]]; then
+  set -- -c "${runtime_root}/configs/yml/app_config.yml"
+fi
+
+exec "${runtime_root}/bin/deepstream-app-custom.bin" "$@"

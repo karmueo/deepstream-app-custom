@@ -1,0 +1,2 @@
+enable,type,uri,num-sources,gpu-id,cudadec-memtype,rtsp-reconnect-interval-sec,rtsp-reconnect-attempts,select-rtp-protocol,smart-record,smart-rec-dir-path,smart-rec-duration,smart-rec-start-time
+0,2,file:///path/to/input.mp4,1,0,0,0,0,0,0,/var/lib/deepstream-app-custom/recordings,30,3

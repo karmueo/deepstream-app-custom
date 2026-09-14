@@ -1,0 +1,27 @@
+%YAML:1.0
+
+BaseConfig:
+  modelName: 3    # { 0=sutrack, 1=ostrack, 2=mixformer_v2, 3=nanotrack }
+  enableTrackCenterStable: 1
+  trackCenterStablePixelThreshold: 3
+
+TargetManagement:
+  expandFactor: 1.0
+  probationAge: 2
+  maxMiss: 10
+  scoreThreshold: 0.75
+  iouThreshold: 0.5
+  trackBoxWidthThreshold: 0.3
+  trackBoxHeightThreshold: 0.3
+  maxTrackAge: 30
+
+MixformerV2Config:
+  modelFilePath: /opt/deepstream-app-custom/models/mixformerv2_online_base_fp16.engine
+  update_interval: 100
+  max_score_decay: 0.95
+  template_update_score_threshold: 0.5
+
+NanotrackConfig:
+  nanotrack_head_engine: /opt/deepstream-app-custom/models/nanotrack_head_fp16.engine
+  nanotrack_backbone_engine: /opt/deepstream-app-custom/models/nanotrack_backbone_fp16.engine
+  nanotrack_search_backbone_engine: /opt/deepstream-app-custom/models/nanotrack_backbone_search_fp16.engine

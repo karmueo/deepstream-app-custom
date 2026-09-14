@@ -16,20 +16,14 @@ property:
   # 模型输入颜色格式：0=RGB, 1=BGR, 2=GRAY
   model-color-format: 0
 
-  # ONNX 模型文件路径（首次运行时会转换为 TensorRT 引擎）
-  # onnx-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/models/yolo26s_rgb_352_2c_v2.onnx
-
   # TensorRT 引擎文件路径（序列化后的推理引擎，加载更快）
-  # model-engine-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/models/yolo26n_rgb_352_person_b4_fp16.engine
-  model-engine-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/models/yolo26n_rgb_352_uav_no-p2_b4.engine
-  # model-engine-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/models/yolo26n_rgb_352_2c.engine
+  model-engine-file: /opt/deepstream-app-custom/models/yolo26n_rgb_352_uav_no-p2_b4.engine
 
   # INT8 量化校准表文件路径（仅 network-mode=1 时需要）
   # int8-calib-file: calib.table
 
   # 类别标签文件路径（每行一个类别名称）
-  labelfile-path: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/labels.txt
-  # labelfile-path: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/labels2.txt
+  labelfile-path: /opt/deepstream-app-custom/configs/labels.txt
 
   # 推理批处理大小（同时处理的图像数量）
   batch-size: 4
@@ -68,7 +62,7 @@ property:
   # 可选 CUDA 加速版本：parse-bbox-func-name: NvDsInferParseYoloCuda
 
   # 自定义解析库路径（包含 NvDsInferParseYolo 等函数实现）
-  custom-lib-path: ../../../../DeepStream-Yolo/nvdsinfer_custom_impl_Yolo/libnvdsinfer_custom_impl_Yolo.so
+  custom-lib-path: /opt/deepstream-app-custom/lib/libnvdsinfer_custom_impl_Yolo.so
 
   # TensorRT 引擎创建函数名称
   engine-create-func-name: "NvDsInferYoloCudaEngineGet"

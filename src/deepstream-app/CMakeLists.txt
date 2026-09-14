@@ -11,6 +11,9 @@
 ################################################################################
 
 cmake_minimum_required(VERSION 3.16)
+project(deepstream_app_custom VERSION 1.0.0 LANGUAGES C CXX)
+get_filename_component(REPOSITORY_ROOT
+    "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
 # 设置 CUDA 编译器路径
 if(NOT DEFINED CMAKE_CUDA_COMPILER)
     set(CMAKE_CUDA_COMPILER "/usr/local/cuda/bin/nvcc")
@@ -30,15 +33,54 @@ if("${CUDA_VER}" STREQUAL "")
 endif()
 
 # DeepStream version
-set(NVDS_VERSION "8.0")
+set(NVDS_VERSION "7.1")
+
+set(_DEVELOPMENT_LICENSE_PUBLIC_KEY
+    "049645b76f338aacaf30a83c12056e4aa47da65ff2fee0b6181918375eedf0bb")
+set(LICENSE_ED25519_PUBLIC_KEY_HEX "${_DEVELOPMENT_LICENSE_PUBLIC_KEY}"
+    CACHE STRING "Raw Ed25519 public key encoded as 64 hexadecimal characters")
+set(LICENSE_KEY_ID "prod-2026-01" CACHE STRING
+    "Embedded license signing key identifier")
+if(NOT CMAKE_BUILD_TYPE STREQUAL "Release")
+    # Development builds do not enforce licenses. Reset cached production
+    # metadata so switching this directory back to Release requires the key
+    # arguments to be supplied explicitly again.
+    set(LICENSE_ED25519_PUBLIC_KEY_HEX "${_DEVELOPMENT_LICENSE_PUBLIC_KEY}"
+        CACHE STRING "Raw Ed25519 public key encoded as 64 hexadecimal characters" FORCE)
+    set(LICENSE_KEY_ID "prod-2026-01" CACHE STRING
+        "Embedded license signing key identifier" FORCE)
+endif()
+string(LENGTH "${LICENSE_KEY_ID}" _LICENSE_KEY_ID_LENGTH)
+if(_LICENSE_KEY_ID_LENGTH LESS 1 OR _LICENSE_KEY_ID_LENGTH GREATER 64 OR
+   NOT LICENSE_KEY_ID MATCHES "^[A-Za-z0-9._-]+$")
+    message(FATAL_ERROR
+        "LICENSE_KEY_ID must be 1-64 ASCII letters, digits, dots, underscores, or hyphens")
+endif()
+string(LENGTH "${LICENSE_ED25519_PUBLIC_KEY_HEX}" _LICENSE_PUBLIC_KEY_LENGTH)
+if(NOT _LICENSE_PUBLIC_KEY_LENGTH EQUAL 64 OR
+   NOT LICENSE_ED25519_PUBLIC_KEY_HEX MATCHES "^[0-9A-Fa-f]+$")
+    message(FATAL_ERROR
+        "LICENSE_ED25519_PUBLIC_KEY_HEX must contain exactly 64 hexadecimal characters")
+endif()
+if(CMAKE_BUILD_TYPE STREQUAL "Release" AND
+   LICENSE_ED25519_PUBLIC_KEY_HEX STREQUAL _DEVELOPMENT_LICENSE_PUBLIC_KEY)
+    message(FATAL_ERROR
+        "Release builds require a production Ed25519 public key. Run tools/license_issuer.py keygen and pass -DLICENSE_ED25519_PUBLIC_KEY_HEX=<hex>.")
+elseif(LICENSE_ED25519_PUBLIC_KEY_HEX STREQUAL _DEVELOPMENT_LICENSE_PUBLIC_KEY)
+    message(STATUS
+        "Using the placeholder public key; license enforcement is disabled for this development build")
+endif()
+
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/license_public_key.h.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/license_public_key.h"
+    @ONLY
+)
 
 # Installation directories
 if(NOT DEFINED LIB_INSTALL_DIR)
     set(LIB_INSTALL_DIR "/opt/nvidia/deepstream/deepstream/lib/")
-endif()
-
-if(NOT DEFINED APP_INSTALL_DIR)
-    set(APP_INSTALL_DIR "/opt/nvidia/deepstream/deepstream/bin/")
 endif()
 
 # Detect target device
@@ -53,6 +95,9 @@ string(REGEX REPLACE "-.*" "" TARGET_DEVICE ${TARGET_DEVICE_FULL})
 if(TARGET_DEVICE STREQUAL "aarch64")
     add_compile_definitions(PLATFORM_TEGRA)
 endif()
+if(CMAKE_BUILD_TYPE STREQUAL "Release" AND NOT TARGET_DEVICE STREQUAL "aarch64")
+    message(FATAL_ERROR "Release packages are supported only for aarch64 Jetson")
+endif()
 
 # Find required packages
 find_package(PkgConfig REQUIRED)
@@ -65,6 +110,12 @@ pkg_check_modules(GSTAPP REQUIRED gstreamer-app-1.0)
 # Find CUDA using modern CMake approach
 enable_language(CUDA)
 find_package(CUDAToolkit ${CUDA_VER} REQUIRED)
+find_package(OpenSSL 3.0 REQUIRED COMPONENTS Crypto)
+if(CMAKE_BUILD_TYPE STREQUAL "Release" AND
+   (NOT CUDAToolkit_VERSION_MAJOR EQUAL 12 OR
+    NOT CUDAToolkit_VERSION_MINOR EQUAL 6))
+    message(FATAL_ERROR "Release packages are supported only with CUDA 12.6")
+endif()
 
 # Source files
 file(GLOB DEEPSTREAM_APP_SOURCES
@@ -89,6 +140,7 @@ set(ALL_SOURCES
 # Include directories
 set(INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_BINARY_DIR}/generated
     ${CMAKE_CURRENT_SOURCE_DIR}/../../apps-common/includes
     ${CMAKE_CURRENT_SOURCE_DIR}/../gst-udpjson_meta
     /opt/nvidia/deepstream/deepstream/sources/includes
@@ -97,6 +149,12 @@ set(INCLUDE_DIRS
 
 # Create executable
 add_executable(deepstream-app ${ALL_SOURCES})
+
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(DS_LICENSE_ENFORCEMENT_ENABLED 1)
+else()
+    set(DS_LICENSE_ENFORCEMENT_ENABLED 0)
+endif()
 
 # Set include directories
 target_include_directories(deepstream-app PRIVATE
@@ -111,7 +169,8 @@ target_include_directories(deepstream-app PRIVATE
 # Compile definitions
 target_compile_definitions(deepstream-app PRIVATE
     DS_VERSION_MINOR=1
-    DS_VERSION_MAJOR=5
+    DS_VERSION_MAJOR=7
+    DS_LICENSE_ENFORCEMENT_ENABLED=${DS_LICENSE_ENFORCEMENT_ENABLED}
 )
 
 # Optional JPEG save feature (uncomment if needed)
@@ -124,7 +183,16 @@ target_compile_options(deepstream-app PRIVATE
     ${X11_CFLAGS_OTHER}
     ${JSON_GLIB_CFLAGS_OTHER}
     ${GSTAPP_CFLAGS_OTHER}
-    -g
+    -fstack-protector-strong
+    $<$<CONFIG:Release>:-O2>
+    $<$<CONFIG:Release>:-D_FORTIFY_SOURCE=2>
+    "-ffile-prefix-map=${REPOSITORY_ROOT}=."
+)
+
+target_link_options(deepstream-app PRIVATE
+    -Wl,-z,relro
+    -Wl,-z,now
+    -Wl,-z,noexecstack
 )
 
 # Link directories
@@ -161,6 +229,7 @@ target_link_libraries(deepstream-app PRIVATE
     yaml-cpp
     gstrtspserver-1.0
     dl
+    OpenSSL::Crypto
     
     # Package libraries
     ${GSTREAMER_LIBRARIES}
@@ -188,82 +257,184 @@ endif()
 
 # Set RPATH for runtime library loading
 set_target_properties(deepstream-app PROPERTIES
-    INSTALL_RPATH ${LIB_INSTALL_DIR}
-    BUILD_WITH_INSTALL_RPATH TRUE
+    OUTPUT_NAME "deepstream-app-custom.bin"
+    POSITION_INDEPENDENT_CODE TRUE
+    C_VISIBILITY_PRESET hidden
+    CXX_VISIBILITY_PRESET hidden
+    VISIBILITY_INLINES_HIDDEN YES
+    INSTALL_RPATH "$ORIGIN/../lib;$ORIGIN/../gst-plugins;${LIB_INSTALL_DIR}"
+    BUILD_RPATH "${LIB_INSTALL_DIR}"
 )
 
-# Installation
-install(TARGETS deepstream-app
-    RUNTIME DESTINATION ${APP_INSTALL_DIR}
+# Release builds retain a detached debug file internally and ship a stripped ELF.
+if(CMAKE_BUILD_TYPE STREQUAL "Release" AND CMAKE_OBJCOPY AND CMAKE_STRIP)
+    add_custom_command(TARGET deepstream-app POST_BUILD
+        COMMAND ${CMAKE_OBJCOPY} --only-keep-debug
+                $<TARGET_FILE:deepstream-app> $<TARGET_FILE:deepstream-app>.debug
+        COMMAND ${CMAKE_STRIP} --strip-unneeded $<TARGET_FILE:deepstream-app>
+        COMMAND ${CMAKE_OBJCOPY}
+                --add-gnu-debuglink=$<TARGET_FILE:deepstream-app>.debug
+                $<TARGET_FILE:deepstream-app>
+        COMMENT "Separating debug symbols and stripping release executable"
+    )
+endif()
+
+# Installation/package layout under /opt/deepstream-app-custom.
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+    set(CMAKE_INSTALL_PREFIX "/opt/deepstream-app-custom" CACHE PATH
+        "Runtime installation prefix" FORCE)
+endif()
+set(CMAKE_INSTALL_DEFAULT_DIRECTORY_PERMISSIONS
+    OWNER_READ OWNER_WRITE OWNER_EXECUTE
+    GROUP_READ GROUP_EXECUTE
+    WORLD_READ WORLD_EXECUTE)
+install(TARGETS deepstream-app RUNTIME DESTINATION bin)
+install(PROGRAMS "${CMAKE_CURRENT_SOURCE_DIR}/packaging/deepstream-app-custom"
+        DESTINATION bin)
+
+install(FILES
+    configs/yml/app_config.yml
+    configs/yml/config_infer_primary_yolo_352_rgb.yml
+    "${CMAKE_CURRENT_SOURCE_DIR}/packaging/file_sources.csv"
+    DESTINATION configs/yml
+)
+install(FILES
+    configs/config_preprocess_rgb_352_primary.txt
+    configs/labels.txt
+    DESTINATION configs
+)
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/packaging/config_sot.yml"
+        DESTINATION configs)
+install(FILES
+    models/yolo26n_rgb_352_uav_no-p2_b4.engine
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../sot_plugin/models/nanotrack_head_fp16.engine"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../sot_plugin/models/nanotrack_backbone_fp16.engine"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../sot_plugin/models/nanotrack_backbone_search_fp16.engine"
+    DESTINATION models
 )
 
-# Install-time: create deepstream-app-custom directory and add symlinks to configs and models
-set(DS_APP_CUSTOM_DIR "/opt/nvidia/deepstream/deepstream/deepstream-app-custom")
-get_filename_component(DS_APP_CONFIGS_SRC "${CMAKE_CURRENT_SOURCE_DIR}/configs" ABSOLUTE)
-get_filename_component(DS_APP_MODELS_SRC "${CMAKE_CURRENT_SOURCE_DIR}/models" ABSOLUTE)
-
-set(_ds_install_code [[
-    set(ds_app_custom_dir "@DS_APP_CUSTOM_DIR@")
-    set(configs_src "@DS_APP_CONFIGS_SRC@")
-    set(models_src "@DS_APP_MODELS_SRC@")
-    message(STATUS "Creating directory and symlinks in ${ds_app_custom_dir}")
-
-    if(NOT EXISTS "${ds_app_custom_dir}")
-        file(MAKE_DIRECTORY "${ds_app_custom_dir}")
+set(CUSTOM_PREPROCESS_LIBRARY
+    "/opt/nvidia/deepstream/deepstream/lib/gst-plugins/libcustom2d_preprocess.so"
+    CACHE FILEPATH "Built custom DeepStream preprocess library to package")
+set(SOT_LIBRARY
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../sot_plugin/lib/libsot.so"
+    CACHE FILEPATH "Built SOT tracker library to package")
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    execute_process(
+        COMMAND "${CMAKE_READELF}" -d "${SOT_LIBRARY}"
+        RESULT_VARIABLE _SOT_READELF_RESULT
+        OUTPUT_VARIABLE _SOT_DYNAMIC_SECTION
+        ERROR_VARIABLE _SOT_READELF_ERROR
+    )
+    if(NOT _SOT_READELF_RESULT EQUAL 0)
+        message(FATAL_ERROR
+            "Unable to inspect SOT_LIBRARY: ${_SOT_READELF_ERROR}")
     endif()
-
-    # Create symlink for configs if source exists and link not already present
-    if(EXISTS "${configs_src}")
-        if(NOT EXISTS "${ds_app_custom_dir}/configs")
-            execute_process(
-                COMMAND ${CMAKE_COMMAND} -E create_symlink
-                                "${configs_src}"
-                                "${ds_app_custom_dir}/configs"
-                RESULT_VARIABLE _create_configs_result
-                ERROR_VARIABLE _create_configs_error
-            )
-            if(_create_configs_result EQUAL 0)
-                message(STATUS "Created symlink: ${ds_app_custom_dir}/configs -> ${configs_src}")
-            else()
-                message(WARNING "Failed to create configs symlink: ${_create_configs_error}")
-            endif()
-        else()
-            message(STATUS "Skipping configs symlink: ${ds_app_custom_dir}/configs already exists")
+    foreach(_opencv_soname IN ITEMS
+            "libopencv_core.so.4.5d" "libopencv_imgproc.so.4.5d")
+        string(FIND "${_SOT_DYNAMIC_SECTION}" "${_opencv_soname}"
+            _opencv_soname_offset)
+        if(_opencv_soname_offset EQUAL -1)
+            message(FATAL_ERROR
+                "SOT_LIBRARY must link against Ubuntu 22.04 ${_opencv_soname}. Rebuild it with -DOpenCV_DIR=/usr/lib/aarch64-linux-gnu/cmake/opencv4.")
         endif()
-    else()
-        message(STATUS "Skipping configs symlink: source ${configs_src} not found")
-    endif()
+    endforeach()
+endif()
 
-    # Create symlink for models if source exists and link not already present
-    if(EXISTS "${models_src}")
-        if(NOT EXISTS "${ds_app_custom_dir}/models")
+install(FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../DeepStream-Yolo/nvdsinfer_custom_impl_Yolo/libnvdsinfer_custom_impl_Yolo.so"
+    "${CUSTOM_PREPROCESS_LIBRARY}"
+    DESTINATION lib
+)
+install(FILES "${SOT_LIBRARY}" DESTINATION lib RENAME libsot.so)
+install(FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/../gst-udpjson_meta/build/libudpjsonmeta.so"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../gst-udpmulticast_sink/build/libudpmulticast_sink.so"
+    DESTINATION gst-plugins
+)
+
+# Libraries above are prebuilt inputs, so CMake's target stripping does not
+# apply to them. Strip only their installed Release copies.
+if(CMAKE_BUILD_TYPE STREQUAL "Release" AND CMAKE_STRIP)
+    install(CODE "
+        set(_runtime_root \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}\")
+        file(GLOB _runtime_libraries
+            \"\${_runtime_root}/lib/*.so\"
+            \"\${_runtime_root}/gst-plugins/*.so\")
+        foreach(_library IN LISTS _runtime_libraries)
             execute_process(
-                COMMAND ${CMAKE_COMMAND} -E create_symlink
-                                "${models_src}"
-                                "${ds_app_custom_dir}/models"
-                RESULT_VARIABLE _create_models_result
-                ERROR_VARIABLE _create_models_error
-            )
-            if(_create_models_result EQUAL 0)
-                message(STATUS "Created symlink: ${ds_app_custom_dir}/models -> ${models_src}")
-            else()
-                message(WARNING "Failed to create models symlink: ${_create_models_error}")
-            endif()
-        else()
-            message(STATUS "Skipping models symlink: ${ds_app_custom_dir}/models already exists")
-        endif()
-    else()
-        message(STATUS "Skipping models symlink: source ${models_src} not found")
-    endif()
-]])
+                COMMAND \"${CMAKE_STRIP}\" --strip-unneeded \"\${_library}\"
+                COMMAND_ERROR_IS_FATAL ANY)
+        endforeach()
+    ")
+endif()
 
-string(CONFIGURE "${_ds_install_code}" _ds_install_code_configured @ONLY)
-install(CODE "${_ds_install_code_configured}")
+option(BUILD_LICENSE_TESTS "Build offline license unit tests" ON)
+if(BUILD_LICENSE_TESTS)
+    enable_testing()
+    add_executable(license-gate-test
+        tests/license_gate_test.cpp
+        license_gate.cpp
+    )
+    target_include_directories(license-gate-test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_BINARY_DIR}/generated
+        ${JSON_GLIB_INCLUDE_DIRS}
+    )
+    target_compile_options(license-gate-test PRIVATE
+        ${JSON_GLIB_CFLAGS_OTHER}
+    )
+    target_link_libraries(license-gate-test PRIVATE
+        OpenSSL::Crypto
+        ${JSON_GLIB_LIBRARIES}
+    )
+    add_test(NAME license-gate-test COMMAND license-gate-test)
+    if(NOT CMAKE_BUILD_TYPE STREQUAL "Release")
+        add_test(
+            NAME development-license-bypass
+            COMMAND $<TARGET_FILE:deepstream-app>
+                    --license-file /tmp/deepstream-license-does-not-exist
+                    --license-info)
+        set_tests_properties(development-license-bypass PROPERTIES
+            PASS_REGULAR_EXPRESSION
+                "License enforcement: disabled")
+    endif()
+endif()
+
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(CPACK_GENERATOR "DEB")
+    set(CPACK_PACKAGE_NAME "deepstream-app-custom")
+    set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
+    set(CPACK_PACKAGE_CONTACT "DeepStream Application Maintainer")
+    set(CPACK_PACKAGE_DESCRIPTION_SUMMARY
+        "Device-bound DeepStream application for Jetson Orin Nano")
+    set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "arm64")
+    set(CPACK_DEBIAN_PACKAGE_SECTION "video")
+    set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
+    set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS
+        "deepstream-7.1, nvidia-l4t-core (>= 36.4), nvidia-l4t-core (<< 36.5), libssl3, libjson-glib-1.0-0, libopencv-core4.5d, libopencv-imgproc4.5d")
+    set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
+        "${CMAKE_CURRENT_SOURCE_DIR}/packaging/postinst"
+        "${CMAKE_CURRENT_SOURCE_DIR}/packaging/conffiles")
+    set(CPACK_PACKAGING_INSTALL_PREFIX "/opt/deepstream-app-custom")
+    set(CPACK_STRIP_FILES TRUE)
+    include(CPack)
+else()
+    # A build directory may previously have been configured for Release.
+    # Remove stale CPack metadata so a subsequent development configure cannot
+    # accidentally reproduce a distributable package.
+    file(REMOVE
+        "${CMAKE_BINARY_DIR}/CPackConfig.cmake"
+        "${CMAKE_BINARY_DIR}/CPackSourceConfig.cmake")
+    file(REMOVE_RECURSE "${CMAKE_BINARY_DIR}/_CPack_Packages")
+endif()
 
 # Custom target for clean (equivalent to 'make clean')
 add_custom_target(clean-all
     COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target clean
-    COMMAND ${CMAKE_COMMAND} -E remove -f ${CMAKE_BINARY_DIR}/deepstream-app
+    COMMAND ${CMAKE_COMMAND} -E remove -f
+            ${CMAKE_BINARY_DIR}/deepstream-app-custom.bin.debug
     COMMENT "Cleaning all build artifacts"
 )
 
@@ -273,4 +444,5 @@ message(STATUS "  CUDA Version: ${CUDA_VER}")
 message(STATUS "  NVDS Version: ${NVDS_VERSION}")
 message(STATUS "  Target Device: ${TARGET_DEVICE}")
 message(STATUS "  Library Install Dir: ${LIB_INSTALL_DIR}")
-message(STATUS "  App Install Dir: ${APP_INSTALL_DIR}")
+message(STATUS "  Runtime Install Prefix: ${CMAKE_INSTALL_PREFIX}")
+message(STATUS "  License Enforcement: ${DS_LICENSE_ENFORCEMENT_ENABLED}")

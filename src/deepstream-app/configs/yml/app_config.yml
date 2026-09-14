@@ -9,7 +9,7 @@ application:
   # 是否启用JPEG图像保存（0=禁用，1=启用）
   #enable-jpeg-save: 1
   # 是否开启检测到目标后智能录制（0=禁用，1=启用）
-  smart-rec-detect-default: 1
+  smart-rec-detect-default: 0
 
 tiled-display:
   enable: 1
@@ -30,10 +30,7 @@ tiled-display:
 # -----------------------------------------------------------------------------
 source:
   # 视频源CSV配置文件路径（包含RTSP/文件流地址等）
-  # csv-file-path: sources.csv
   csv-file-path: file_sources.csv
-  #file_sources.csv
-  #debug_sources.csv
 
 # -----------------------------------------------------------------------------
 # 预处理模块配置（用于推理前的图像预处理）
@@ -84,9 +81,9 @@ tracker:
   # 跟踪器处理高度（对于NvDCF和NvDeepSORT必须是32的倍数）
   tracker-height: 1080
   # 跟踪器底层库文件路径
-  ll-lib-file: /opt/nvidia/deepstream/deepstream/lib/libsot.so
+  ll-lib-file: /opt/deepstream-app-custom/lib/libsot.so
   # 跟踪器配置文件路径
-  ll-config-file: /opt/nvidia/deepstream/deepstream/sot_plugin/config/config_sot.yml
+  ll-config-file: /opt/deepstream-app-custom/configs/config_sot.yml
   # 使用的GPU设备ID
   gpu-id: 0
   # 是否在OSD上显示跟踪ID（0=禁用，1=启用）
@@ -99,52 +96,6 @@ tracker:
   static-target-filter-center-threshold: 5.0
   # 目标框尺寸变化阈值（比例，例如0.05表示5%）
   static-target-filter-size-threshold: 0.05
-
-# -----------------------------------------------------------------------------
-# 目标跟踪器配置（自定义多目标跟踪 MOT）
-# -----------------------------------------------------------------------------
-# tracker:
-#   enable: 1
-#   # For NvDCF and NvDeepSORT tracker, tracker-width and tracker-height must be a multiple of 32, respectively
-#   tracker-width: 960
-#   tracker-height: 544
-#   ll-lib-file: /opt/nvidia/deepstream/deepstream/lib/libnvds_nvmultiobjecttracker.so
-#   # ll-config-file required to set different tracker types
-#   # ll-config-file: config_tracker_IOU.yml
-#   # ll-config-file: config_tracker_NvSORT.yml
-#   ll-config-file: /home/nvidia/work/deepstream-app-custom/src/deepstream-app/configs/yml/config_tracker_NvDCF_perf.yml
-#   # ll-config-file: config_tracker_NvDCF_accuracy.yml
-#   # ll-config-file: config_tracker_NvDeepSORT.yml
-#   gpu-id: 0
-#   display-tracking-id: 1
-
-# -----------------------------------------------------------------------------
-# 视频识别模块配置（多帧动作/行为识别）
-# -----------------------------------------------------------------------------
-videorecognition:
-  # 是否启用视频识别（0=禁用，1=启用）
-  enable: 0
-  # 模块唯一标识符
-  unique-id: 15
-  # 使用的GPU设备ID
-  gpu-id: 0
-  # NvBuf内存类型（0=默认）
-  nvbuf-memory-type: 0
-  # 模型输入处理宽度（像素）
-  processing-width: 64
-  # 模型输入处理高度（像素）
-  processing-height: 64
-  # 模型输入的视频片段长度（帧数）
-  model-clip-length: 32
-  # 采样率（每隔多少帧采样一次）
-  sampling-rate: 5
-  # 每条轨迹两次推理间隔；0 表示沿用 sampling-rate
-  infer-interval: 30
-  classifier-threshold: 0.5
-  # TensorRT引擎文件路径
-  trt-engine-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/gst-videorecognition/models/x3d.engine
-  # 分类标签文件路径
-  labels-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/cls_labels.txt
 
 # -----------------------------------------------------------------------------
 # UDP JSON 元数据接收插件配置（用于接收外部JSON元数据）

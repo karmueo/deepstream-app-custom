@@ -19,6 +19,7 @@
 #include "deepstream_app_probes.h"
 #include "nvds_obj_encode.h"
 #include "gstudpjsonmeta.h"
+#include <math.h>
 
 GST_DEBUG_CATEGORY_EXTERN(NVDS_APP);
 

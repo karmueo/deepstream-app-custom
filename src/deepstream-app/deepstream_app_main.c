@@ -14,6 +14,7 @@
 #include "deepstream_app.h"
 #include "deepstream_app_callbacks.h"
 #include "gst-nvdssr.h"
+#include "license_gate.h"
 #include "nvds_version.h"
 #include "nvdsmeta_schema.h"
 #include "nvbufsurftransform.h"
@@ -49,6 +50,9 @@ static gchar    **input_uris = NULL;
 static gboolean   print_version = FALSE;
 static gboolean   show_bbox_text = FALSE;
 static gboolean   print_dependencies_version = FALSE;
+static gchar     *license_request_file = NULL;
+static gchar     *license_file = NULL;
+static gboolean   print_license_info = FALSE;
 static gboolean   quit = FALSE;
 static gint       return_value = 0;
 guint             num_instances; // 实例数量
@@ -82,6 +86,12 @@ GOptionEntry entries[] = {
      "Set the config file", NULL},
     {"input-uri", 'i', 0, G_OPTION_ARG_FILENAME_ARRAY, &input_uris,
      "Set the input uri (file://stream or rtsp://stream)", NULL},
+    {"license-request", 0, 0, G_OPTION_ARG_FILENAME, &license_request_file,
+     "Write an offline license request and exit", "FILE"},
+    {"license-file", 0, 0, G_OPTION_ARG_FILENAME, &license_file,
+     "Use a license file other than the default", "FILE"},
+    {"license-info", 0, 0, G_OPTION_ARG_NONE, &print_license_info,
+     "Print device fingerprint and license status", NULL},
     {NULL},
 };
 
@@ -2780,11 +2790,6 @@ int main(int argc, char *argv[])
 
     GST_DEBUG_CATEGORY_INIT(NVDS_APP, "NVDS_APP", 0, NULL);
 
-    int current_device = -1;
-    cudaGetDevice(&current_device);
-    struct cudaDeviceProp prop;
-    cudaGetDeviceProperties(&prop, current_device);
-
     if (!g_option_context_parse(ctx, &argc, &argv, &error))
     {
         NVGSTDS_ERR_MSG_V("%s", error->message);
@@ -2807,6 +2812,82 @@ int main(int argc, char *argv[])
         nvds_dependencies_version_print();
         return 0;
     }
+
+    gchar app_version[32];
+    g_snprintf(app_version, sizeof(app_version), "%d.%d.%d",
+               NVDS_APP_VERSION_MAJOR, NVDS_APP_VERSION_MINOR,
+               NVDS_APP_VERSION_MICRO);
+
+    if (license_request_file)
+    {
+        DsLicenseInfo request_info;
+        DsLicenseStatus request_status = ds_license_write_request(
+            license_request_file, app_version, &request_info);
+        if (request_status != DS_LICENSE_OK)
+        {
+            g_printerr("License request failed [%s]: %s\n",
+                       ds_license_status_name(request_status),
+                       request_info.error);
+            return 77;
+        }
+        g_print("License request written to %s\nDevice fingerprint: %s\n",
+                license_request_file, request_info.device_fingerprint);
+        return 0;
+    }
+
+    if (print_license_info)
+    {
+#if DS_LICENSE_ENFORCEMENT_ENABLED
+        DsLicenseInfo license_details;
+        DsLicenseStatus license_status =
+            ds_license_validate(license_file, &license_details);
+        g_print("Device fingerprint: %s\n",
+                license_details.device_fingerprint[0]
+                    ? license_details.device_fingerprint
+                    : "unavailable");
+        g_print("License status: %s\n",
+                ds_license_status_name(license_status));
+        if (license_status == DS_LICENSE_OK)
+        {
+            g_print("License ID: %s\nCustomer: %s\n",
+                    license_details.license_id, license_details.customer);
+            return 0;
+        }
+        g_printerr("License error: %s\n", license_details.error);
+        return 77;
+#else
+        char device_fingerprint[DS_LICENSE_FINGERPRINT_SIZE] = {0};
+        char device_error[DS_LICENSE_ERROR_SIZE] = {0};
+        DsLicenseStatus device_status = ds_license_get_device_fingerprint(
+            device_fingerprint, device_error);
+        g_print("Device fingerprint: %s\n",
+                device_status == DS_LICENSE_OK ? device_fingerprint
+                                               : "unavailable");
+        if (device_status != DS_LICENSE_OK)
+            g_print("Device fingerprint error: %s\n", device_error);
+        g_print("License enforcement: disabled (development build)\n");
+        return 0;
+#endif
+    }
+
+#if DS_LICENSE_ENFORCEMENT_ENABLED
+    DsLicenseInfo license_details;
+    DsLicenseStatus license_status =
+        ds_license_validate(license_file, &license_details);
+    if (license_status != DS_LICENSE_OK)
+    {
+        g_printerr("License validation failed [%s]: %s\n",
+                   ds_license_status_name(license_status),
+                   license_details.error);
+        g_printerr("Generate an offline request with --license-request FILE\n");
+        return 77;
+    }
+#endif
+
+    int current_device = -1;
+    cudaGetDevice(&current_device);
+    struct cudaDeviceProp prop;
+    cudaGetDeviceProperties(&prop, current_device);
 
     if (cfg_files)
     {
