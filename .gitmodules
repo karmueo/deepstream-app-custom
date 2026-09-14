@@ -15,6 +15,7 @@
 [submodule "src/gst-videorecognition"]
 	path = src/gst-videorecognition
 	url = https://github.com/karmueo/gstvideorecognition.git
+	branch = anti-uav-dev
 [submodule "src/gst-udpjson_meta"]
 	path = src/gst-udpjson_meta
 	url = https://github.com/karmueo/gst-udpjson_meta.git
