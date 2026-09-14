@@ -6,6 +6,7 @@
 [submodule "sot_plugin"]
 	path = sot_plugin
 	url = https://github.com/karmueo/deepstream_sot_plugin.git
+	branch = anti-uav-dev
 	ignore = dirty
 [submodule "src/gst-udpmulticast_sink"]
 	path = src/gst-udpmulticast_sink
