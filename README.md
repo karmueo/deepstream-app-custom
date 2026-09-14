@@ -163,6 +163,13 @@ cmake --build .
 sudo cmake --install .
 ```
 
+## 编译自定义 2D 预处理库
+
+```sh
+make -C src/nvdspreprocess_lib clean
+make -C src/nvdspreprocess_lib
+```
+
 ## 编译主程序
 
 ```sh
@@ -203,7 +210,7 @@ export GST_PLUGIN_PATH=/opt/nvidia/deepstream/deepstream/lib/gst-plugins:$GST_PL
 当前 `sink1.type: 2` 使用的是 `EglSink`，推荐通过用户级 `systemd` 服务在桌面会话中自动启动：
 
 ```bash
-/opt/nvidia/deepstream/deepstream/deepstream-app-custom/start_rgb_app.sh
+/opt/deepstream-app-custom/start_rgb_app.sh
 ```
 
 ## 步骤如下：
@@ -215,11 +222,9 @@ systemctl get-default
 systemctl status gdm --no-pager
 ```
 
-2) 安装 GUI 启动脚本与用户级 service
+2) 主程序的 `cmake --install` 会同时安装 GUI 和 DRM 启动脚本，只需安装用户级 service
 
 ```bash
-sudo install -m 755 ./start_rgb_app.sh \
-  /opt/nvidia/deepstream/deepstream/deepstream-app-custom/start_rgb_app.sh
 mkdir -p ~/.config/systemd/user
 install -m 644 ./systemd/user/deepstream-app-rgb.service \
   ~/.config/systemd/user/deepstream-app-rgb.service
@@ -258,7 +263,7 @@ systemctl --user disable deepstream-app-rgb.service
 - `start_rgb_app.sh` 会保留图形会话环境，并在缺失时兜底设置 `DISPLAY`、`XDG_RUNTIME_DIR`、`XAUTHORITY`。
 - GUI 模式依赖桌面会话；如果系统没有自动登录，用户级服务不会真正启动窗口。
 - 如果你的应用依赖其他服务（如 MQTT），可在 `systemd/user/deepstream-app-rgb.service` 里继续追加 `After=`/`Wants=`。
-- 如果 `/opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs` 还没建立，请先按主程序编译步骤执行一次 `cmake --install build`。
+- 如果 `/opt/deepstream-app-custom/configs` 还没建立，请先按主程序编译步骤执行一次 `cmake --install build`。
 - Jetson 桌面环境默认会启动 `nvpmodel_indicator`。如果启动后持续弹出 `System throttled due to over-current`，通常不是 DeepStream 本身报错，而是设备处于高功耗模式时触发了过流保护。
 - 当前设备建议优先使用 `25W` 模式，不建议长期使用 `MAXN_SUPER` 跑 GUI 推理：
 
@@ -282,8 +287,6 @@ pkill -f nvpmodel_indicator.py
 改回 `5`，然后使用系统级 DRM 服务：
 
 ```bash
-sudo install -m 755 ./start_rgb_drm_app.sh \
-  /opt/nvidia/deepstream/deepstream/deepstream-app-custom/start_rgb_drm_app.sh
 sudo install -m 644 ./systemd/deepstream-app-rgb-drm.service \
   /etc/systemd/system/deepstream-app-rgb-drm.service
 sudo systemctl daemon-reload
@@ -314,9 +317,9 @@ Conflicts=deepstream-night.service
 Type=simple
 User=tl
 Group=tl
-WorkingDirectory=/opt/nvidia/deepstream/deepstream
+WorkingDirectory=/opt/deepstream-app-custom
 # 白天使用的 RGB 配置文件
-ExecStart=/opt/nvidia/deepstream/deepstream/bin/deepstream-app -c /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/rgb_app_config.txt
+ExecStart=/opt/deepstream-app-custom/bin/deepstream-app-custom.bin -c /opt/deepstream-app-custom/configs/rgb_app_config.txt
 Restart=always
 RestartSec=30
 
@@ -337,9 +340,9 @@ Conflicts=deepstream-day.service
 Type=simple
 User=tl
 Group=tl
-WorkingDirectory=/opt/nvidia/deepstream/deepstream
+WorkingDirectory=/opt/deepstream-app-custom
 # 晚上使用的 Night 配置文件
-ExecStart=/opt/nvidia/deepstream/deepstream/bin/deepstream-app -c /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/night_app_config.txt
+ExecStart=/opt/deepstream-app-custom/bin/deepstream-app-custom.bin -c /opt/deepstream-app-custom/configs/night_app_config.txt
 Restart=always
 RestartSec=30
 

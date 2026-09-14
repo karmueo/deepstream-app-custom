@@ -1,6 +1,7 @@
 *.o
 *.so
 *.mp4
+!test/uav.mp4
 *.jpg
 triton.log
 

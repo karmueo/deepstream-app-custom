@@ -13,7 +13,8 @@ from typing import Iterable
 
 
 REQUIRED = (
-    "bin/deepstream-app-custom",
+    "start_rgb_app.sh",
+    "start_rgb_drm_app.sh",
     "bin/deepstream-app-custom.bin",
     "configs/yml/app_config.yml",
     "configs/yml/config_infer_primary_yolo_352_rgb.yml",
@@ -25,12 +26,14 @@ REQUIRED = (
     "models/nanotrack_head_fp16.engine",
     "models/nanotrack_backbone_fp16.engine",
     "models/nanotrack_backbone_search_fp16.engine",
+    "samples/uav.mp4",
     "lib/libsot.so",
     "lib/libnvdsinfer_custom_impl_Yolo.so",
     "lib/libcustom2d_preprocess.so",
     "gst-plugins/libudpjsonmeta.so",
     "gst-plugins/libudpmulticast_sink.so",
 )
+ALLOWED_SHELL_SCRIPTS = {"start_rgb_app.sh", "start_rgb_drm_app.sh"}
 FORBIDDEN_SUFFIXES = {
     ".c",
     ".cc",
@@ -44,6 +47,9 @@ FORBIDDEN_SUFFIXES = {
 }
 TEXT_SUFFIXES = {"", ".conf", ".csv", ".ini", ".json", ".txt", ".yaml", ".yml"}
 RTSP_CREDENTIALS = re.compile(rb"rtsp://[^\s,/:]+:[^\s,@]+@", re.IGNORECASE)
+RUNTIME_PATHS = re.compile(
+    rb"(?:file://)?/opt/deepstream-app-custom/[A-Za-z0-9._/-]+"
+)
 
 
 def _files(root: Path) -> Iterable[Path]:
@@ -75,7 +81,7 @@ def _run(command: list[str], env: dict[str, str] | None = None) -> str:
     return result.stdout
 
 
-def verify(root: Path, runtime_checks: bool) -> list[str]:
+def verify(root: Path, runtime_checks: bool, development: bool) -> list[str]:
     errors: list[str] = []
     elf_files: list[Path] = []
     for relative in REQUIRED:
@@ -84,7 +90,10 @@ def verify(root: Path, runtime_checks: bool) -> list[str]:
 
     for path in _files(root):
         relative = path.relative_to(root)
-        if path.suffix.lower() in FORBIDDEN_SUFFIXES:
+        if (
+            path.suffix.lower() in FORBIDDEN_SUFFIXES
+            and str(relative) not in ALLOWED_SHELL_SCRIPTS
+        ):
             errors.append(f"forbidden development file: {relative}")
         if _contains_bytes(path, b"/home/nvidia/"):
             errors.append(f"developer absolute path found: {relative}")
@@ -92,12 +101,24 @@ def verify(root: Path, runtime_checks: bool) -> list[str]:
             data = path.read_bytes()
             if RTSP_CREDENTIALS.search(data):
                 errors.append(f"RTSP credentials found: {relative}")
+            for match in RUNTIME_PATHS.finditer(data):
+                runtime_path = match.group().decode("utf-8")
+                if runtime_path.startswith("file://"):
+                    runtime_path = runtime_path.removeprefix("file://")
+                referenced = root / Path(runtime_path).relative_to(
+                    "/opt/deepstream-app-custom"
+                )
+                if not referenced.exists():
+                    errors.append(
+                        f"missing runtime path referenced by {relative}: "
+                        f"{runtime_path}"
+                    )
         with path.open("rb") as stream:
             is_elf = stream.read(4) == b"\x7fELF"
         if is_elf:
             elf_files.append(path)
             sections = _run(["readelf", "-S", str(path)])
-            if ".debug_" in sections:
+            if not development and ".debug_" in sections:
                 errors.append(f"embedded debug section found: {relative}")
 
     if runtime_checks and not errors:
@@ -134,11 +155,16 @@ def main() -> int:
         action="store_true",
         help="also run ldd and gst-inspect on a compatible Jetson",
     )
+    parser.add_argument(
+        "--development",
+        action="store_true",
+        help="allow debug sections in a development installation",
+    )
     args = parser.parse_args()
     root = args.root.resolve()
     if not root.is_dir():
         parser.error(f"not a directory: {root}")
-    errors = verify(root, args.runtime_checks)
+    errors = verify(root, args.runtime_checks, args.development)
     if errors:
         for error in errors:
             print(f"ERROR: {error}", file=sys.stderr)

@@ -42,7 +42,6 @@ Release 构建会拒绝使用仓库中无对应私钥的占位公钥：
 repo_root=$(pwd)
 release_cxx_flags="-O2 -DNDEBUG -ffile-prefix-map=${repo_root}=."
 cmake -B sot_plugin/build -S sot_plugin -DCMAKE_BUILD_TYPE=Release \
-  -DOpenCV_DIR=/usr/lib/aarch64-linux-gnu/cmake/opencv4 \
   -DCMAKE_CXX_FLAGS_RELEASE="${release_cxx_flags}"
 cmake --build sot_plugin/build --clean-first --parallel
 cmake -B src/gst-udpjson_meta/build -S src/gst-udpjson_meta \
@@ -55,7 +54,13 @@ cmake -B src/gst-udpmulticast_sink/build -S src/gst-udpmulticast_sink \
 cmake --build src/gst-udpmulticast_sink/build --clean-first --parallel
 make -C DeepStream-Yolo/nvdsinfer_custom_impl_Yolo clean
 make -C DeepStream-Yolo/nvdsinfer_custom_impl_Yolo
+make -C src/nvdspreprocess_lib clean
+make -C src/nvdspreprocess_lib
 ```
+
+SOT 构建会同时校验 OpenCV 4.5 头文件以及 Ubuntu 22.04 的
+`libopencv_core.so.4.5d`、`libopencv_imgproc.so.4.5d`，避免误链接
+`/usr/local` 下的其他 OpenCV ABI。
 
 随后编译主程序并生成 DEB：
 
@@ -90,7 +95,7 @@ cmake --build build --clean-first --parallel
 安装 DEB 后，客户 Jetson 上生成申请：
 
 ```bash
-/opt/deepstream-app-custom/bin/deepstream-app-custom \
+/opt/deepstream-app-custom/bin/deepstream-app-custom.bin \
   --license-request license-request.json
 ```
 
@@ -118,7 +123,7 @@ python3 tools/license_issuer.py inspect \
 ```bash
 sudo install -D -m 0644 license.lic \
   /etc/deepstream-app-custom/license.lic
-/opt/deepstream-app-custom/bin/deepstream-app-custom --license-info
+/opt/deepstream-app-custom/bin/deepstream-app-custom.bin --license-info
 ```
 
 可使用 `--license-file FILE` 临时覆盖默认路径。Release 程序正常启动时会在解析配置、加载 engine 和创建 CUDA/GStreamer pipeline 之前 fail-closed 校验许可证，失败返回码为 77。

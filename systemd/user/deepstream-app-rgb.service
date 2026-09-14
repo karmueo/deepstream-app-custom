@@ -6,8 +6,8 @@ PartOf=graphical-session.target
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/nvidia/deepstream/deepstream
-ExecStart=/opt/nvidia/deepstream/deepstream/deepstream-app-custom/start_rgb_app.sh
+WorkingDirectory=/opt/deepstream-app-custom
+ExecStart=/opt/deepstream-app-custom/start_rgb_app.sh
 Restart=on-failure
 RestartSec=5
 

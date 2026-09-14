@@ -1,6 +1,0 @@
-#!/bin/sh
-set -e
-
-install -d -m 0755 /etc/deepstream-app-custom
-
-exit 0

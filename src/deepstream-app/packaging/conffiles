@@ -1,5 +1,0 @@
-/opt/deepstream-app-custom/configs/yml/app_config.yml
-/opt/deepstream-app-custom/configs/yml/config_infer_primary_yolo_352_rgb.yml
-/opt/deepstream-app-custom/configs/yml/file_sources.csv
-/opt/deepstream-app-custom/configs/config_preprocess_rgb_352_primary.txt
-/opt/deepstream-app-custom/configs/config_sot.yml

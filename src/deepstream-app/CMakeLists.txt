@@ -14,6 +14,13 @@ cmake_minimum_required(VERSION 3.16)
 project(deepstream_app_custom VERSION 1.0.0 LANGUAGES C CXX)
 get_filename_component(REPOSITORY_ROOT
     "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
+
+# The runtime configuration contains absolute paths below this prefix. Keep the
+# CMake install and CPack layouts aligned; DESTDIR remains available for staged
+# package verification.
+set(RUNTIME_INSTALL_PREFIX "/opt/deepstream-app-custom")
+set(CMAKE_INSTALL_PREFIX "${RUNTIME_INSTALL_PREFIX}" CACHE PATH
+    "Runtime installation prefix" FORCE)
 # 设置 CUDA 编译器路径
 if(NOT DEFINED CMAKE_CUDA_COMPILER)
     set(CMAKE_CUDA_COMPILER "/usr/local/cuda/bin/nvcc")
@@ -239,21 +246,17 @@ target_link_libraries(deepstream-app PRIVATE
     ${GSTAPP_LIBRARIES}
 )
 
-# Link udpjsonmeta plugin library if available (for callback symbols)
-find_library(UDPJSONMETA_LIB
-    NAMES udpjsonmeta
-    PATHS
-        ${CMAKE_CURRENT_SOURCE_DIR}/../gst-udpjson_meta/build
-        /opt/nvidia/deepstream/deepstream/lib/gst-plugins
-        /opt/nvidia/deepstream/deepstream/lib
-    NO_DEFAULT_PATH
-)
-if(UDPJSONMETA_LIB)
-    target_link_libraries(deepstream-app PRIVATE ${UDPJSONMETA_LIB})
-    message(STATUS "Linking udpjsonmeta: ${UDPJSONMETA_LIB}")
-else()
-    message(WARNING "udpjsonmeta library not found; deepstream-app may fail to link if callbacks are used")
+# Link the repository-built udpjsonmeta library for callback symbols. Falling
+# back to a globally installed copy can silently package a different ABI.
+set(UDPJSONMETA_LIBRARY
+    "${CMAKE_CURRENT_SOURCE_DIR}/../gst-udpjson_meta/build/libudpjsonmeta.so"
+    CACHE FILEPATH "Repository-built udpjsonmeta library")
+if(NOT EXISTS "${UDPJSONMETA_LIBRARY}")
+    message(FATAL_ERROR
+        "Missing UDPJSONMETA_LIBRARY: ${UDPJSONMETA_LIBRARY}. Build src/gst-udpjson_meta before configuring the main application.")
 endif()
+target_link_libraries(deepstream-app PRIVATE "${UDPJSONMETA_LIBRARY}")
+message(STATUS "Linking udpjsonmeta: ${UDPJSONMETA_LIBRARY}")
 
 # Set RPATH for runtime library loading
 set_target_properties(deepstream-app PROPERTIES
@@ -280,22 +283,20 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release" AND CMAKE_OBJCOPY AND CMAKE_STRIP)
 endif()
 
 # Installation/package layout under /opt/deepstream-app-custom.
-if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
-    set(CMAKE_INSTALL_PREFIX "/opt/deepstream-app-custom" CACHE PATH
-        "Runtime installation prefix" FORCE)
-endif()
 set(CMAKE_INSTALL_DEFAULT_DIRECTORY_PERMISSIONS
     OWNER_READ OWNER_WRITE OWNER_EXECUTE
     GROUP_READ GROUP_EXECUTE
     WORLD_READ WORLD_EXECUTE)
 install(TARGETS deepstream-app RUNTIME DESTINATION bin)
-install(PROGRAMS "${CMAKE_CURRENT_SOURCE_DIR}/packaging/deepstream-app-custom"
-        DESTINATION bin)
+install(PROGRAMS
+        "${REPOSITORY_ROOT}/start_rgb_app.sh"
+        "${REPOSITORY_ROOT}/start_rgb_drm_app.sh"
+        DESTINATION .)
 
 install(FILES
     configs/yml/app_config.yml
     configs/yml/config_infer_primary_yolo_352_rgb.yml
-    "${CMAKE_CURRENT_SOURCE_DIR}/packaging/file_sources.csv"
+    configs/yml/file_sources.csv
     DESTINATION configs/yml
 )
 install(FILES
@@ -303,7 +304,7 @@ install(FILES
     configs/labels.txt
     DESTINATION configs
 )
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/packaging/config_sot.yml"
+install(FILES "${REPOSITORY_ROOT}/sot_plugin/config_sot.yml"
         DESTINATION configs)
 install(FILES
     models/yolo26n_rgb_352_uav_no-p2_b4.engine
@@ -312,44 +313,73 @@ install(FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/../../sot_plugin/models/nanotrack_backbone_search_fp16.engine"
     DESTINATION models
 )
+install(FILES "${REPOSITORY_ROOT}/test/uav.mp4"
+        DESTINATION samples)
 
-set(CUSTOM_PREPROCESS_LIBRARY
-    "/opt/nvidia/deepstream/deepstream/lib/gst-plugins/libcustom2d_preprocess.so"
+set(PACKAGED_CUSTOM_PREPROCESS_LIBRARY
+    "${CMAKE_CURRENT_SOURCE_DIR}/../nvdspreprocess_lib/libcustom2d_preprocess.so"
     CACHE FILEPATH "Built custom DeepStream preprocess library to package")
 set(SOT_LIBRARY
     "${CMAKE_CURRENT_SOURCE_DIR}/../../sot_plugin/lib/libsot.so"
     CACHE FILEPATH "Built SOT tracker library to package")
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    execute_process(
-        COMMAND "${CMAKE_READELF}" -d "${SOT_LIBRARY}"
-        RESULT_VARIABLE _SOT_READELF_RESULT
-        OUTPUT_VARIABLE _SOT_DYNAMIC_SECTION
-        ERROR_VARIABLE _SOT_READELF_ERROR
-    )
-    if(NOT _SOT_READELF_RESULT EQUAL 0)
+set(YOLO_CUSTOM_LIBRARY
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../DeepStream-Yolo/nvdsinfer_custom_impl_Yolo/libnvdsinfer_custom_impl_Yolo.so"
+    CACHE FILEPATH "Built DeepStream YOLO parser library to package")
+set(UDPMULTICAST_LIBRARY
+    "${CMAKE_CURRENT_SOURCE_DIR}/../gst-udpmulticast_sink/build/libudpmulticast_sink.so"
+    CACHE FILEPATH "Repository-built UDP multicast sink library")
+
+set(_RUNTIME_REQUIRED_INPUTS
+    "${YOLO_CUSTOM_LIBRARY}"
+    "${PACKAGED_CUSTOM_PREPROCESS_LIBRARY}"
+    "${SOT_LIBRARY}"
+    "${UDPJSONMETA_LIBRARY}"
+    "${UDPMULTICAST_LIBRARY}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/models/yolo26n_rgb_352_uav_no-p2_b4.engine"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../sot_plugin/models/nanotrack_head_fp16.engine"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../sot_plugin/models/nanotrack_backbone_fp16.engine"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../sot_plugin/models/nanotrack_backbone_search_fp16.engine"
+    "${REPOSITORY_ROOT}/test/uav.mp4"
+)
+foreach(_runtime_input IN LISTS _RUNTIME_REQUIRED_INPUTS)
+    if(NOT EXISTS "${_runtime_input}")
         message(FATAL_ERROR
-            "Unable to inspect SOT_LIBRARY: ${_SOT_READELF_ERROR}")
+            "Missing runtime input: ${_runtime_input}. Build all project runtime libraries and models before configuring the main application.")
     endif()
-    foreach(_opencv_soname IN ITEMS
-            "libopencv_core.so.4.5d" "libopencv_imgproc.so.4.5d")
-        string(FIND "${_SOT_DYNAMIC_SECTION}" "${_opencv_soname}"
-            _opencv_soname_offset)
-        if(_opencv_soname_offset EQUAL -1)
-            message(FATAL_ERROR
-                "SOT_LIBRARY must link against Ubuntu 22.04 ${_opencv_soname}. Rebuild it with -DOpenCV_DIR=/usr/lib/aarch64-linux-gnu/cmake/opencv4.")
-        endif()
-    endforeach()
+endforeach()
+
+if(NOT CMAKE_READELF)
+    find_program(CMAKE_READELF readelf REQUIRED)
 endif()
+execute_process(
+    COMMAND "${CMAKE_READELF}" -d "${SOT_LIBRARY}"
+    RESULT_VARIABLE _SOT_READELF_RESULT
+    OUTPUT_VARIABLE _SOT_DYNAMIC_SECTION
+    ERROR_VARIABLE _SOT_READELF_ERROR
+)
+if(NOT _SOT_READELF_RESULT EQUAL 0)
+    message(FATAL_ERROR
+        "Unable to inspect SOT_LIBRARY: ${_SOT_READELF_ERROR}")
+endif()
+foreach(_opencv_soname IN ITEMS
+        "libopencv_core.so.4.5d" "libopencv_imgproc.so.4.5d")
+    string(FIND "${_SOT_DYNAMIC_SECTION}" "${_opencv_soname}"
+        _opencv_soname_offset)
+    if(_opencv_soname_offset EQUAL -1)
+        message(FATAL_ERROR
+            "SOT_LIBRARY must link against Ubuntu 22.04 ${_opencv_soname}. Rebuild sot_plugin with its default SOT_OPENCV_* settings.")
+    endif()
+endforeach()
 
 install(FILES
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../DeepStream-Yolo/nvdsinfer_custom_impl_Yolo/libnvdsinfer_custom_impl_Yolo.so"
-    "${CUSTOM_PREPROCESS_LIBRARY}"
+    "${YOLO_CUSTOM_LIBRARY}"
+    "${PACKAGED_CUSTOM_PREPROCESS_LIBRARY}"
     DESTINATION lib
 )
 install(FILES "${SOT_LIBRARY}" DESTINATION lib RENAME libsot.so)
 install(FILES
-    "${CMAKE_CURRENT_SOURCE_DIR}/../gst-udpjson_meta/build/libudpjsonmeta.so"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../gst-udpmulticast_sink/build/libudpmulticast_sink.so"
+    "${UDPJSONMETA_LIBRARY}"
+    "${UDPMULTICAST_LIBRARY}"
     DESTINATION gst-plugins
 )
 
@@ -402,6 +432,17 @@ if(BUILD_LICENSE_TESTS)
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(_DEBIAN_CONTROL_DIR "${CMAKE_CURRENT_BINARY_DIR}/debian-control")
+    file(MAKE_DIRECTORY "${_DEBIAN_CONTROL_DIR}")
+    file(WRITE "${_DEBIAN_CONTROL_DIR}/postinst"
+        "#!/bin/sh\nset -e\n\ninstall -d -m 0755 /etc/deepstream-app-custom\n\nexit 0\n")
+    file(WRITE "${_DEBIAN_CONTROL_DIR}/conffiles"
+        "${RUNTIME_INSTALL_PREFIX}/configs/yml/app_config.yml\n"
+        "${RUNTIME_INSTALL_PREFIX}/configs/yml/config_infer_primary_yolo_352_rgb.yml\n"
+        "${RUNTIME_INSTALL_PREFIX}/configs/yml/file_sources.csv\n"
+        "${RUNTIME_INSTALL_PREFIX}/configs/config_preprocess_rgb_352_primary.txt\n"
+        "${RUNTIME_INSTALL_PREFIX}/configs/config_sot.yml\n")
+
     set(CPACK_GENERATOR "DEB")
     set(CPACK_PACKAGE_NAME "deepstream-app-custom")
     set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
@@ -415,9 +456,10 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
     set(CPACK_DEBIAN_PACKAGE_DEPENDS
         "deepstream-7.1, nvidia-l4t-core (>= 36.4), nvidia-l4t-core (<< 36.5), libssl3, libjson-glib-1.0-0, libopencv-core4.5d, libopencv-imgproc4.5d")
     set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
-        "${CMAKE_CURRENT_SOURCE_DIR}/packaging/postinst"
-        "${CMAKE_CURRENT_SOURCE_DIR}/packaging/conffiles")
-    set(CPACK_PACKAGING_INSTALL_PREFIX "/opt/deepstream-app-custom")
+        "${_DEBIAN_CONTROL_DIR}/postinst"
+        "${_DEBIAN_CONTROL_DIR}/conffiles")
+    set(CPACK_DEBIAN_PACKAGE_CONTROL_STRICT_PERMISSION TRUE)
+    set(CPACK_PACKAGING_INSTALL_PREFIX "${RUNTIME_INSTALL_PREFIX}")
     set(CPACK_STRIP_FILES TRUE)
     include(CPack)
 else()

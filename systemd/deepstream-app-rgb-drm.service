@@ -5,7 +5,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/nvidia/deepstream/deepstream
+WorkingDirectory=/opt/deepstream-app-custom
+StateDirectory=deepstream-app-custom
 Environment=DISPLAY=
 Environment=XAUTHORITY=
 Environment=WAYLAND_DISPLAY=
@@ -13,7 +14,7 @@ StandardInput=tty
 TTYPath=/dev/tty1
 TTYReset=yes
 TTYVHangup=yes
-ExecStart=/opt/nvidia/deepstream/deepstream/deepstream-app-custom/start_rgb_drm_app.sh
+ExecStart=/opt/deepstream-app-custom/start_rgb_drm_app.sh
 Restart=always
 RestartSec=30
 

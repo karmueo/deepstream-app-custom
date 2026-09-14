@@ -16,17 +16,19 @@ ifeq ($(CUDA_VER),)
 endif
 
 TARGET_DEVICE = $(shell gcc -dumpmachine | cut -f1 -d -)
+REPOSITORY_ROOT := $(abspath ../..)
 
 CXX:= g++
 NVCC:=/usr/local/cuda-$(CUDA_VER)/bin/nvcc
 
-SRCS:= nvdspreprocess_lib.cpp 
+NVDS_PREPROCESS_SOURCE_DIR?=/opt/nvidia/deepstream/deepstream/sources/gst-plugins/gst-nvdspreprocess/nvdspreprocess_lib
 
-INCS:= $(wildcard *.h)
 LIB:=libcustom2d_preprocess.so
 
 CFLAGS+= -fPIC -DHAVE_CONFIG_H -std=c++17 -Wall -Werror \
+	 -ffile-prefix-map=$(REPOSITORY_ROOT)=. \
 	 -I /usr/local/cuda-$(CUDA_VER)/include \
+	 -I $(NVDS_PREPROCESS_SOURCE_DIR) \
 	 -I /opt/nvidia/deepstream/deepstream/sources/gst-plugins/include \
 	 -I /opt/nvidia/deepstream/deepstream/sources/gst-plugins/gst-nvdspreprocess/include \
 	 -I /opt/nvidia/deepstream/deepstream/sources/includes
@@ -42,8 +44,7 @@ LIBS := -shared -Wl,-no-undefined \
 	-L$(LIB_INSTALL_DIR) -lnvdsgst_helper -lnvdsgst_meta -lnvds_meta -lnvbufsurface -lnvbufsurftransform\
 	-lcuda -Wl,-rpath,$(LIB_INSTALL_DIR)
 
-OBJS:= $(SRCS:.cpp=.o)
-OBJS:= $(OBJS:.cu=.o)
+OBJS:= nvdspreprocess_2d_lib.o nvdspreprocess_impl.o nvdspreprocess_conversion.o
 
 PKGS:= gstreamer-1.0 gstreamer-base-1.0 gstreamer-video-1.0
 
@@ -52,13 +53,19 @@ LIBS+=$(shell pkg-config --libs $(PKGS))
 
 all: $(LIB)
 
-%.o: %.cpp $(INCS) Makefile
+nvdspreprocess_2d_lib.o: $(NVDS_PREPROCESS_SOURCE_DIR)/nvdspreprocess_lib.cpp Makefile
 	@echo $(CFLAGS)
 	$(CXX) -c -o $@ $(CFLAGS) $<
 
-%.o: %.cu $(INCS) Makefile
+nvdspreprocess_impl.o: $(NVDS_PREPROCESS_SOURCE_DIR)/nvdspreprocess_impl.cpp Makefile
 	@echo $(CFLAGS)
-	$(NVCC) -c -o $@ --compiler-options '-fPIC' $<
+	$(CXX) -c -o $@ $(CFLAGS) $<
+
+nvdspreprocess_conversion.o: $(NVDS_PREPROCESS_SOURCE_DIR)/nvdspreprocess_conversion.cu Makefile
+	@echo $(CFLAGS)
+	$(NVCC) -c -o $@ --compiler-options '-fPIC -ffile-prefix-map=$(REPOSITORY_ROOT)=.' \
+		-I /usr/local/cuda-$(CUDA_VER)/include \
+		-I $(NVDS_PREPROCESS_SOURCE_DIR) $<
 
 $(LIB): $(OBJS) $(DEP) Makefile
 	@echo $(CFLAGS)
