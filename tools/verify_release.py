@@ -23,9 +23,14 @@ REQUIRED = (
     "configs/config_sot.yml",
     "configs/labels.txt",
     "models/yolo26n_rgb_352_uav_no-p2_b4.engine",
+    "models/yolo26n_rgb_352_uav_no-p2_b4.onnx",
     "models/nanotrack_head_fp16.engine",
+    "models/nanotrack_head.onnx",
     "models/nanotrack_backbone_fp16.engine",
+    "models/nanotrack_backbone.onnx",
     "models/nanotrack_backbone_search_fp16.engine",
+    "models/nanotrack_backbone_search.onnx",
+    "models/convert2trt.sh",
     "samples/uav.mp4",
     "lib/libsot.so",
     "lib/libnvdsinfer_custom_impl_Yolo.so",
@@ -33,7 +38,11 @@ REQUIRED = (
     "gst-plugins/libudpjsonmeta.so",
     "gst-plugins/libudpmulticast_sink.so",
 )
-ALLOWED_SHELL_SCRIPTS = {"start_rgb_app.sh", "start_rgb_drm_app.sh"}
+ALLOWED_SHELL_SCRIPTS = {
+    "start_rgb_app.sh",
+    "start_rgb_drm_app.sh",
+    "models/convert2trt.sh",
+}
 FORBIDDEN_SUFFIXES = {
     ".c",
     ".cc",
@@ -41,7 +50,6 @@ FORBIDDEN_SUFFIXES = {
     ".cu",
     ".h",
     ".hpp",
-    ".onnx",
     ".py",
     ".sh",
 }

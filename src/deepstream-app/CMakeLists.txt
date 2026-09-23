@@ -304,15 +304,56 @@ install(FILES
     configs/labels.txt
     DESTINATION configs
 )
-install(FILES "${REPOSITORY_ROOT}/sot_plugin/config_sot.yml"
-        DESTINATION configs)
+
+# The SOT source configuration is also used by the development installation
+# under the DeepStream tree, where its model paths are valid. Generate a
+# package-specific copy so the /opt/deepstream-app-custom runtime remains
+# self-contained when copied to another Jetson.
+set(SOT_CONFIG_SOURCE "${REPOSITORY_ROOT}/sot_plugin/config_sot.yml")
+set(SOT_RUNTIME_CONFIG
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/config_sot.yml")
+if(NOT EXISTS "${SOT_CONFIG_SOURCE}")
+    message(FATAL_ERROR "Missing SOT configuration: ${SOT_CONFIG_SOURCE}")
+endif()
+
+file(READ "${SOT_CONFIG_SOURCE}" _sot_runtime_config_content)
+set(_sot_legacy_model_dir
+    "/opt/nvidia/deepstream/deepstream/sot_plugin/models")
+set(_sot_runtime_model_dir "${RUNTIME_INSTALL_PREFIX}/models")
+foreach(_sot_engine IN ITEMS
+        nanotrack_head_fp16.engine
+        nanotrack_backbone_fp16.engine
+        nanotrack_backbone_search_fp16.engine)
+    string(REPLACE
+        "${_sot_legacy_model_dir}/${_sot_engine}"
+        "${_sot_runtime_model_dir}/${_sot_engine}"
+        _sot_runtime_config_content
+        "${_sot_runtime_config_content}")
+    string(FIND "${_sot_runtime_config_content}"
+        "${_sot_runtime_model_dir}/${_sot_engine}"
+        _sot_runtime_path_offset)
+    if(_sot_runtime_path_offset EQUAL -1)
+        message(FATAL_ERROR
+            "Unable to configure packaged SOT engine path for ${_sot_engine}")
+    endif()
+endforeach()
+file(WRITE "${SOT_RUNTIME_CONFIG}" "${_sot_runtime_config_content}")
+
+install(FILES "${SOT_RUNTIME_CONFIG}"
+        DESTINATION configs
+        RENAME config_sot.yml)
 install(FILES
     models/yolo26n_rgb_352_uav_no-p2_b4.engine
+    models/yolo26n_rgb_352_uav_no-p2_b4.onnx
     "${CMAKE_CURRENT_SOURCE_DIR}/../../sot_plugin/models/nanotrack_head_fp16.engine"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../sot_plugin/models/nanotrack_head.onnx"
     "${CMAKE_CURRENT_SOURCE_DIR}/../../sot_plugin/models/nanotrack_backbone_fp16.engine"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../sot_plugin/models/nanotrack_backbone.onnx"
     "${CMAKE_CURRENT_SOURCE_DIR}/../../sot_plugin/models/nanotrack_backbone_search_fp16.engine"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../sot_plugin/models/nanotrack_backbone_search.onnx"
     DESTINATION models
 )
+install(PROGRAMS models/convert2trt.sh DESTINATION models)
 install(FILES "${REPOSITORY_ROOT}/test/uav.mp4"
         DESTINATION samples)
 
@@ -336,9 +377,14 @@ set(_RUNTIME_REQUIRED_INPUTS
     "${UDPJSONMETA_LIBRARY}"
     "${UDPMULTICAST_LIBRARY}"
     "${CMAKE_CURRENT_SOURCE_DIR}/models/yolo26n_rgb_352_uav_no-p2_b4.engine"
+    "${CMAKE_CURRENT_SOURCE_DIR}/models/yolo26n_rgb_352_uav_no-p2_b4.onnx"
+    "${CMAKE_CURRENT_SOURCE_DIR}/models/convert2trt.sh"
     "${CMAKE_CURRENT_SOURCE_DIR}/../../sot_plugin/models/nanotrack_head_fp16.engine"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../sot_plugin/models/nanotrack_head.onnx"
     "${CMAKE_CURRENT_SOURCE_DIR}/../../sot_plugin/models/nanotrack_backbone_fp16.engine"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../sot_plugin/models/nanotrack_backbone.onnx"
     "${CMAKE_CURRENT_SOURCE_DIR}/../../sot_plugin/models/nanotrack_backbone_search_fp16.engine"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../sot_plugin/models/nanotrack_backbone_search.onnx"
     "${REPOSITORY_ROOT}/test/uav.mp4"
 )
 foreach(_runtime_input IN LISTS _RUNTIME_REQUIRED_INPUTS)

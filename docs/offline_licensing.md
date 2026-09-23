@@ -24,7 +24,7 @@ python3 tools/license_issuer.py keygen \
 cmake -B build -S src/deepstream-app \
   -DCMAKE_BUILD_TYPE=RelWithDebInfo \
   -DBUILD_LICENSE_TESTS=ON
-cmake --build build --parallel
+cmake --build build --parallel 2
 ./build/deepstream-app-custom.bin \
   -c src/deepstream-app/configs/yml/app_config.yml
 ```
@@ -75,7 +75,7 @@ ctest --test-dir build --output-on-failure
 cpack --config build/CPackConfig.cmake
 ```
 
-Release 构建必须提供正式公钥，并始终启用 fail-closed 许可校验。只有 Release 会生成 `build/CPackConfig.cmake`。`deepstream-app-custom.bin.debug` 是内部调试符号，不会进入 DEB。DEB 仅包含主程序、运行库/插件、配置、标签和已选 engine；DeepStream 7.1、L4T 36.4.x、CUDA 12.6 和 TensorRT 由目标 Jetson 预装。SOT 使用 Ubuntu 22.04 提供的 OpenCV 4.5 ABI，DEB 会显式安装 `libopencv-core4.5d` 和 `libopencv-imgproc4.5d`。
+Release 构建必须提供正式公钥，并始终启用 fail-closed 许可校验。只有 Release 会生成 `build/CPackConfig.cmake`。`deepstream-app-custom.bin.debug` 是内部调试符号，不会进入 DEB。DEB 包含主程序、运行库/插件、配置、标签、已选 engine、对应的 ONNX 模型及静态模型转换脚本；DeepStream 7.1、L4T 36.4.x、CUDA 12.6 和 TensorRT 由目标 Jetson 预装。SOT 使用 Ubuntu 22.04 提供的 OpenCV 4.5 ABI，DEB 会显式安装 `libopencv-core4.5d` 和 `libopencv-imgproc4.5d`。
 
 包内运行配置被声明为 Debian conffile。客户修改视频源或流水线参数后，升级
 DEB 时 `dpkg` 会保留修改或提示处理配置冲突，不会静默恢复成示例配置。
@@ -139,7 +139,7 @@ python3 tools/verify_release.py \
   "$staging_dir/opt/deepstream-app-custom" --runtime-checks
 ```
 
-`--runtime-checks` 需在相容 Jetson 上运行，额外检查 `ldd` 和两个 GStreamer 插件。静态检查会拒绝源码、头文件、ONNX、Python/shell 脚本、ELF 调试节、`/home/nvidia` 路径和 RTSP 明文账号。
+`--runtime-checks` 需在相容 Jetson 上运行，额外检查 `ldd` 和两个 GStreamer 插件。静态检查要求包内包含指定 ONNX 模型和 `models/convert2trt.sh`，并拒绝源码、头文件、Python 脚本、其他 shell 脚本、ELF 调试节、`/home/nvidia` 路径和 RTSP 明文账号。
 
 ## 安全边界
 
