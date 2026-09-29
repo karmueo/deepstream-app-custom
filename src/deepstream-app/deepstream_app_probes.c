@@ -16,6 +16,7 @@
 #include <string.h>
 
 #include "deepstream_app.h"
+#include "face_metadata.h"
 #include "deepstream_app_callbacks.h"
 #include "deepstream_app_probes.h"
 #include "nvds_obj_encode.h"
@@ -327,6 +328,9 @@ static void write_kitti_track_output(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
              l_obj = l_obj->next)
         {
             NvDsObjectMeta *obj = (NvDsObjectMeta *)l_obj->data;
+            if (appCtx->config.face_detect_config.enable &&
+                obj->unique_component_id == (gint)appCtx->config.face_detect_config.unique_id)
+                continue;
             float left = obj->tracker_bbox_info.org_bbox_coords.left;
             float top = obj->tracker_bbox_info.org_bbox_coords.top;
             float right = left + obj->tracker_bbox_info.org_bbox_coords.width;
@@ -416,6 +420,29 @@ static void process_meta(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
             gint class_index = obj->class_id;
             NvDsGieConfig *gie_config = NULL;
             gchar *str_ins_pos = NULL;
+
+            if (appCtx->config.face_detect_config.enable &&
+                obj->unique_component_id == (gint)appCtx->config.face_detect_config.unique_id) {
+                g_free(obj->text_params.display_text);
+                obj->text_params.display_text = NULL;
+                if (appCtx->show_bbox_text) {
+                    for (NvDsMetaList *l_meta = obj->obj_user_meta_list; l_meta; l_meta = l_meta->next) {
+                        NvDsUserMeta *user = (NvDsUserMeta *)l_meta->data;
+                        if (user->base_meta.meta_type != nvds_get_user_meta_type(FACE_DETECT_META_TYPE))
+                            continue;
+                        FaceDetectMeta *face = (FaceDetectMeta *)user->user_meta_data;
+                        obj->text_params.display_text = g_strdup_printf("%s %.3f", face->name,
+                                                                          face->similarity);
+                        obj->text_params.x_offset = obj->rect_params.left;
+                        obj->text_params.y_offset = MAX(0, (gint)obj->rect_params.top - 20);
+                        obj->text_params.font_params.font_color = appCtx->config.osd_config.text_color;
+                        obj->text_params.font_params.font_size = appCtx->config.osd_config.text_size;
+                        obj->text_params.font_params.font_name = appCtx->config.osd_config.font;
+                        break;
+                    }
+                }
+                continue;
+            }
 
             if (obj->unique_component_id ==
                 (gint)appCtx->config.primary_gie_config.unique_id)
@@ -611,6 +638,9 @@ GstPadProbeReturn gie_primary_processing_done_buf_prob(GstPad *pad,
             for (NvDsMetaList *l = frame_meta->obj_meta_list; l; l = l->next)
             {
                 NvDsObjectMeta *o = (NvDsObjectMeta *)l->data;  // 当前对象元数据
+                if (appCtx->config.face_detect_config.enable &&
+                    o->unique_component_id == (gint)appCtx->config.face_detect_config.unique_id)
+                    continue;
                 g_array_append_val(objs, o);
             }
 

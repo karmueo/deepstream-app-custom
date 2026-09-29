@@ -147,6 +147,9 @@ typedef struct
   gulong probe_id;
   guint64 accumulated_base;
   guint64 prev_accumulated_base;
+  guint64 loop_segment_start;
+  guint64 loop_segment_span;
+  guint64 loop_last_buffer_end;
   guint source_id;
   NvDsSourceConfig *config;
   NvDsSrcParentBin *parent_bin;

@@ -14,10 +14,10 @@
 #include "deepstream_app.h"
 #include "deepstream_app_callbacks.h"
 #include "gst-nvdssr.h"
-#include "license_gate.h"
 #include "nvds_version.h"
 #include "nvdsmeta_schema.h"
 #include "nvbufsurftransform.h"
+#include "face_metadata.h"
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <cuda_runtime_api.h>
@@ -50,9 +50,6 @@ static gchar    **input_uris = NULL;
 static gboolean   print_version = FALSE;
 static gboolean   show_bbox_text = FALSE;
 static gboolean   print_dependencies_version = FALSE;
-static gchar     *license_request_file = NULL;
-static gchar     *license_file = NULL;
-static gboolean   print_license_info = FALSE;
 static gboolean   quit = FALSE;
 static gint       return_value = 0;
 guint             num_instances; // 实例数量
@@ -86,12 +83,6 @@ GOptionEntry entries[] = {
      "Set the config file", NULL},
     {"input-uri", 'i', 0, G_OPTION_ARG_FILENAME_ARRAY, &input_uris,
      "Set the input uri (file://stream or rtsp://stream)", NULL},
-    {"license-request", 0, 0, G_OPTION_ARG_FILENAME, &license_request_file,
-     "Write an offline license request and exit", "FILE"},
-    {"license-file", 0, 0, G_OPTION_ARG_FILENAME, &license_file,
-     "Use a license file other than the default", "FILE"},
-    {"license-info", 0, 0, G_OPTION_ARG_NONE, &print_license_info,
-     "Print device fingerprint and license status", NULL},
     {NULL},
 };
 
@@ -111,9 +102,12 @@ is_detect_record_enabled(AppCtx *appCtx)
 }
 
 static inline gboolean
-has_detection_target(const NvDsObjectMeta *obj_meta)
+has_detection_target(const AppCtx *appCtx, const NvDsObjectMeta *obj_meta)
 {
     if (!obj_meta)
+        return FALSE;
+    if (appCtx->config.face_detect_config.enable &&
+        obj_meta->unique_component_id == (gint)appCtx->config.face_detect_config.unique_id)
         return FALSE;
     if (obj_meta->obj_label[0] != '\0' && obj_meta->confidence >= 0.5f &&
         obj_meta->rect_params.width > 0.f &&
@@ -908,11 +902,14 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
         for (l = frame_meta->obj_meta_list; l != NULL; l = l->next)
         {
             obj_meta = (NvDsObjectMeta *)(l->data);
+            if (appCtx->config.face_detect_config.enable &&
+                obj_meta->unique_component_id == (gint)appCtx->config.face_detect_config.unique_id)
+                continue;
 
             if ((src_bin->config->smart_record == 2 || src_bin->config->smart_record == 3) &&
                 is_detect_record_enabled(appCtx) &&
                 (single_object_tracker ? has_valid_sot_target(obj_meta)
-                                       : has_detection_target(obj_meta)))
+                                       : has_detection_target(appCtx, obj_meta)))
             {
                 gboolean should_trigger_recording = FALSE;
 
@@ -1376,7 +1373,7 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
             {
                 NvDsObjectMeta *obj = (NvDsObjectMeta *)l->data;
                 obj_count++;
-                if (has_detection_target(obj))
+                if (has_detection_target(appCtx, obj))
                 {
                     frame_has_target = TRUE;
                     break;
@@ -1407,7 +1404,7 @@ static void bbox_generated_probe_after_analytics(AppCtx *appCtx, GstBuffer *buf,
                 for (GList *l = frame_meta->obj_meta_list; l != NULL; l = l->next)
                 {
                     NvDsObjectMeta *obj = (NvDsObjectMeta *)l->data;
-                    if (has_detection_target(obj))
+                    if (has_detection_target(appCtx, obj))
                     {
                         if (obj->obj_label[0] != '\0')
                         {
@@ -2052,7 +2049,7 @@ render_corner_box(CornerLineWriter *writer, NvDsObjectMeta *obj_meta, guint fall
     obj_meta->rect_params.has_bg_color = 0;
 }
 
-static NvDsObjectMeta *select_primary_object(NvDsFrameMeta *frame_meta)
+static NvDsObjectMeta *select_primary_object(const AppCtx *appCtx, NvDsFrameMeta *frame_meta)
 {
     NvDsObjectMeta *best = NULL;
     gfloat          best_conf = -1.f;
@@ -2060,6 +2057,9 @@ static NvDsObjectMeta *select_primary_object(NvDsFrameMeta *frame_meta)
          l_obj = l_obj->next)
     {
         NvDsObjectMeta *obj_meta = (NvDsObjectMeta *)l_obj->data;
+        if (obj_meta && appCtx->config.face_detect_config.enable &&
+            obj_meta->unique_component_id == (gint)appCtx->config.face_detect_config.unique_id)
+            continue;
         if (!obj_meta || obj_meta->rect_params.width <= 0.f ||
             obj_meta->rect_params.height <= 0.f)
         {
@@ -2331,6 +2331,27 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
         {
             NvDsObjectMeta *obj_meta = (NvDsObjectMeta *)l_obj->data;
 
+            if (appCtx->config.face_detect_config.enable &&
+                obj_meta->unique_component_id == (gint)appCtx->config.face_detect_config.unique_id) {
+                /* This object keeps the precise face rectangle; only update its OSD label. */
+                for (NvDsMetaList *l_meta = obj_meta->obj_user_meta_list; l_meta; l_meta = l_meta->next) {
+                    NvDsUserMeta *user = (NvDsUserMeta *)l_meta->data;
+                    if (user->base_meta.meta_type != nvds_get_user_meta_type(FACE_DETECT_META_TYPE))
+                        continue;
+                    FaceDetectMeta *face = (FaceDetectMeta *)user->user_meta_data;
+                    g_free(obj_meta->text_params.display_text);
+                    obj_meta->text_params.display_text = g_strdup_printf("%s %.3f", face->name,
+                                                                           face->similarity);
+                    obj_meta->text_params.x_offset = obj_meta->rect_params.left;
+                    obj_meta->text_params.y_offset = MAX(0, (gint)obj_meta->rect_params.top - 20);
+                    obj_meta->text_params.font_params.font_size = appCtx->config.osd_config.text_size;
+                    obj_meta->text_params.font_params.font_color = appCtx->config.osd_config.text_color;
+                    obj_meta->text_params.font_params.font_name = appCtx->config.osd_config.font;
+                    break;
+                }
+                continue;
+            }
+
             /* 适度膨胀框，便于角标留出空间 */
             inflate_rect(&obj_meta->rect_params, 1.25f, frame_w, frame_h);
 
@@ -2591,7 +2612,7 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
         /* 鹰眼图功能开关 */
         if (batch_surf && appCtx->config.osd_config.enable_thumbnail)
         {
-            NvDsObjectMeta *thumb_obj = select_primary_object(frame_meta);
+            NvDsObjectMeta *thumb_obj = select_primary_object(appCtx, frame_meta);
             if (thumb_obj)
             {
                 overlay_thumbnail_to_corner(batch_surf, batch_meta, frame_meta,
@@ -2769,6 +2790,28 @@ static gboolean recreate_pipeline_thread_func(gpointer arg)
     return ret;
 }
 
+static void register_app_plugins(void)
+{
+    gchar *executable = g_file_read_link("/proc/self/exe", NULL);
+    if (!executable)
+        return;
+
+    gchar *binary_dir = g_path_get_dirname(executable);
+    gchar *installed_dir = g_build_filename(binary_dir, "..", "gst-plugins", NULL);
+    gchar *development_dir = g_build_filename(
+        binary_dir, "..", "src", "face_detect_plugin", "build", "lib", NULL);
+
+    if (g_file_test(installed_dir, G_FILE_TEST_IS_DIR))
+        gst_registry_scan_path(gst_registry_get(), installed_dir);
+    if (g_file_test(development_dir, G_FILE_TEST_IS_DIR))
+        gst_registry_scan_path(gst_registry_get(), development_dir);
+
+    g_free(development_dir);
+    g_free(installed_dir);
+    g_free(binary_dir);
+    g_free(executable);
+}
+
 int main(int argc, char *argv[])
 {
     GOptionContext *ctx = NULL;
@@ -2796,6 +2839,8 @@ int main(int argc, char *argv[])
         return -1;
     }
 
+    register_app_plugins();
+
     if (print_version)
     {
         g_print("deepstream-app version %d.%d.%d\n", NVDS_APP_VERSION_MAJOR,
@@ -2812,77 +2857,6 @@ int main(int argc, char *argv[])
         nvds_dependencies_version_print();
         return 0;
     }
-
-    gchar app_version[32];
-    g_snprintf(app_version, sizeof(app_version), "%d.%d.%d",
-               NVDS_APP_VERSION_MAJOR, NVDS_APP_VERSION_MINOR,
-               NVDS_APP_VERSION_MICRO);
-
-    if (license_request_file)
-    {
-        DsLicenseInfo request_info;
-        DsLicenseStatus request_status = ds_license_write_request(
-            license_request_file, app_version, &request_info);
-        if (request_status != DS_LICENSE_OK)
-        {
-            g_printerr("License request failed [%s]: %s\n",
-                       ds_license_status_name(request_status),
-                       request_info.error);
-            return 77;
-        }
-        g_print("License request written to %s\nDevice fingerprint: %s\n",
-                license_request_file, request_info.device_fingerprint);
-        return 0;
-    }
-
-    if (print_license_info)
-    {
-#if DS_LICENSE_ENFORCEMENT_ENABLED
-        DsLicenseInfo license_details;
-        DsLicenseStatus license_status =
-            ds_license_validate(license_file, &license_details);
-        g_print("Device fingerprint: %s\n",
-                license_details.device_fingerprint[0]
-                    ? license_details.device_fingerprint
-                    : "unavailable");
-        g_print("License status: %s\n",
-                ds_license_status_name(license_status));
-        if (license_status == DS_LICENSE_OK)
-        {
-            g_print("License ID: %s\nCustomer: %s\n",
-                    license_details.license_id, license_details.customer);
-            return 0;
-        }
-        g_printerr("License error: %s\n", license_details.error);
-        return 77;
-#else
-        char device_fingerprint[DS_LICENSE_FINGERPRINT_SIZE] = {0};
-        char device_error[DS_LICENSE_ERROR_SIZE] = {0};
-        DsLicenseStatus device_status = ds_license_get_device_fingerprint(
-            device_fingerprint, device_error);
-        g_print("Device fingerprint: %s\n",
-                device_status == DS_LICENSE_OK ? device_fingerprint
-                                               : "unavailable");
-        if (device_status != DS_LICENSE_OK)
-            g_print("Device fingerprint error: %s\n", device_error);
-        g_print("License enforcement: disabled (development build)\n");
-        return 0;
-#endif
-    }
-
-#if DS_LICENSE_ENFORCEMENT_ENABLED
-    DsLicenseInfo license_details;
-    DsLicenseStatus license_status =
-        ds_license_validate(license_file, &license_details);
-    if (license_status != DS_LICENSE_OK)
-    {
-        g_printerr("License validation failed [%s]: %s\n",
-                   ds_license_status_name(license_status),
-                   license_details.error);
-        g_printerr("Generate an offline request with --license-request FILE\n");
-        return 77;
-    }
-#endif
 
     int current_device = -1;
     cudaGetDevice(&current_device);

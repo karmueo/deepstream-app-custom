@@ -498,6 +498,16 @@ create_common_elements(NvDsConfig *config, NvDsPipeline *pipeline,
     gboolean ret = FALSE;
     *sink_elem = *src_elem = NULL;
 
+    if (config->face_detect_config.enable)
+    {
+        if (!create_face_detect_bin(&config->face_detect_config,
+                                    &pipeline->common_elements.face_detect_bin)) goto done;
+        GstElement *face_bin = pipeline->common_elements.face_detect_bin.bin;
+        gst_bin_add(GST_BIN(pipeline->pipeline), face_bin);
+        *src_elem = face_bin;
+        *sink_elem = face_bin;
+    }
+
     if (config->segvisual_config.enable)
     {
         if (!create_segvisual_bin(&config->segvisual_config,

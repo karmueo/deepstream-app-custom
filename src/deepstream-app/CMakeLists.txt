@@ -42,49 +42,6 @@ endif()
 # DeepStream version
 set(NVDS_VERSION "7.1")
 
-set(_DEVELOPMENT_LICENSE_PUBLIC_KEY
-    "049645b76f338aacaf30a83c12056e4aa47da65ff2fee0b6181918375eedf0bb")
-set(LICENSE_ED25519_PUBLIC_KEY_HEX "${_DEVELOPMENT_LICENSE_PUBLIC_KEY}"
-    CACHE STRING "Raw Ed25519 public key encoded as 64 hexadecimal characters")
-set(LICENSE_KEY_ID "prod-2026-01" CACHE STRING
-    "Embedded license signing key identifier")
-if(NOT CMAKE_BUILD_TYPE STREQUAL "Release")
-    # Development builds do not enforce licenses. Reset cached production
-    # metadata so switching this directory back to Release requires the key
-    # arguments to be supplied explicitly again.
-    set(LICENSE_ED25519_PUBLIC_KEY_HEX "${_DEVELOPMENT_LICENSE_PUBLIC_KEY}"
-        CACHE STRING "Raw Ed25519 public key encoded as 64 hexadecimal characters" FORCE)
-    set(LICENSE_KEY_ID "prod-2026-01" CACHE STRING
-        "Embedded license signing key identifier" FORCE)
-endif()
-string(LENGTH "${LICENSE_KEY_ID}" _LICENSE_KEY_ID_LENGTH)
-if(_LICENSE_KEY_ID_LENGTH LESS 1 OR _LICENSE_KEY_ID_LENGTH GREATER 64 OR
-   NOT LICENSE_KEY_ID MATCHES "^[A-Za-z0-9._-]+$")
-    message(FATAL_ERROR
-        "LICENSE_KEY_ID must be 1-64 ASCII letters, digits, dots, underscores, or hyphens")
-endif()
-string(LENGTH "${LICENSE_ED25519_PUBLIC_KEY_HEX}" _LICENSE_PUBLIC_KEY_LENGTH)
-if(NOT _LICENSE_PUBLIC_KEY_LENGTH EQUAL 64 OR
-   NOT LICENSE_ED25519_PUBLIC_KEY_HEX MATCHES "^[0-9A-Fa-f]+$")
-    message(FATAL_ERROR
-        "LICENSE_ED25519_PUBLIC_KEY_HEX must contain exactly 64 hexadecimal characters")
-endif()
-if(CMAKE_BUILD_TYPE STREQUAL "Release" AND
-   LICENSE_ED25519_PUBLIC_KEY_HEX STREQUAL _DEVELOPMENT_LICENSE_PUBLIC_KEY)
-    message(FATAL_ERROR
-        "Release builds require a production Ed25519 public key. Run tools/license_issuer.py keygen and pass -DLICENSE_ED25519_PUBLIC_KEY_HEX=<hex>.")
-elseif(LICENSE_ED25519_PUBLIC_KEY_HEX STREQUAL _DEVELOPMENT_LICENSE_PUBLIC_KEY)
-    message(STATUS
-        "Using the placeholder public key; license enforcement is disabled for this development build")
-endif()
-
-file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
-configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/license_public_key.h.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/generated/license_public_key.h"
-    @ONLY
-)
-
 # Installation directories
 if(NOT DEFINED LIB_INSTALL_DIR)
     set(LIB_INSTALL_DIR "/opt/nvidia/deepstream/deepstream/lib/")
@@ -117,7 +74,6 @@ pkg_check_modules(GSTAPP REQUIRED gstreamer-app-1.0)
 # Find CUDA using modern CMake approach
 enable_language(CUDA)
 find_package(CUDAToolkit ${CUDA_VER} REQUIRED)
-find_package(OpenSSL 3.0 REQUIRED COMPONENTS Crypto)
 if(CMAKE_BUILD_TYPE STREQUAL "Release" AND
    (NOT CUDAToolkit_VERSION_MAJOR EQUAL 12 OR
     NOT CUDAToolkit_VERSION_MINOR EQUAL 6))
@@ -147,20 +103,14 @@ set(ALL_SOURCES
 # Include directories
 set(INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_BINARY_DIR}/generated
     ${CMAKE_CURRENT_SOURCE_DIR}/../../apps-common/includes
+    ${CMAKE_CURRENT_SOURCE_DIR}/../face_detect_plugin/includes
     /opt/nvidia/deepstream/deepstream/sources/includes
     ${CUDAToolkit_INCLUDE_DIRS}
 )
 
 # Create executable
 add_executable(deepstream-app ${ALL_SOURCES})
-
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    set(DS_LICENSE_ENFORCEMENT_ENABLED 1)
-else()
-    set(DS_LICENSE_ENFORCEMENT_ENABLED 0)
-endif()
 
 # Set include directories
 target_include_directories(deepstream-app PRIVATE
@@ -176,7 +126,6 @@ target_include_directories(deepstream-app PRIVATE
 target_compile_definitions(deepstream-app PRIVATE
     DS_VERSION_MINOR=1
     DS_VERSION_MAJOR=7
-    DS_LICENSE_ENFORCEMENT_ENABLED=${DS_LICENSE_ENFORCEMENT_ENABLED}
 )
 
 # Optional JPEG save feature (uncomment if needed)
@@ -235,7 +184,6 @@ target_link_libraries(deepstream-app PRIVATE
     yaml-cpp
     gstrtspserver-1.0
     dl
-    OpenSSL::Crypto
     
     # Package libraries
     ${GSTREAMER_LIBRARIES}
@@ -280,12 +228,50 @@ install(PROGRAMS
         "${REPOSITORY_ROOT}/start_rgb_drm_app.sh"
         DESTINATION .)
 
+set(APP_CONFIG_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/configs/yml/app_config.yml")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${APP_CONFIG_SOURCE}")
+file(READ "${APP_CONFIG_SOURCE}"
+    _app_runtime_config_content)
+string(FIND "${_app_runtime_config_content}"
+    "config-file: ../../../face_detect_plugin/config_face_detect.yml"
+    _face_config_path_offset)
+if(_face_config_path_offset EQUAL -1)
+    message(FATAL_ERROR "Cannot locate development face-detect config path in app_config.yml")
+endif()
+string(REPLACE
+    "config-file: ../../../face_detect_plugin/config_face_detect.yml"
+    "config-file: ${RUNTIME_INSTALL_PREFIX}/face_detect_plugin/config_face_detect.yml"
+    _app_runtime_config_content "${_app_runtime_config_content}")
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/generated/app_config.yml"
+    "${_app_runtime_config_content}")
 install(FILES
-    configs/yml/app_config.yml
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/app_config.yml"
+    DESTINATION configs/yml)
+install(FILES
     configs/yml/config_infer_primary_yolo_352_rgb.yml
     configs/yml/file_sources.csv
     DESTINATION configs/yml
 )
+
+set(FACE_DETECT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../face_detect_plugin")
+set(FACE_DETECT_PLUGIN_LIBRARY
+    "${FACE_DETECT_ROOT}/build/lib/libgstfacedetect.so"
+    CACHE FILEPATH "Built face detection GStreamer plugin to package")
+set(FACE_DETECT_MODEL_FILES
+    "${FACE_DETECT_ROOT}/model/det_500m.onnx"
+    "${FACE_DETECT_ROOT}/model/w600k_mbf.onnx"
+    "${FACE_DETECT_ROOT}/model/detector.engine"
+    "${FACE_DETECT_ROOT}/model/recognizer.engine"
+    "${FACE_DETECT_ROOT}/model/detector.engine.json"
+    "${FACE_DETECT_ROOT}/model/recognizer.engine.json")
+install(FILES "${FACE_DETECT_PLUGIN_LIBRARY}" DESTINATION gst-plugins)
+install(FILES "${FACE_DETECT_ROOT}/config_face_detect.yml"
+    DESTINATION face_detect_plugin)
+install(FILES ${FACE_DETECT_MODEL_FILES}
+    DESTINATION face_detect_plugin/model)
+
 install(FILES
     configs/config_preprocess_rgb_352_primary.txt
     configs/labels.txt
@@ -299,6 +285,7 @@ install(FILES
 set(SOT_CONFIG_SOURCE "${REPOSITORY_ROOT}/sot_plugin/config_sot.yml")
 set(SOT_RUNTIME_CONFIG
     "${CMAKE_CURRENT_BINARY_DIR}/generated/config_sot.yml")
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
 if(NOT EXISTS "${SOT_CONFIG_SOURCE}")
     message(FATAL_ERROR "Missing SOT configuration: ${SOT_CONFIG_SOURCE}")
 endif()
@@ -341,8 +328,6 @@ install(FILES
     DESTINATION models
 )
 install(PROGRAMS models/convert2trt.sh DESTINATION models)
-install(FILES "${REPOSITORY_ROOT}/test/uav.mp4"
-        DESTINATION samples)
 
 set(PACKAGED_CUSTOM_PREPROCESS_LIBRARY
     "${CMAKE_CURRENT_SOURCE_DIR}/../nvdspreprocess_lib/libcustom2d_preprocess.so"
@@ -357,6 +342,9 @@ set(_RUNTIME_REQUIRED_INPUTS
     "${YOLO_CUSTOM_LIBRARY}"
     "${PACKAGED_CUSTOM_PREPROCESS_LIBRARY}"
     "${SOT_LIBRARY}"
+    "${FACE_DETECT_PLUGIN_LIBRARY}"
+    "${FACE_DETECT_ROOT}/config_face_detect.yml"
+    ${FACE_DETECT_MODEL_FILES}
     "${CMAKE_CURRENT_SOURCE_DIR}/models/yolo26n_rgb_352_uav_no-p2_b4.engine"
     "${CMAKE_CURRENT_SOURCE_DIR}/models/yolo26n_rgb_352_uav_no-p2_b4.onnx"
     "${CMAKE_CURRENT_SOURCE_DIR}/models/convert2trt.sh"
@@ -366,7 +354,6 @@ set(_RUNTIME_REQUIRED_INPUTS
     "${CMAKE_CURRENT_SOURCE_DIR}/../../sot_plugin/models/nanotrack_backbone.onnx"
     "${CMAKE_CURRENT_SOURCE_DIR}/../../sot_plugin/models/nanotrack_backbone_search_fp16.engine"
     "${CMAKE_CURRENT_SOURCE_DIR}/../../sot_plugin/models/nanotrack_backbone_search.onnx"
-    "${REPOSITORY_ROOT}/test/uav.mp4"
 )
 foreach(_runtime_input IN LISTS _RUNTIME_REQUIRED_INPUTS)
     if(NOT EXISTS "${_runtime_input}")
@@ -420,38 +407,6 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release" AND CMAKE_STRIP)
     ")
 endif()
 
-option(BUILD_LICENSE_TESTS "Build offline license unit tests" ON)
-if(BUILD_LICENSE_TESTS)
-    enable_testing()
-    add_executable(license-gate-test
-        tests/license_gate_test.cpp
-        license_gate.cpp
-    )
-    target_include_directories(license-gate-test PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_CURRENT_BINARY_DIR}/generated
-        ${JSON_GLIB_INCLUDE_DIRS}
-    )
-    target_compile_options(license-gate-test PRIVATE
-        ${JSON_GLIB_CFLAGS_OTHER}
-    )
-    target_link_libraries(license-gate-test PRIVATE
-        OpenSSL::Crypto
-        ${JSON_GLIB_LIBRARIES}
-    )
-    add_test(NAME license-gate-test COMMAND license-gate-test)
-    if(NOT CMAKE_BUILD_TYPE STREQUAL "Release")
-        add_test(
-            NAME development-license-bypass
-            COMMAND $<TARGET_FILE:deepstream-app>
-                    --license-file /tmp/deepstream-license-does-not-exist
-                    --license-info)
-        set_tests_properties(development-license-bypass PROPERTIES
-            PASS_REGULAR_EXPRESSION
-                "License enforcement: disabled")
-    endif()
-endif()
-
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
     set(_DEBIAN_CONTROL_DIR "${CMAKE_CURRENT_BINARY_DIR}/debian-control")
     file(MAKE_DIRECTORY "${_DEBIAN_CONTROL_DIR}")
@@ -461,6 +416,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
         "${RUNTIME_INSTALL_PREFIX}/configs/yml/app_config.yml\n"
         "${RUNTIME_INSTALL_PREFIX}/configs/yml/config_infer_primary_yolo_352_rgb.yml\n"
         "${RUNTIME_INSTALL_PREFIX}/configs/yml/file_sources.csv\n"
+        "${RUNTIME_INSTALL_PREFIX}/face_detect_plugin/config_face_detect.yml\n"
         "${RUNTIME_INSTALL_PREFIX}/configs/config_preprocess_rgb_352_primary.txt\n"
         "${RUNTIME_INSTALL_PREFIX}/configs/config_sot.yml\n")
 
@@ -469,13 +425,13 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
     set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
     set(CPACK_PACKAGE_CONTACT "DeepStream Application Maintainer")
     set(CPACK_PACKAGE_DESCRIPTION_SUMMARY
-        "Device-bound DeepStream application for Jetson Orin Nano")
+        "DeepStream application for Jetson Orin Nano")
     set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "arm64")
     set(CPACK_DEBIAN_PACKAGE_SECTION "video")
     set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
     set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
     set(CPACK_DEBIAN_PACKAGE_DEPENDS
-        "deepstream-7.1, nvidia-l4t-core (>= 36.4), nvidia-l4t-core (<< 36.5), libssl3, libjson-glib-1.0-0, libopencv-core4.5d, libopencv-imgproc4.5d")
+        "deepstream-7.1, nvidia-l4t-core (>= 36.4), nvidia-l4t-core (<< 36.5), libjson-glib-1.0-0, libopencv-core4.5d, libopencv-imgproc4.5d")
     set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
         "${_DEBIAN_CONTROL_DIR}/postinst"
         "${_DEBIAN_CONTROL_DIR}/conffiles")
@@ -508,4 +464,3 @@ message(STATUS "  NVDS Version: ${NVDS_VERSION}")
 message(STATUS "  Target Device: ${TARGET_DEVICE}")
 message(STATUS "  Library Install Dir: ${LIB_INSTALL_DIR}")
 message(STATUS "  Runtime Install Prefix: ${CMAKE_INSTALL_PREFIX}")
-message(STATUS "  License Enforcement: ${DS_LICENSE_ENFORCEMENT_ENABLED}")

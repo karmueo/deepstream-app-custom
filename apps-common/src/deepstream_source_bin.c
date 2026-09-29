@@ -394,35 +394,104 @@ static gboolean seek_decode(gpointer data)
     return FALSE;
 }
 
-/**
- * Probe function to drop certain events to support custom
- * logic of looping of each source stream.
- */
+/* Keep decoder timestamps and segment bounds on the same continuous timeline. */
+static GstClockTime offset_loop_time(GstClockTime time, GstClockTime offset)
+{
+    return GST_CLOCK_TIME_IS_VALID(time) ? time + offset : time;
+}
+
+/** Loop a file source without hiding its segment events from the decoder. */
 static GstPadProbeReturn
 restart_stream_buf_prob(GstPad *pad, GstPadProbeInfo *info, gpointer u_data)
 {
-    GstEvent   *event = GST_EVENT(info->data);
     NvDsSrcBin *bin = (NvDsSrcBin *)u_data;
 
-    if ((info->type & GST_PAD_PROBE_TYPE_BUFFER))
+    if (info->type & GST_PAD_PROBE_TYPE_BUFFER)
     {
-        GST_BUFFER_PTS(GST_BUFFER(info->data)) += bin->prev_accumulated_base;
+        GstBuffer *buffer = GST_PAD_PROBE_INFO_BUFFER(info);
+        GstClockTime pts = GST_BUFFER_PTS(buffer);
+        GstClockTime dts = GST_BUFFER_DTS(buffer);
+        GstClockTime duration = GST_BUFFER_DURATION(buffer);
+        GstClockTime last_time = GST_CLOCK_TIME_IS_VALID(pts) ? pts : dts;
+
+        if (GST_CLOCK_TIME_IS_VALID(last_time))
+        {
+            GstClockTime end = last_time +
+                (GST_CLOCK_TIME_IS_VALID(duration) ? duration : 1);
+            if (bin->loop_last_buffer_end == 0)
+                GST_CAT_DEBUG(NVDS_APP,
+                              "File loop source %u: first timestamp %" G_GUINT64_FORMAT,
+                              bin->source_id,
+                              offset_loop_time(last_time, bin->prev_accumulated_base));
+            if (end > bin->loop_segment_start)
+                bin->loop_last_buffer_end = MAX(bin->loop_last_buffer_end,
+                                                end - bin->loop_segment_start);
+        }
+
+        buffer = gst_buffer_make_writable(buffer);
+        GST_PAD_PROBE_INFO_DATA(info) = buffer;
+        GST_BUFFER_PTS(buffer) = offset_loop_time(pts, bin->prev_accumulated_base);
+        GST_BUFFER_DTS(buffer) = offset_loop_time(dts, bin->prev_accumulated_base);
+        return GST_PAD_PROBE_OK;
     }
-    if ((info->type & GST_PAD_PROBE_TYPE_EVENT_BOTH))
+
+    if (info->type & GST_PAD_PROBE_TYPE_EVENT_BOTH)
     {
+        GstEvent *event = GST_PAD_PROBE_INFO_EVENT(info);
+
         if (GST_EVENT_TYPE(event) == GST_EVENT_EOS)
         {
+            GstClockTime span = MAX(bin->loop_segment_span,
+                                   bin->loop_last_buffer_end);
+            /* An empty or unknown segment must still advance the timeline. */
+            bin->accumulated_base = bin->prev_accumulated_base + MAX(span, 1);
+            GST_CAT_DEBUG(NVDS_APP,
+                          "File loop source %u: last end %" G_GUINT64_FORMAT
+                          ", next offset %" G_GUINT64_FORMAT,
+                          bin->source_id,
+                          bin->prev_accumulated_base + bin->loop_last_buffer_end,
+                          bin->accumulated_base);
+            bin->loop_segment_span = 0;
+            bin->loop_last_buffer_end = 0;
             g_timeout_add(1, seek_decode, bin);
         }
 
         if (GST_EVENT_TYPE(event) == GST_EVENT_SEGMENT)
         {
-            GstSegment *segment = NULL;
+            GstSegment segment;
+            GstEvent *loop_event;
 
-            gst_event_parse_segment(event, (const GstSegment **)&segment);
-            segment->base = bin->accumulated_base;
+            gst_event_copy_segment(event, &segment);
             bin->prev_accumulated_base = bin->accumulated_base;
-            bin->accumulated_base += segment->stop;
+            bin->loop_segment_start = segment.start;
+            if (GST_CLOCK_TIME_IS_VALID(segment.stop) &&
+                segment.stop >= segment.start)
+                bin->loop_segment_span = MAX(bin->loop_segment_span,
+                                             segment.stop - segment.start);
+
+            segment.base = offset_loop_time(segment.base,
+                                            bin->prev_accumulated_base);
+            segment.start = offset_loop_time(segment.start,
+                                             bin->prev_accumulated_base);
+            segment.stop = offset_loop_time(segment.stop,
+                                            bin->prev_accumulated_base);
+            segment.time = offset_loop_time(segment.time,
+                                            bin->prev_accumulated_base);
+            segment.position = offset_loop_time(segment.position,
+                                                bin->prev_accumulated_base);
+            segment.duration = offset_loop_time(segment.duration,
+                                                bin->prev_accumulated_base);
+
+            loop_event = gst_event_new_segment(&segment);
+            gst_event_set_seqnum(loop_event, gst_event_get_seqnum(event));
+            gst_event_set_running_time_offset(
+                loop_event, gst_event_get_running_time_offset(event));
+            GST_CAT_DEBUG(NVDS_APP,
+                          "File loop source %u: segment offset %" G_GUINT64_FORMAT,
+                          bin->source_id, bin->prev_accumulated_base);
+            GST_PAD_PROBE_INFO_DATA(info) = loop_event;
+            gst_event_unref(event);
+            return GST_PAD_PROBE_OK;
         }
         switch (GST_EVENT_TYPE(event))
         {
@@ -432,7 +501,6 @@ restart_stream_buf_prob(GstPad *pad, GstPadProbeInfo *info, gpointer u_data)
              * We should drop the QOS events since we have custom logic for
              * looping individual sources. */
         case GST_EVENT_QOS:
-        case GST_EVENT_SEGMENT:
         case GST_EVENT_FLUSH_START:
         case GST_EVENT_FLUSH_STOP:
             return GST_PAD_PROBE_DROP;

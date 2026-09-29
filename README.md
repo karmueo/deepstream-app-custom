@@ -7,8 +7,6 @@
 
 ```bash
 sudo apt install \
-libssl3 \
-libssl-dev \
 libgstreamer1.0-0 \
 gstreamer1.0-tools \
 gstreamer1.0-plugins-good \
@@ -44,8 +42,6 @@ export CUDA_VER=12.6
 
 ```bash
 sudo apt install \
-libssl3 \
-libssl-dev \
 libgles2-mesa-dev \
 libgstreamer1.0-0 \
 gstreamer1.0-tools \
@@ -152,12 +148,17 @@ make -C src/nvdspreprocess_lib
 
 ## 编译主程序
 
+主程序配置默认启用人脸检测。先按 [人脸插件说明](src/face_detect_plugin/README.md)
+构建插件并在当前 Jetson 生成检测、识别引擎。
+
 ```sh
 mkdir build && cd build
 cmake -DCMAKE_BUILD_TYPE=Release ../src/deepstream-app/
 cmake --build .
 sudo cmake --install .
 ```
+
+调试构建与 Release 打包步骤见 [Jetson 构建与发布](docs/release_packaging.md)。当前分支无需许可证文件或签名公钥。
 
 ## 添加环境变量
 ```sh

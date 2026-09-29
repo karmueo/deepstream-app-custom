@@ -439,6 +439,10 @@ parse_config_file_yaml(NvDsConfig *config, gchar *cfg_file_path)
              * it will override the value set using global_gpu_id in parse_videorecognition_yaml function */
             parse_err = !parse_videorecognition_yaml(&config->videorecognition_config, cfg_file_path);
         }
+        else if (paramKey == "face-detect")
+        {
+            parse_err = !parse_face_detect_yaml(&config->face_detect_config, cfg_file_path);
+        }
         else if (paramKey == "message-converter")
         {
             parse_err = !parse_msgconv_yaml(&config->msg_conv_config, paramKey, cfg_file_path);
@@ -481,6 +485,22 @@ parse_config_file_yaml(NvDsConfig *config, gchar *cfg_file_path)
             }
         }
     } */
+    if (config->face_detect_config.enable) {
+        const guint id = config->face_detect_config.unique_id;
+        gboolean conflict =
+            (config->primary_gie_config.enable && id == config->primary_gie_config.unique_id) ||
+            (config->videorecognition_config.enable && id == config->videorecognition_config.unique_id) ||
+            (config->dsanalytics_config.enable && id == config->dsanalytics_config.unique_id) ||
+            (config->dsexample_config.enable && id == config->dsexample_config.unique_id);
+        for (guint index = 0; index < config->num_secondary_gie_sub_bins; ++index)
+            if (config->secondary_gie_sub_bin_config[index].enable &&
+                id == config->secondary_gie_sub_bin_config[index].unique_id)
+                conflict = TRUE;
+        if (conflict) {
+            g_printerr("face-detect unique-id conflicts with another component\n");
+            goto done;
+        }
+    }
     unsigned int i, j;
     for (i = 0; i < config->num_secondary_gie_sub_bins; i++)
     {

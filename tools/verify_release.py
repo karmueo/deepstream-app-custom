@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from pathlib import Path
 import re
@@ -22,6 +23,13 @@ REQUIRED = (
     "configs/config_preprocess_rgb_352_primary.txt",
     "configs/config_sot.yml",
     "configs/labels.txt",
+    "face_detect_plugin/config_face_detect.yml",
+    "face_detect_plugin/model/det_500m.onnx",
+    "face_detect_plugin/model/w600k_mbf.onnx",
+    "face_detect_plugin/model/detector.engine",
+    "face_detect_plugin/model/recognizer.engine",
+    "face_detect_plugin/model/detector.engine.json",
+    "face_detect_plugin/model/recognizer.engine.json",
     "models/yolo26n_rgb_352_uav_no-p2_b4.engine",
     "models/yolo26n_rgb_352_uav_no-p2_b4.onnx",
     "models/nanotrack_head_fp16.engine",
@@ -31,10 +39,10 @@ REQUIRED = (
     "models/nanotrack_backbone_search_fp16.engine",
     "models/nanotrack_backbone_search.onnx",
     "models/convert2trt.sh",
-    "samples/uav.mp4",
     "lib/libsot.so",
     "lib/libnvdsinfer_custom_impl_Yolo.so",
     "lib/libcustom2d_preprocess.so",
+    "gst-plugins/libgstfacedetect.so",
 )
 ALLOWED_SHELL_SCRIPTS = {
     "start_rgb_app.sh",
@@ -96,6 +104,21 @@ def verify(root: Path, runtime_checks: bool, development: bool) -> list[str]:
 
     for path in _files(root):
         relative = path.relative_to(root)
+        if relative.parent == Path("face_detect_plugin/model") and path.name.endswith(
+            ".engine.json"
+        ):
+            try:
+                metadata = json.loads(path.read_text(encoding="utf-8"))
+                onnx_path = metadata["onnx_path"]
+                if not isinstance(onnx_path, str) or not onnx_path:
+                    raise ValueError("onnx_path must be a nonempty string")
+                if Path(onnx_path).is_absolute():
+                    raise ValueError("onnx_path must be relative to the engine")
+                source = (path.parent / onnx_path).resolve()
+                if not source.is_relative_to(root) or not source.is_file():
+                    raise ValueError("onnx_path does not point to a packaged model")
+            except (OSError, KeyError, ValueError, TypeError) as error:
+                errors.append(f"invalid face engine metadata in {relative}: {error}")
         if (
             path.suffix.lower() in FORBIDDEN_SUFFIXES
             and str(relative) not in ALLOWED_SHELL_SCRIPTS

@@ -1,0 +1,8 @@
+property:
+  detector-engine: model/detector.engine
+  recognizer-engine: model/recognizer.engine
+  gallery-file: ""
+  interval: 0
+  detection-threshold: 0.5
+  nms-threshold: 0.4
+  recognition-threshold: 0.4
