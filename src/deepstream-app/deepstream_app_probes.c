@@ -17,6 +17,7 @@
 
 #include "deepstream_app.h"
 #include "face_metadata.h"
+#include "emotieff_osd.h"
 #include "deepstream_app_callbacks.h"
 #include "deepstream_app_probes.h"
 #include "nvds_obj_encode.h"
@@ -431,8 +432,9 @@ static void process_meta(AppCtx *appCtx, NvDsBatchMeta *batch_meta)
                         if (user->base_meta.meta_type != nvds_get_user_meta_type(FACE_DETECT_META_TYPE))
                             continue;
                         FaceDetectMeta *face = (FaceDetectMeta *)user->user_meta_data;
-                        obj->text_params.display_text = g_strdup_printf("%s %.3f", face->name,
-                                                                          face->similarity);
+                        obj->text_params.display_text = format_face_emotion_label(
+                            face, obj, appCtx->config.emotieff_config.enable ?
+                            appCtx->config.emotieff_config.unique_id : 0);
                         obj->text_params.x_offset = obj->rect_params.left;
                         obj->text_params.y_offset = MAX(0, (gint)obj->rect_params.top - 20);
                         obj->text_params.font_params.font_color = appCtx->config.osd_config.text_color;

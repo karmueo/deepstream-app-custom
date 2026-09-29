@@ -1,6 +1,7 @@
 *.o
 *.so
 *.mp4
+!test/test.mp4
 *.jpg
 triton.log
 
@@ -32,7 +33,10 @@ build
 *.bin
 .codex
 *.pyc
-src/face_detect_plugin/data/
+src/face_detect_plugin/data/*
+!src/face_detect_plugin/data/gallery.sqlite
 src/face_detect_plugin/model/*.engine.json
 src/face_detect_plugin/model/*.layers.json
 src/face_detect_plugin/model/*.zip*
+src/emotieff_plugin/model/*.engine.json
+src/emotieff_plugin/model/*.engine.layers.json

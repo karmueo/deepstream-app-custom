@@ -42,6 +42,7 @@ extern "C"
 #include "deepstream_dsexample.h"
 #include "deepstream_videorecognition.h"
 #include "deepstream_face_detect.h"
+#include "deepstream_emotieff.h"
 
 #define _MAX_STR_LENGTH 1024
 
@@ -102,6 +103,7 @@ gboolean
 parse_videorecognition_yaml (NvDsVideoRecognitionConfig *config, gchar *cfg_file_path);
 
 gboolean parse_face_detect_yaml(NvDsFaceDetectConfig *config, gchar *cfg_file_path);
+gboolean parse_emotieff_yaml(NvDsEmotieffConfig *config, gchar *cfg_file_path);
 
 #ifdef __cplusplus
 }

@@ -508,6 +508,17 @@ create_common_elements(NvDsConfig *config, NvDsPipeline *pipeline,
         *sink_elem = face_bin;
     }
 
+    if (config->emotieff_config.enable)
+    {
+        if (!create_emotieff_bin(&config->emotieff_config,
+                                 config->face_detect_config.unique_id,
+                                 &pipeline->common_elements.emotieff_bin)) goto done;
+        GstElement *emotion_bin = pipeline->common_elements.emotieff_bin.bin;
+        gst_bin_add(GST_BIN(pipeline->pipeline), emotion_bin);
+        NVGSTDS_LINK_ELEMENT(*src_elem, emotion_bin);
+        *src_elem = emotion_bin;
+    }
+
     if (config->segvisual_config.enable)
     {
         if (!create_segvisual_bin(&config->segvisual_config,

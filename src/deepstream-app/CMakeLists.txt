@@ -105,6 +105,7 @@ set(INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../../apps-common/includes
     ${CMAKE_CURRENT_SOURCE_DIR}/../face_detect_plugin/includes
+    ${CMAKE_CURRENT_SOURCE_DIR}/../emotieff_plugin/includes
     /opt/nvidia/deepstream/deepstream/sources/includes
     ${CUDAToolkit_INCLUDE_DIRS}
 )
@@ -243,17 +244,46 @@ string(REPLACE
     "config-file: ../../../face_detect_plugin/config_face_detect.yml"
     "config-file: ${RUNTIME_INSTALL_PREFIX}/face_detect_plugin/config_face_detect.yml"
     _app_runtime_config_content "${_app_runtime_config_content}")
+string(FIND "${_app_runtime_config_content}"
+    "config-file: ../../../emotieff_plugin/configs/config_emotieff.yml"
+    _emotion_config_path_offset)
+if(_emotion_config_path_offset EQUAL -1)
+    message(FATAL_ERROR "Cannot locate development emotieff config path in app_config.yml")
+endif()
+string(REPLACE
+    "config-file: ../../../emotieff_plugin/configs/config_emotieff.yml"
+    "config-file: ${RUNTIME_INSTALL_PREFIX}/emotieff_plugin/configs/config_emotieff.yml"
+    _app_runtime_config_content "${_app_runtime_config_content}")
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/generated/app_config.yml"
     "${_app_runtime_config_content}")
+set(APP_SOURCE_CSV "${CMAKE_CURRENT_SOURCE_DIR}/configs/yml/file_sources.csv")
+get_filename_component(APP_TEST_VIDEO
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../test/test.mp4" ABSOLUTE)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${APP_SOURCE_CSV}")
+file(READ "${APP_SOURCE_CSV}" _app_runtime_sources_content)
+set(_development_test_video_uri "file://../../../../test/test.mp4")
+string(FIND "${_app_runtime_sources_content}"
+    "${_development_test_video_uri}"
+    _test_video_uri_offset)
+if(_test_video_uri_offset EQUAL -1)
+    message(FATAL_ERROR "Cannot locate development test video URI in file_sources.csv")
+endif()
+string(REPLACE
+    "${_development_test_video_uri}"
+    "file://${RUNTIME_INSTALL_PREFIX}/test/test.mp4"
+    _app_runtime_sources_content "${_app_runtime_sources_content}")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/generated/file_sources.csv"
+    "${_app_runtime_sources_content}")
 install(FILES
     "${CMAKE_CURRENT_BINARY_DIR}/generated/app_config.yml"
     DESTINATION configs/yml)
 install(FILES
     configs/yml/config_infer_primary_yolo_352_rgb.yml
-    configs/yml/file_sources.csv
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/file_sources.csv"
     DESTINATION configs/yml
 )
+install(FILES "${APP_TEST_VIDEO}" DESTINATION test)
 
 set(FACE_DETECT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../face_detect_plugin")
 set(FACE_DETECT_PLUGIN_LIBRARY
@@ -269,8 +299,36 @@ set(FACE_DETECT_MODEL_FILES
 install(FILES "${FACE_DETECT_PLUGIN_LIBRARY}" DESTINATION gst-plugins)
 install(FILES "${FACE_DETECT_ROOT}/config_face_detect.yml"
     DESTINATION face_detect_plugin)
+install(FILES "${FACE_DETECT_ROOT}/data/gallery.sqlite"
+    DESTINATION face_detect_plugin/data)
 install(FILES ${FACE_DETECT_MODEL_FILES}
     DESTINATION face_detect_plugin/model)
+
+set(EMOTIEFF_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../emotieff_plugin")
+set(EMOTIEFF_PLUGIN_LIBRARY
+    "${EMOTIEFF_ROOT}/build/lib/libgstemotieff.so"
+    CACHE FILEPATH "Built EmotiEff GStreamer plugin to package")
+set(EMOTIEFF_ENGINE_BUILDER
+    "${EMOTIEFF_ROOT}/build/emotieff-build-engine"
+    CACHE FILEPATH "Built EmotiEff engine converter to package")
+set(EMOTIEFF_MODEL_FILES
+    "${EMOTIEFF_ROOT}/model/enet_b0_8_best_vgaf.onnx"
+    "${EMOTIEFF_ROOT}/model/mbf_va_mtl.onnx"
+    "${EMOTIEFF_ROOT}/model/enet_b0_8_best_vgaf.engine"
+    "${EMOTIEFF_ROOT}/model/mbf_va_mtl.engine"
+    "${EMOTIEFF_ROOT}/model/enet_b0_8_best_vgaf.engine.json"
+    "${EMOTIEFF_ROOT}/model/mbf_va_mtl.engine.json"
+    "${EMOTIEFF_ROOT}/model/enet_b0_8_best_vgaf.engine.layers.json"
+    "${EMOTIEFF_ROOT}/model/mbf_va_mtl.engine.layers.json")
+install(FILES "${EMOTIEFF_PLUGIN_LIBRARY}" DESTINATION gst-plugins)
+install(PROGRAMS "${EMOTIEFF_ENGINE_BUILDER}" DESTINATION bin)
+install(FILES "${EMOTIEFF_ROOT}/configs/config_emotieff.yml"
+    DESTINATION emotieff_plugin/configs)
+install(PROGRAMS "${EMOTIEFF_ROOT}/model/prepare_models.sh"
+    "${EMOTIEFF_ROOT}/model/convert2trt.sh" DESTINATION emotieff_plugin/model)
+install(FILES ${EMOTIEFF_MODEL_FILES} DESTINATION emotieff_plugin/model)
+install(FILES "${EMOTIEFF_ROOT}/includes/emotieff_metadata.h"
+    DESTINATION include/emotieff_plugin)
 
 install(FILES
     configs/config_preprocess_rgb_352_primary.txt
@@ -344,7 +402,13 @@ set(_RUNTIME_REQUIRED_INPUTS
     "${SOT_LIBRARY}"
     "${FACE_DETECT_PLUGIN_LIBRARY}"
     "${FACE_DETECT_ROOT}/config_face_detect.yml"
+    "${FACE_DETECT_ROOT}/data/gallery.sqlite"
     ${FACE_DETECT_MODEL_FILES}
+    "${EMOTIEFF_PLUGIN_LIBRARY}"
+    "${EMOTIEFF_ENGINE_BUILDER}"
+    "${EMOTIEFF_ROOT}/configs/config_emotieff.yml"
+    ${EMOTIEFF_MODEL_FILES}
+    "${APP_TEST_VIDEO}"
     "${CMAKE_CURRENT_SOURCE_DIR}/models/yolo26n_rgb_352_uav_no-p2_b4.engine"
     "${CMAKE_CURRENT_SOURCE_DIR}/models/yolo26n_rgb_352_uav_no-p2_b4.onnx"
     "${CMAKE_CURRENT_SOURCE_DIR}/models/convert2trt.sh"
@@ -417,6 +481,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
         "${RUNTIME_INSTALL_PREFIX}/configs/yml/config_infer_primary_yolo_352_rgb.yml\n"
         "${RUNTIME_INSTALL_PREFIX}/configs/yml/file_sources.csv\n"
         "${RUNTIME_INSTALL_PREFIX}/face_detect_plugin/config_face_detect.yml\n"
+        "${RUNTIME_INSTALL_PREFIX}/emotieff_plugin/configs/config_emotieff.yml\n"
         "${RUNTIME_INSTALL_PREFIX}/configs/config_preprocess_rgb_352_primary.txt\n"
         "${RUNTIME_INSTALL_PREFIX}/configs/config_sot.yml\n")
 

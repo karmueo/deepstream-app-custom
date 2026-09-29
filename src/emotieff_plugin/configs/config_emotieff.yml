@@ -1,0 +1,4 @@
+property:
+  emotion-model: enet_b0_8_best_vgaf
+  emotion-engine: ../model/enet_b0_8_best_vgaf.engine
+  interval: 0

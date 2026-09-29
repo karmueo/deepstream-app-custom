@@ -8,7 +8,7 @@ SCRFD-500MF 和 MobileFaceNet/ArcFace 做五点对齐与身份匹配，向每张
 
 - `includes/`、`src/`：接口和实现；`tools/`：引擎构建与人员照片导入。
 - `model/`：`det_500m.onnx`、`w600k_mbf.onnx`、本机生成的引擎及转换脚本。
-- `data/`：每个一级子目录对应一人，目录名作为姓名；照片和 `gallery.sqlite` 留在本机。
+- `data/`：每个一级子目录对应一人，目录名作为姓名；照片留在本机，`gallery.sqlite` 随代码和安装包提供。
 - `tests/`：核心测试及 `test/test.mp4` 实机验证入口。
 
 需要 Jetson DeepStream 7.1、CUDA 12.6、TensorRT 10、GStreamer、SQLite、
@@ -20,7 +20,7 @@ APT 软件源；若已有匹配的 4.5 头文件，可通过
 `-DFACE_OPENCV_INCLUDE_DIR=/path/to/opencv4` 指定。
 
 ```bash
-cd /home/nvidia/work/deepstream-app-custom
+cd <repository-root>
 cmake -S src/face_detect_plugin -B src/face_detect_plugin/build -DCMAKE_BUILD_TYPE=Debug
 cmake --build src/face_detect_plugin/build -j4
 ctest --test-dir src/face_detect_plugin/build --output-on-failure
@@ -56,8 +56,8 @@ src/face_detect_plugin/build/face-gallery-import \
 
 `config_face_detect.yml` 中 `interval: 0` 表示逐帧识别；`N` 表示每次识别后
 跳过该视频源的 N 帧。阈值分别控制检测、NMS 和余弦匹配。`gallery-file`
-默认留空，全部人脸显示为“陌生人”；导入人员后可将其设为
-`data/gallery.sqlite`。路径非空但数据库不存在会启动失败。
+默认使用 `data/gallery.sqlite`；需要禁用身份匹配时可将其设为空字符串。
+路径非空但数据库不存在会启动失败。
 
 ## 接入与测试
 
@@ -86,9 +86,8 @@ sudo cmake --install src/face_detect_plugin/build
 sudo cmake --install build
 ```
 
-安装包含插件动态库、工具、配置与本机已有模型文件，不包含人员照片和
-`gallery.sqlite`。部署时若需要身份识别，将数据库复制到可读的位置并
-修改 `config_face_detect.yml` 的 `gallery-file` 路径。主程序的启动脚本
+安装包含插件动态库、工具、配置、本机已有模型文件和 `gallery.sqlite`，
+不包含人员照片。主程序的启动脚本
 已经包含 `/opt/deepstream-app-custom/gst-plugins` 的搜索路径。
 
 下游可通过 `unique_component_id` 区分人脸对象。公开头文件

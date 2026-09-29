@@ -18,6 +18,7 @@
 #include "nvdsmeta_schema.h"
 #include "nvbufsurftransform.h"
 #include "face_metadata.h"
+#include "emotieff_osd.h"
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <cuda_runtime_api.h>
@@ -2340,8 +2341,9 @@ static gboolean overlay_graphics(AppCtx *appCtx, GstBuffer *buf,
                         continue;
                     FaceDetectMeta *face = (FaceDetectMeta *)user->user_meta_data;
                     g_free(obj_meta->text_params.display_text);
-                    obj_meta->text_params.display_text = g_strdup_printf("%s %.3f", face->name,
-                                                                           face->similarity);
+                    obj_meta->text_params.display_text = format_face_emotion_label(
+                        face, obj_meta, appCtx->config.emotieff_config.enable ?
+                        appCtx->config.emotieff_config.unique_id : 0);
                     obj_meta->text_params.x_offset = obj_meta->rect_params.left;
                     obj_meta->text_params.y_offset = MAX(0, (gint)obj_meta->rect_params.top - 20);
                     obj_meta->text_params.font_params.font_size = appCtx->config.osd_config.text_size;
@@ -2800,12 +2802,17 @@ static void register_app_plugins(void)
     gchar *installed_dir = g_build_filename(binary_dir, "..", "gst-plugins", NULL);
     gchar *development_dir = g_build_filename(
         binary_dir, "..", "src", "face_detect_plugin", "build", "lib", NULL);
+    gchar *emotion_development_dir = g_build_filename(
+        binary_dir, "..", "src", "emotieff_plugin", "build", "lib", NULL);
 
     if (g_file_test(installed_dir, G_FILE_TEST_IS_DIR))
         gst_registry_scan_path(gst_registry_get(), installed_dir);
     if (g_file_test(development_dir, G_FILE_TEST_IS_DIR))
         gst_registry_scan_path(gst_registry_get(), development_dir);
+    if (g_file_test(emotion_development_dir, G_FILE_TEST_IS_DIR))
+        gst_registry_scan_path(gst_registry_get(), emotion_development_dir);
 
+    g_free(emotion_development_dir);
     g_free(development_dir);
     g_free(installed_dir);
     g_free(binary_dir);

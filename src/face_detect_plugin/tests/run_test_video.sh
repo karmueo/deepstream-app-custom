@@ -51,6 +51,7 @@ if with_yolo:
     set_value('pre-process', 'config-file', str(root / 'src/deepstream-app/configs/config_preprocess_rgb_352_primary.txt'))
     set_value('primary-gie', 'config-file', str(root / 'src/deepstream-app/configs/yml/config_infer_primary_yolo_352_rgb.yml'))
 set_value('face-detect', 'enable', '1' if with_face else '0')
+set_value('emotieff', 'enable', '0')
 set_value('face-detect', 'config-file', str(work / 'face_plugin.yml'))
 set_value('sink0', 'enable', '0')
 set_value('tiled-display', 'rows', '1')

@@ -1,7 +1,7 @@
 property:
   detector-engine: model/detector.engine
   recognizer-engine: model/recognizer.engine
-  gallery-file: ""
+  gallery-file: "data/gallery.sqlite"
   interval: 0
   detection-threshold: 0.5
   nms-threshold: 0.4

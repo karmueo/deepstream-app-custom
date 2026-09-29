@@ -38,6 +38,7 @@
 #include "deepstream_tracker.h"
 #include "deepstream_videorecognition.h"
 #include "deepstream_face_detect.h"
+#include "deepstream_emotieff.h"
 #include "gst-nvdscommonconfig.h"
 #include "gst-nvdscustommessage.h"
 #include "nvbufsurface.h"
@@ -106,6 +107,7 @@ typedef struct
     NvDsDsExampleBin           dsexample_bin;                   /**< Dsexample bin */
     NvDsVideoRecognitionBin    videorecognition_bin;            /**< 视频识别 bin (X3D 动作识别) */
     NvDsFaceDetectBin          face_detect_bin;
+    NvDsEmotieffBin            emotieff_bin;
     AppCtx                    *appCtx;                          /**< 指向应用程序上下文的指针 */
 } NvDsInstanceBin;
 
@@ -184,6 +186,7 @@ typedef struct
     NvDsDsExampleConfig    dsexample_config;                   /**< Dsexample 配置 */
     NvDsVideoRecognitionConfig videorecognition_config;        /**< 视频识别配置 (X3D) */
     NvDsFaceDetectConfig face_detect_config;
+    NvDsEmotieffConfig emotieff_config;
     NvDsSinkMsgConvBrokerConfig msg_conv_config;              /**< 消息转换 broker 配置 */
     NvDsImageSave               image_save_config;            /**< 图像保存配置 */
 

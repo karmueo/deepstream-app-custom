@@ -443,6 +443,10 @@ parse_config_file_yaml(NvDsConfig *config, gchar *cfg_file_path)
         {
             parse_err = !parse_face_detect_yaml(&config->face_detect_config, cfg_file_path);
         }
+        else if (paramKey == "emotieff")
+        {
+            parse_err = !parse_emotieff_yaml(&config->emotieff_config, cfg_file_path);
+        }
         else if (paramKey == "message-converter")
         {
             parse_err = !parse_msgconv_yaml(&config->msg_conv_config, paramKey, cfg_file_path);
@@ -498,6 +502,28 @@ parse_config_file_yaml(NvDsConfig *config, gchar *cfg_file_path)
                 conflict = TRUE;
         if (conflict) {
             g_printerr("face-detect unique-id conflicts with another component\n");
+            goto done;
+        }
+    }
+    if (config->emotieff_config.enable) {
+        const guint id = config->emotieff_config.unique_id;
+        if (!config->face_detect_config.enable ||
+            config->emotieff_config.gpu_id != config->face_detect_config.gpu_id ||
+            id == 0 || id == config->face_detect_config.unique_id) {
+            g_printerr("emotieff requires facedetect on the same GPU with a distinct unique-id\n");
+            goto done;
+        }
+        gboolean conflict =
+            (config->primary_gie_config.enable && id == config->primary_gie_config.unique_id) ||
+            (config->videorecognition_config.enable && id == config->videorecognition_config.unique_id) ||
+            (config->dsanalytics_config.enable && id == config->dsanalytics_config.unique_id) ||
+            (config->dsexample_config.enable && id == config->dsexample_config.unique_id);
+        for (guint index = 0; index < config->num_secondary_gie_sub_bins; ++index)
+            if (config->secondary_gie_sub_bin_config[index].enable &&
+                id == config->secondary_gie_sub_bin_config[index].unique_id)
+                conflict = TRUE;
+        if (conflict) {
+            g_printerr("emotieff unique-id conflicts with another component\n");
             goto done;
         }
     }

@@ -103,6 +103,7 @@ endif()
 install(TARGETS gstfacedetect LIBRARY DESTINATION gst-plugins)
 install(TARGETS face-build-engines face-gallery-import face-image-check RUNTIME DESTINATION bin)
 install(FILES config_face_detect.yml DESTINATION face_detect_plugin)
+install(FILES data/gallery.sqlite DESTINATION face_detect_plugin/data)
 install(DIRECTORY model/ DESTINATION face_detect_plugin/model
         PATTERN "*.onnx" EXCLUDE PATTERN "*.engine" EXCLUDE PATTERN "*.json" EXCLUDE)
 install(DIRECTORY model/ DESTINATION face_detect_plugin/model FILES_MATCHING

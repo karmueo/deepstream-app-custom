@@ -5,25 +5,11 @@ application:
   # 是否启用性能测量（0=禁用，1=启用）
   enable-perf-measurement: 1
   # 性能测量输出间隔（秒）
-  perf-measurement-interval-sec: 5
+  perf-measurement-interval-sec: 3
   # 是否启用JPEG图像保存（0=禁用，1=启用）
   #enable-jpeg-save: 1
   # 是否开启检测到目标后智能录制（0=禁用，1=启用）
   smart-rec-detect-default: 0
-
-tiled-display:
-  enable: 1
-  rows: 2
-  columns: 2
-  width: 1920
-  height: 1080
-  gpu-id: 0
-  #(0): nvbuf-mem-default - Default memory allocated, specific to particular platform
-  #(1): nvbuf-mem-cuda-pinned - Allocate Pinned/Host cuda memory, applicable for Tesla
-  #(2): nvbuf-mem-cuda-device - Allocate Device cuda memory, applicable for Tesla
-  #(3): nvbuf-mem-cuda-unified - Allocate Unified cuda memory, applicable for Tesla
-  #(4): nvbuf-mem-surface-array - Allocate Surface Array memory, applicable for Jetson
-  nvbuf-memory-type: 0
 
 # -----------------------------------------------------------------------------
 # 视频源配置
@@ -106,12 +92,19 @@ face-detect:
   unique-id: 16
   config-file: ../../../face_detect_plugin/config_face_detect.yml
 
+# 情绪识别，使用上游人脸框；模型和推理间隔在插件配置中设置
+emotieff:
+  enable: 1
+  gpu-id: 0
+  unique-id: 17
+  config-file: ../../../emotieff_plugin/configs/config_emotieff.yml
+
 # -----------------------------------------------------------------------------
 # Sink0: RTSP流输出配置
 # -----------------------------------------------------------------------------
 sink0:
   # 是否启用此输出（0=禁用，1=启用）
-  enable: 1
+  enable: 0
   # 输出类型：1=FakeSink 2=EglSink 3=File 4=RTSPStreaming 5=nvdrmvideosink
   type: 4
   # 编码格式：1=H264, 2=H265
@@ -119,7 +112,7 @@ sink0:
   # 编码器类型：0=硬件编码, 1=软件编码
   enc-type: 1
   # 是否同步播放（0=异步，1=同步）
-  sync: 1
+  sync: 0
   # 编码比特率（bps）
   bitrate: 4000000
   # 编码Profile：
@@ -137,11 +130,11 @@ sink0:
 # -----------------------------------------------------------------------------
 sink1:
   # 是否启用此输出（0=禁用，1=启用）
-  enable: 0
+  enable: 1
   # 输出类型：2=EglSink（本地窗口显示）
   type: 2
   # 是否同步播放（0=异步，1=同步）
-  sync: 1
+  sync: 0
   # QoS（服务质量）控制（0=禁用，1=启用）
   qos: 0
   # 使用的GPU设备ID
@@ -149,28 +142,9 @@ sink1:
   # NvBuf内存类型
   nvbuf-memory-type: 0
 
-# -----------------------------------------------------------------------------
-# Sink3: 本地文件录制配置
-# -----------------------------------------------------------------------------
-sink3:
-  # 是否启用此输出（0=禁用，1=启用）
-  enable: 0
-  # 输出类型：3=File（文件录制）
-  type: 3
-  # 是否同步（0=异步，1=同步；录制建议用0）
-  sync: 0
-  # 容器格式：1=mp4, 2=mkv
-  container : 2
-  # 编码格式：1=H264, 2=H265
-  codec : 1
-  # 编码比特率（bps）
-  bitrate: 4000000
-  # 输出文件路径
-  output-file: ./deepstream_output.mkv
-
 
 # FAKE SINK 输出
-sink4:
+sink3:
   enable: 0
   type: 1
   sync: 1
@@ -216,11 +190,11 @@ streammux:
   # 使用的GPU设备ID
   gpu-id: 0
   # 是否为实时源（0=文件/录像，1=实时流如RTSP/摄像头）
-  live-source: 1
+  live-source: 0
   # 缓冲池大小（帧数）
   buffer-pool-size: 4
   # 批处理大小（同时处理的帧数，需与主检测 batch 能力匹配）
-  batch-size: 4
+  batch-size: 1
   # 批处理超时时间（微秒），等待第一个buffer后，即使batch未满也会推送
   batched-push-timeout: 10000
   # 复用器输出宽度（像素）
