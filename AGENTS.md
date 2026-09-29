@@ -4,7 +4,7 @@
 
 ## Project Structure & Module Organization
 - 主应用：`src/deepstream-app/`（配置、DeepStream pipeline 源码、模型）。
-- 插件：`src/gst-udpmulticast_sink/`（UDP 多播 sink）、`src/gst-videorecognition/`（多帧识别）、`src/nvdspreprocess_lib/`、`src/nvmsgconv/`。
+- 插件：`src/gst-videorecognition/`（多帧识别）、`src/nvdspreprocess_lib/`、`src/nvmsgconv/`。
 - 公共代码：`apps-common/` 头文件与工具函数。
 - YOLO 自定义推理：`DeepStream-Yolo/nvdsinfer_custom_impl_Yolo`。
 - 其他：`sot_plugin/`（单目标跟踪）、`smart_rec_rgb/`、`triton_model/`（模型文件）、`test_triton.py`、`test_video_triton.py`（客户端验证）、`start_*.sh` 启动脚本。
@@ -13,8 +13,6 @@
 ```bash
 # 编译 YOLO 自定义推理
 cd DeepStream-Yolo && make -C nvdsinfer_custom_impl_Yolo clean && make -C nvdsinfer_custom_impl_Yolo
-# 编译/安装 UDP 多播 sink
-cd src/gst-udpmulticast_sink && cmake -B build -S . && cmake --build build && sudo cmake --install build
 # 编译/安装多帧识别插件
 cd src/gst-videorecognition && cmake -B build -S . && cmake --build build && sudo cmake --install build
 # 编译/安装 SOT 插件

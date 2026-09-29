@@ -35,8 +35,7 @@ extern "C"
         NV_DS_SINK_ENCODE_FILE,
         NV_DS_SINK_UDPSINK,
         NV_DS_SINK_RENDER_DRM,
-        NV_DS_SINK_MSG_CONV_BROKER,
-        NV_DS_SINK_MYNETWORK
+        NV_DS_SINK_MSG_CONV_BROKER
     } NvDsSinkType;
 
     typedef enum
@@ -130,47 +129,14 @@ extern "C"
 
     typedef struct
     {
-        // Create a bin for the element only if enabled
-        gboolean enable;
-        guint unique_id;
-        guint gpu_id;
-        gboolean disable_msgconv;
-        /** MsgConv settings */
-        gchar *config_file_path;
-        guint conv_payload_type;
-        gchar *conv_msg2p_lib;
-        guint conv_comp_id;
-        gchar *debug_payload_dir;
-        gboolean multiple_payloads;
-        gboolean conv_msg2p_new_api;
-        guint conv_frame_interval;
-        gboolean conv_dummy_payload;
-        // 组播ip
-        gchar *ip;
-        // 组播port
-        guint multicast_port;
-        // 组播网卡名称
-        gchar *iface;
-        // 帧率
-        guint fps;
-        // 单目标跟踪报文模式（仅影响目标筛选和字段取值）
-        gboolean sot_mode;
-        // SOT 正常跟踪置信度阈值
-        gfloat sot_score_threshold;
-    } NvDsMyNetworkConfig;
-
-    typedef struct
-    {
         gboolean enable;
         guint source_id;
-        gboolean source_id_specified; /**< 是否在配置文件中显式配置了 source-id */
         gboolean link_to_demux;
         NvDsSinkType type;
         gint sync;
         NvDsSinkEncoderConfig encoder_config;
         NvDsSinkRenderConfig render_config;
         NvDsSinkMsgConvBrokerConfig msg_conv_broker_config;
-        NvDsMyNetworkConfig mynetwork_config;
     } NvDsSinkSubBinConfig;
 
     typedef struct
@@ -213,24 +179,11 @@ extern "C"
      * @return true if bin created successfully.
      */
     gboolean create_sink_bin(guint num_sub_bins,
-                             NvDsSinkSubBinConfig *config_array, NvDsSinkBin *bin, guint index,
-                             gboolean include_mynetwork);
+                             NvDsSinkSubBinConfig *config_array, NvDsSinkBin *bin, guint index);
 
     void destroy_sink_bin(void);
     gboolean create_demux_sink_bin(guint num_sub_bins,
-                                   NvDsSinkSubBinConfig *config_array, NvDsSinkBin *bin, guint index,
-                                   gboolean include_mynetwork);
-    /**
-     * @brief 创建仅包含自定义组播发送器的独立 sink bin。
-     *
-     * 该 bin 用于 tiled-display 模式下的旁路输出，直接挂到 tiler tee 前，
-     * 以便保留原始 source_id。
-     *
-     * @param config 自定义组播配置。
-     * @param bin 用于接收创建结果的 sink 子 bin。
-     * @return 创建成功返回 TRUE，否则返回 FALSE。
-     */
-    gboolean create_mynetwork_only_bin(NvDsMyNetworkConfig *config, NvDsSinkBinSubBin *bin);
+                                   NvDsSinkSubBinConfig *config_array, NvDsSinkBin *bin, guint index);
 
     void set_rtsp_udp_port_num(guint rtsp_port_num, guint udp_port_num);
 

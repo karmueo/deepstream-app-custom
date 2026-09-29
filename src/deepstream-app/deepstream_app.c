@@ -18,7 +18,6 @@
 #include "deepstream_app_callbacks.h"
 #include "deepstream_app_probes.h"
 #include "nvds_obj_encode.h"
-#include "gstudpjsonmeta.h"
 #include <math.h>
 
 GST_DEBUG_CATEGORY_EXTERN(NVDS_APP);
@@ -59,23 +58,6 @@ NvDsSensorInfo *get_sensor_info(AppCtx *appCtx, guint source_id)
     NvDsSensorInfo *sensorInfo = (NvDsSensorInfo *)g_hash_table_lookup(appCtx->sensorInfoHash,
                                                                        source_id + (gchar *)NULL);
     return sensorInfo;
-}
-
-static void on_cuav_guidance(const CUAVCommonHeader *header,
-                             const CUAVGuidanceInfo *guidance,
-                             gpointer user_data)
-{
-    (void)user_data;
-    if (!header || !guidance)
-        return;
-
-    g_print("[cuav][guidance] msg_sn=%u time=%u-%02u-%02u %02u:%02u:%02u.%.0f "
-            "tar_id=%u cat=%u stat=%u enu_a=%.2f enu_e=%.2f lon=%.6f lat=%.6f alt=%.2f\n",
-            header->msg_sn,
-            guidance->yr, guidance->mo, guidance->dy,
-            guidance->h, guidance->min, guidance->sec, guidance->msec,
-            guidance->tar_id, guidance->tar_category, guidance->guid_stat,
-            guidance->enu_a, guidance->enu_e, guidance->lon, guidance->lat, guidance->alt);
 }
 
 /**
@@ -375,8 +357,6 @@ create_demux_pipeline(AppCtx *appCtx, guint index)
 {
     gboolean ret = FALSE;
     NvDsConfig *config = &appCtx->config;
-    gboolean   include_mynetwork = (config->tiled_display_config.enable ==
-                                    NV_DS_TILED_DISPLAY_DISABLE); /**< tiled 模式下是否保留 mynetwork sink 在 demux 实例内。 */
     NvDsInstanceBin *instance_bin = &appCtx->pipeline.demux_instance_bins[index];
     GstElement *last_elem;
     gchar elem_name[32];
@@ -389,8 +369,7 @@ create_demux_pipeline(AppCtx *appCtx, guint index)
 
     if (!create_demux_sink_bin(config->num_sink_sub_bins,
                                config->sink_bin_sub_bin_config, &instance_bin->demux_sink_bin,
-                               config->sink_bin_sub_bin_config[index].source_id,
-                               include_mynetwork))
+                               config->sink_bin_sub_bin_config[index].source_id))
     {
         goto done;
     }
@@ -436,59 +415,6 @@ done:
 }
 
 /**
- * @brief 在 tiled-display 模式下创建并挂接独立的 mynetwork 旁路分支。
- *
- * 该分支直接连接到 tiler tee 的输出，避免报文经过 tiled 合成后丢失原始
- * source 信息。
- *
- * @param appCtx 应用程序上下文。
- * @param latency_probe_id 延迟探针 ID 输出指针，可为空。
- * @return 创建成功返回 TRUE，否则返回 FALSE。
- */
-static gboolean
-add_tiled_mynetwork_sink_branches(AppCtx *appCtx, gulong *latency_probe_id)
-{
-    NvDsConfig *config = &appCtx->config;
-    NvDsPipeline *pipeline = &appCtx->pipeline;
-    gboolean ret = FALSE;
-
-    for (guint i = 0; i < config->num_sink_sub_bins; i++)
-    {
-        NvDsSinkSubBinConfig *sink_config = &config->sink_bin_sub_bin_config[i]; /**< 当前 sink 配置。 */
-        NvDsSinkBinSubBin *sink_bin_sub = &pipeline->instance_bins[0].sink_bin.sub_bins[i]; /**< 复用 0 号实例的 sink 容器保存旁路分支。 */
-
-        if (!sink_config->enable || sink_config->type != NV_DS_SINK_MYNETWORK)
-        {
-            continue;
-        }
-
-        if (!create_mynetwork_only_bin(&sink_config->mynetwork_config, sink_bin_sub))
-        {
-            goto done;
-        }
-
-        if (!gst_bin_add(GST_BIN(pipeline->pipeline), sink_bin_sub->bin))
-        {
-            goto done;
-        }
-
-        if (!link_element_to_tee_src_pad(pipeline->tiler_tee, sink_bin_sub->bin))
-        {
-            goto done;
-        }
-
-    }
-
-    ret = TRUE;
-done:
-    if (!ret)
-    {
-        NVGSTDS_ERR_MSG_V("%s failed", __func__);
-    }
-    return ret;
-}
-
-/**
  * Function to add components to pipeline which are dependent on number
  * of streams. These components work on single buffer. If tiling is being
  * used then single instance will be created otherwise < N > such instances
@@ -501,8 +427,6 @@ create_processing_instance(AppCtx *appCtx, guint index)
 {
     gboolean ret = FALSE;
     NvDsConfig *config = &appCtx->config;
-    gboolean   include_mynetwork = (config->tiled_display_config.enable ==
-                                    NV_DS_TILED_DISPLAY_DISABLE); /**< tiled 模式下是否保留 mynetwork sink 在主 processing 实例内。 */
     NvDsInstanceBin *instance_bin = &appCtx->pipeline.instance_bins[index];
     GstElement *last_elem;
     gchar elem_name[32];
@@ -514,8 +438,7 @@ create_processing_instance(AppCtx *appCtx, guint index)
     instance_bin->bin = gst_bin_new(elem_name);
 
     if (!create_sink_bin(config->num_sink_sub_bins,
-                         config->sink_bin_sub_bin_config, &instance_bin->sink_bin, index,
-                         include_mynetwork))
+                         config->sink_bin_sub_bin_config, &instance_bin->sink_bin, index))
     {
         goto done;
     }
@@ -559,115 +482,6 @@ done:
         NVGSTDS_ERR_MSG_V("%s failed", __func__);
     }
     return ret;
-}
-
-/* 创建并插入自定义 udpmulticast 源到 pipeline (简单版：单独一个源 -> streammux) */
-/* 独立的 udpmulticast 分支（不接入主视频推理链） */
-static GstFlowReturn on_udpmulticast_sample(GstElement *sink, AppCtx *appCtx)
-{
-    GstSample *sample = NULL;
-    g_signal_emit_by_name(sink, "pull-sample", &sample);
-    if (!sample)
-        return GST_FLOW_OK;
-    /* 调试：每次收到 sample 都打印一次（可按需改为取模减少日志） */
-    static guint frame_cnt = 0;
-    GstBuffer *buf = gst_sample_get_buffer(sample);
-    gsize size = 0;
-    if (buf) {
-        GstMapInfo map;
-        if (gst_buffer_map(buf, &map, GST_MAP_READ)) {
-            size = map.size;
-            gst_buffer_unmap(buf, &map);
-        }
-    }
-    g_print("[udpmulticast] new-sample #%u buffer-size=%zu bytes\n", ++frame_cnt, size);
-    /* TODO: 在这里解析真实业务数据（当前插件还未把 UDP 载荷填入 buffer，仅生成黑帧） */
-    gst_sample_unref(sample);
-    return GST_FLOW_OK;
-}
-
-static gboolean
-add_udpmulticast_source(AppCtx *appCtx)
-{
-    NvDsConfig *config = &appCtx->config;
-    if (!config->udpmulticast_config.enable)
-        return TRUE; /* 未启用直接返回 */
-
-    /* --- 调试辅助：记录函数进入 --- */
-    g_print("[udpsrc-multicast] add_udpmulticast_source() enter\n");
-
-    /* 改为使用内置 udpsrc 直接加入组播，不再依赖自定义插件 */
-    GstElement *udpsrc = gst_element_factory_make("udpsrc", "app_udpmulticast_src");
-    GstElement *queue = gst_element_factory_make("queue", "udpmulti_queue");
-    GstElement *sink = gst_element_factory_make("appsink", "udpmulti_sink");
-    if (!udpsrc || !queue || !sink)
-    {
-        NVGSTDS_ERR_MSG_V("Failed to create udpmulticast branch elements");
-        return FALSE;
-    }
-
-    if (config->udpmulticast_config.multicast_ip) {
-        g_object_set(G_OBJECT(udpsrc), "multicast-group", config->udpmulticast_config.multicast_ip, NULL);
-    }
-    if (config->udpmulticast_config.port)
-        g_object_set(G_OBJECT(udpsrc), "port", config->udpmulticast_config.port, NULL);
-    /* iface: 若提供的是网卡名(如 eth0), 直接赋给 multicast-iface; 如果看起来像 IPv4 地址, 做提示 */
-    if (config->udpmulticast_config.iface) {
-        const gchar *iface = config->udpmulticast_config.iface;
-        gboolean looks_ip = FALSE;
-        int dot_cnt = 0; for (const char *p = iface; *p; ++p) if (*p=='.') dot_cnt++;
-        if (dot_cnt == 3) looks_ip = TRUE; /* 粗略判断 */
-        if (looks_ip) {
-            g_print("[udpsrc-multicast][warn] iface='%s' 像是IP地址; udpsrc 的 multicast-iface 期望网卡名 (如 eth0). 建议改为设备名.\n", iface);
-        }
-        g_object_set(G_OBJECT(udpsrc), "multicast-iface", iface, NULL);
-    }
-    /* auto-multicast 让 udpsrc 自动 bind 与 setsockopt */
-    g_object_set(G_OBJECT(udpsrc), "auto-multicast", TRUE, NULL);
-    /* 允许地址重用 (多个监听 / 容器重启) */
-    g_object_set(G_OBJECT(udpsrc), "reuse", TRUE, NULL);
-    if (config->udpmulticast_config.recv_buf_size)
-        g_object_set(G_OBJECT(udpsrc), "buffer-size", config->udpmulticast_config.recv_buf_size, NULL);
-
-    /* 可选：设置超时时间（毫秒）-> 如果想让套接字更快产出数据或探测空闲，可用 timeout 属性 (GStreamer 1.22+ 支持) */
-#ifdef GST_1_22
-    g_object_set(G_OBJECT(udpsrc), "timeout", (guint64)5 * 1000 * 1000 * 1000ULL, NULL); /* 5s 无数据发送 GST_EVENT_EOS (调试可关闭) */
-#endif
-
-    /* queue 做节流，防止阻塞 (50Hz+ 可以适当调小缓冲) */
-    // g_object_set(G_OBJECT(queue), "max-size-buffers", 100, "leaky", 2, NULL);
-
-    /* appsink 设置 */
-    g_object_set(G_OBJECT(sink), "emit-signals", TRUE, "sync", FALSE, NULL);
-    g_signal_connect(sink, "new-sample", G_CALLBACK(on_udpmulticast_sample), appCtx);
-
-    GstElement *pipeline = appCtx->pipeline.pipeline;
-    gst_bin_add_many(GST_BIN(pipeline), udpsrc, queue, sink, NULL);
-    if (!gst_element_link_many(udpsrc, queue, sink, NULL))
-    {
-        NVGSTDS_ERR_MSG_V("Failed to link udpmulticast branch elements");
-        return FALSE;
-    }
-
-    /* 同步状态 */
-    gst_element_sync_state_with_parent(udpsrc);
-    gst_element_sync_state_with_parent(queue);
-    gst_element_sync_state_with_parent(sink);
-    /* 在源 pad 上加探针 */
-    // GstPad *srcpad = gst_element_get_static_pad(udpsrc, "src");
-    // if (srcpad) {
-    //     gst_pad_add_probe(srcpad, GST_PAD_PROBE_TYPE_BUFFER, udpsrc_probe_cb, NULL, NULL);
-    //     gst_object_unref(srcpad);
-    // }
-
-    /* 打印最终属性 */
-    gchar *group = NULL; gchar *iface = NULL; gboolean auto_mc = FALSE; gboolean reuse = FALSE; gint port = 0; guint bufsize=0;
-    g_object_get(udpsrc, "multicast-group", &group, "multicast-iface", &iface, "auto-multicast", &auto_mc, "reuse", &reuse, "port", &port, "buffer-size", &bufsize, NULL);
-    g_print("[udpsrc-multicast] started group=%s port=%d iface=%s auto=%d reuse=%d bufsize=%u (NOT linked to streammux)\n",
-            group?group:"(null)", port, iface?iface:"(null)", auto_mc, reuse, bufsize);
-    if (group) g_free(group); if (iface) g_free(iface);
-
-    return TRUE;
 }
 
 /**
@@ -816,58 +630,6 @@ create_common_elements(NvDsConfig *config, NvDsPipeline *pipeline,
 
         // 也就说，如果启用该插件，该插件的输入应该要连接到跟踪的输出
         *sink_elem = pipeline->common_elements.videorecognition_bin.bin;
-    }
-
-    if (config->udpjsonmeta_config.enable)
-    {
-        GstElement *udpjsonmeta = gst_element_factory_make(NVDS_ELEM_UDPJSONMETA_ELEMENT, "udpjsonmeta"); /* UDP JSON 元数据插件 */
-        if (!udpjsonmeta)
-        {
-            NVGSTDS_ERR_MSG_V("Failed to create element '%s'", NVDS_ELEM_UDPJSONMETA_ELEMENT);
-            goto done;
-        }
-
-        if (config->udpjsonmeta_config.multicast_ip)
-            g_object_set(G_OBJECT(udpjsonmeta), "multicast-ip", config->udpjsonmeta_config.multicast_ip, NULL);
-        if (config->udpjsonmeta_config.iface)
-            g_object_set(G_OBJECT(udpjsonmeta), "iface", config->udpjsonmeta_config.iface, NULL);
-        if (config->udpjsonmeta_config.recv_buf_size)
-            g_object_set(G_OBJECT(udpjsonmeta), "recv-buf-size", config->udpjsonmeta_config.recv_buf_size, NULL);
-        if (config->udpjsonmeta_config.cache_ttl_ms)
-            g_object_set(G_OBJECT(udpjsonmeta), "cache-ttl-ms", config->udpjsonmeta_config.cache_ttl_ms, NULL);
-        if (config->udpjsonmeta_config.max_cache_size)
-            g_object_set(G_OBJECT(udpjsonmeta), "max-cache-size", config->udpjsonmeta_config.max_cache_size, NULL);
-
-        /* C-UAV 协议配置 */
-        if (config->udpjsonmeta_config.enable_cuav_parser)
-        {
-            g_object_set(G_OBJECT(udpjsonmeta), "enable-cuav-parser", TRUE, NULL);
-            g_object_set(G_OBJECT(udpjsonmeta), "cuav-port", config->udpjsonmeta_config.cuav_port, NULL);
-            if (config->udpjsonmeta_config.cuav_ctrl_port)
-            {
-                g_object_set(G_OBJECT(udpjsonmeta), "cuav-ctrl-port",
-                             config->udpjsonmeta_config.cuav_ctrl_port, NULL);
-            }
-            if (config->udpjsonmeta_config.enable_cuav_debug)
-            {
-                g_object_set(G_OBJECT(udpjsonmeta), "cuav-debug", TRUE, NULL);
-            }
-            gst_udpjson_meta_set_guidance_callback(GST_UDPJSON_META(udpjsonmeta),
-                                                   on_cuav_guidance,
-                                                   pipeline->common_elements.appCtx);
-        }
-
-        gst_bin_add(GST_BIN(pipeline->pipeline), udpjsonmeta);
-        if (!*src_elem)
-        {
-            *src_elem = udpjsonmeta;
-        }
-        if (*sink_elem)
-        {
-            NVGSTDS_LINK_ELEMENT(udpjsonmeta, *sink_elem);
-        }
-        *sink_elem = udpjsonmeta;
-        pipeline->common_elements.udpjsonmeta = udpjsonmeta;
     }
 
     if (config->tracker_config.enable)
@@ -1019,10 +781,7 @@ is_sink_available_for_source_id(NvDsConfig *config, guint source_id)
     for (guint j = 0; j < config->num_sink_sub_bins; j++)
     {
         if (config->sink_bin_sub_bin_config[j].enable &&
-            (config->sink_bin_sub_bin_config[j].type == NV_DS_SINK_MYNETWORK
-                 ? (!config->sink_bin_sub_bin_config[j].source_id_specified ||
-                    config->sink_bin_sub_bin_config[j].source_id == source_id)
-                 : config->sink_bin_sub_bin_config[j].source_id == source_id) &&
+            config->sink_bin_sub_bin_config[j].source_id == source_id &&
             config->sink_bin_sub_bin_config[j].link_to_demux == FALSE)
         {
             return TRUE;
@@ -1302,13 +1061,6 @@ create_pipeline(AppCtx *appCtx,
     }
     gst_bin_add(GST_BIN(pipeline->pipeline), pipeline->multi_src_bin.bin);
 
-    /* 如果启用了[udpmulticast]，在streammux之后添加 */
-    if (!add_udpmulticast_source(appCtx))
-    {
-        NVGSTDS_ERR_MSG_V("add_udpmulticast_source failed");
-        goto done;
-    }
-
     if (config->streammux_config.is_parsed)
     {
         if (config->use_nvmultiurisrcbin)
@@ -1452,10 +1204,6 @@ create_pipeline(AppCtx *appCtx,
 
         link_element_to_tee_src_pad(pipeline->tiler_tee,
                                     pipeline->tiled_display_bin.bin);
-        if (!add_tiled_mynetwork_sink_branches(appCtx, &latency_probe_id))
-        {
-            goto done;
-        }
         last_elem = pipeline->tiler_tee;
 
         NVGSTDS_ELEM_ADD_PROBE(latency_probe_id,

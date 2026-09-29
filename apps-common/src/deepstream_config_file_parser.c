@@ -229,7 +229,6 @@ GST_DEBUG_CATEGORY(APP_CFG_PARSER_CAT);
 // Add group name for set of configs of dsexample element
 #define CONFIG_GROUP_DSEXAMPLE "ds-example"
 #define CONFIG_GROUP_VIDEORECOGNITION "videorecognition"
-#define CONFIG_GROUP_UDPMULTICAST "udpmulticast"
 // Refer to gst-dsexample element source code for the meaning of these
 // configs
 #define CONFIG_GROUP_DSEXAMPLE_FULL_FRAME "full-frame"
@@ -1315,148 +1314,6 @@ parse_videorecognition(NvDsVideoRecognitionConfig *config, GKeyFile *key_file)
     {
         NVGSTDS_ERR_MSG_V("videorecognition classifier-threshold must be between 0 and 1");
         goto done;
-    }
-
-    ret = TRUE;
-done:
-    if (error)
-    {
-        g_error_free(error);
-    }
-    if (keys)
-    {
-        g_strfreev(keys);
-    }
-    if (!ret)
-    {
-        NVGSTDS_ERR_MSG_V("%s failed", __func__);
-    }
-    return ret;
-}
-
-gboolean
-parse_udpmulticast(NvDsUdpMulticastConfig *config, GKeyFile *key_file)
-{
-    gboolean ret = FALSE;
-    gchar **keys = NULL;
-    gchar **key = NULL;
-    GError *error = NULL;
-
-    keys = g_key_file_get_keys(key_file, CONFIG_GROUP_UDPMULTICAST, NULL, &error);
-    CHECK_ERROR(error);
-    for (key = keys; *key; key++)
-    {
-        if (!g_strcmp0(*key, CONFIG_GROUP_ENABLE))
-        {
-            config->enable = g_key_file_get_integer(key_file, CONFIG_GROUP_UDPMULTICAST, CONFIG_GROUP_ENABLE, &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "gpu-id"))
-        {
-            config->gpu_id = g_key_file_get_integer(key_file, CONFIG_GROUP_UDPMULTICAST, "gpu-id", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "multicast-ip"))
-        {
-            config->multicast_ip = g_key_file_get_string(key_file, CONFIG_GROUP_UDPMULTICAST, "multicast-ip", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "port"))
-        {
-            config->port = g_key_file_get_integer(key_file, CONFIG_GROUP_UDPMULTICAST, "port", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "interface"))
-        {
-            config->iface = g_key_file_get_string(key_file, CONFIG_GROUP_UDPMULTICAST, "interface", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "recv-buf-size"))
-        {
-            config->recv_buf_size = g_key_file_get_integer(key_file, CONFIG_GROUP_UDPMULTICAST, "recv-buf-size", &error);
-            CHECK_ERROR(error);
-        }
-        else
-        {
-            NVGSTDS_WARN_MSG_V("Unknown key '%s' for group [%s]", *key, CONFIG_GROUP_UDPMULTICAST);
-        }
-    }
-
-    ret = TRUE;
-done:
-    if (error)
-    {
-        g_error_free(error);
-    }
-    if (keys)
-    {
-        g_strfreev(keys);
-    }
-    if (!ret)
-    {
-        NVGSTDS_ERR_MSG_V("%s failed", __func__);
-    }
-    return ret;
-}
-
-/**
- * @brief 解析 UDP JSON 元数据插件配置。
- *
- * @param config 配置结构体指针。
- * @param key_file 配置文件句柄。
- * @return 成功返回 TRUE。
- */
-gboolean
-parse_udpjsonmeta(NvDsUdpJsonMetaConfig *config, GKeyFile *key_file)
-{
-    gboolean ret = FALSE; /* 返回值 */
-    gchar **keys = NULL; /* key 列表 */
-    gchar **key = NULL; /* 当前 key */
-    GError *error = NULL; /* 错误 */
-
-    keys = g_key_file_get_keys(key_file, CONFIG_GROUP_UDPJSONMETA, NULL, &error);
-    CHECK_ERROR(error);
-    for (key = keys; *key; key++)
-    {
-        if (!g_strcmp0(*key, CONFIG_GROUP_ENABLE))
-        {
-            config->enable = g_key_file_get_integer(key_file, CONFIG_GROUP_UDPJSONMETA, CONFIG_GROUP_ENABLE, &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "multicast-ip"))
-        {
-            config->multicast_ip = g_key_file_get_string(key_file, CONFIG_GROUP_UDPJSONMETA, "multicast-ip", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "interface"))
-        {
-            config->iface = g_key_file_get_string(key_file, CONFIG_GROUP_UDPJSONMETA, "interface", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "recv-buf-size"))
-        {
-            config->recv_buf_size = g_key_file_get_integer(key_file, CONFIG_GROUP_UDPJSONMETA, "recv-buf-size", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "cache-ttl-ms"))
-        {
-            config->cache_ttl_ms = g_key_file_get_integer(key_file, CONFIG_GROUP_UDPJSONMETA, "cache-ttl-ms", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "max-cache-size"))
-        {
-            config->max_cache_size = g_key_file_get_integer(key_file, CONFIG_GROUP_UDPJSONMETA, "max-cache-size", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "cuav-ctrl-port"))
-        {
-            config->cuav_ctrl_port = g_key_file_get_integer(key_file, CONFIG_GROUP_UDPJSONMETA, "cuav-ctrl-port", &error);
-            CHECK_ERROR(error);
-        }
-        else
-        {
-            NVGSTDS_WARN_MSG_V("Unknown key '%s' for group [%s]", *key, CONFIG_GROUP_UDPJSONMETA);
-        }
     }
 
     ret = TRUE;
@@ -2743,47 +2600,6 @@ parse_sink(NvDsSinkSubBinConfig *config, GKeyFile *key_file, gchar *group,
             config->msg_conv_broker_config.broker_sleep_time =
                 g_key_file_get_integer(key_file, group,
                                        CONFIG_GROUP_SINK_MSG_BROKER_SLEEP_TIME, &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "ip"))
-        {
-            // 设置报文发送组播地址
-            config->mynetwork_config.ip =
-                g_key_file_get_string(key_file, group, "ip", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "multicast-port"))
-        {
-            // 设置报文发送组播端口
-            config->mynetwork_config.multicast_port =
-                g_key_file_get_integer(key_file, group, "multicast-port", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "multicast-iface"))
-        {
-            // 设置报文发送组播网卡
-            config->mynetwork_config.iface =
-                g_key_file_get_string(key_file, group, "multicast-iface", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "fps"))
-        {
-            // 设置帧率
-            config->mynetwork_config.fps =
-                g_key_file_get_integer(key_file, group, "fps", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "sot-mode"))
-        {
-            config->mynetwork_config.sot_mode =
-                g_key_file_get_boolean(key_file, group, "sot-mode", &error);
-            CHECK_ERROR(error);
-        }
-        else if (!g_strcmp0(*key, "sot-score-threshold"))
-        {
-            config->mynetwork_config.sot_score_threshold =
-                g_key_file_get_double(key_file, group,
-                                      "sot-score-threshold", &error);
             CHECK_ERROR(error);
         }
         else

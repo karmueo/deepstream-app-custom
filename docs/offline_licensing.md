@@ -44,14 +44,6 @@ release_cxx_flags="-O2 -DNDEBUG -ffile-prefix-map=${repo_root}=."
 cmake -B sot_plugin/build -S sot_plugin -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_CXX_FLAGS_RELEASE="${release_cxx_flags}"
 cmake --build sot_plugin/build --clean-first --parallel
-cmake -B src/gst-udpjson_meta/build -S src/gst-udpjson_meta \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_CXX_FLAGS_RELEASE="${release_cxx_flags}"
-cmake --build src/gst-udpjson_meta/build --clean-first --parallel
-cmake -B src/gst-udpmulticast_sink/build -S src/gst-udpmulticast_sink \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_CXX_FLAGS_RELEASE="${release_cxx_flags}"
-cmake --build src/gst-udpmulticast_sink/build --clean-first --parallel
 make -C DeepStream-Yolo/nvdsinfer_custom_impl_Yolo clean
 make -C DeepStream-Yolo/nvdsinfer_custom_impl_Yolo
 make -C src/nvdspreprocess_lib clean

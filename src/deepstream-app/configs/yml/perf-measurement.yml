@@ -63,29 +63,6 @@ videorecognition:
   trt-engine-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/gst-videorecognition/models/x3d.engine
   labels-file: /opt/nvidia/deepstream/deepstream/deepstream-app-custom/configs/cls_labels.txt
 
-udpjsonmeta:
-  # 是否启用UDP JSON元数据接收（0=禁用，1=启用）
-  enable: 1
-  # 组播IP地址
-  multicast-ip: 230.1.88.51
-  # 网络接口名称（如eth0, enp5s0等）
-  interface: eno1
-  # 接收缓冲区大小（字节）
-  # recv-buf-size: 1048576
-  # 缓存过期时间（毫秒）
-  # cache-ttl-ms: 1000
-  # 最大缓存条目数
-  # max-cache-size: 2048
-  # C-UAV 协议配置
-  # 是否启用C-UAV协议解析（0=禁用，1=启用）
-  enable-cuav-parser: 1
-  # C-UAV组播端口（默认8013）
-  cuav-port: 8013
-  # C-UAV控制/引导端口（默认8003）
-  cuav-ctrl-port: 8003
-  # 是否打印C-UAV调试信息（0=禁用，1=启用）
-  cuav-debug: 1
-
 # FAKE SINK 输出
 sink0:
   enable: 0
@@ -101,20 +78,6 @@ sink3:
   codec : 1      # 1=h264, 2=h265
   bitrate: 4000000
   output-file: output.mkv
-
-# 自定义的udp组播
-sink2:
-  enable: 0
-  #Type - 1=FakeSink 2=EglSink 3=File 4=UDPSink 5=nvdrmvideosink 6=MsgConvBroker 7=MyNetwork
-  type: 7
-  ip: 230.1.8.31
-  multicast-port: 8128
-  # NOTE: 通过ip a 查看网卡，指定组播网卡名称，例如: eth0, enp5s0, ens33 等
-  # multicast-iface: eno1
-  # multicast-ttl=32
-  fps: 2  # 可选参数，不配置时默认为25
-  sot-mode: 1
-  sot-score-threshold: 0.75
 
 osd:
   enable: 1

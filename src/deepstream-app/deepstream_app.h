@@ -36,8 +36,6 @@
 #include "deepstream_streammux.h"
 #include "deepstream_tiled_display.h"
 #include "deepstream_tracker.h"
-#include "deepstream_udpmulticast.h"
-#include "deepstream_udpjsonmeta.h"
 #include "deepstream_videorecognition.h"
 #include "gst-nvdscommonconfig.h"
 #include "gst-nvdscustommessage.h"
@@ -106,7 +104,6 @@ typedef struct
     NvDsDsAnalyticsBin         dsanalytics_bin;                 /**< DS Analytics bin */
     NvDsDsExampleBin           dsexample_bin;                   /**< Dsexample bin */
     NvDsVideoRecognitionBin    videorecognition_bin;            /**< 视频识别 bin (X3D 动作识别) */
-    GstElement                *udpjsonmeta;                    /**< UDP JSON 元数据插件 */
     AppCtx                    *appCtx;                          /**< 指向应用程序上下文的指针 */
 } NvDsInstanceBin;
 
@@ -184,10 +181,7 @@ typedef struct
     NvDsDsAnalyticsConfig  dsanalytics_config;                 /**< DS Analytics 配置 */
     NvDsDsExampleConfig    dsexample_config;                   /**< Dsexample 配置 */
     NvDsVideoRecognitionConfig videorecognition_config;        /**< 视频识别配置 (X3D) */
-    NvDsUdpMulticastConfig udpmulticast_config;               /**< UDP 多播配置 */
-    NvDsUdpJsonMetaConfig  udpjsonmeta_config;                /**< UDP JSON 元数据配置 */
     NvDsSinkMsgConvBrokerConfig msg_conv_config;              /**< 消息转换 broker 配置 */
-    NvDsMyNetworkConfig         mynetwork_config;             /**< 自定义网络配置 */
     NvDsImageSave               image_save_config;            /**< 图像保存配置 */
 
     /** 多 URI 源支持配置 */

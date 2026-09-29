@@ -35,8 +35,6 @@ REQUIRED = (
     "lib/libsot.so",
     "lib/libnvdsinfer_custom_impl_Yolo.so",
     "lib/libcustom2d_preprocess.so",
-    "gst-plugins/libudpjsonmeta.so",
-    "gst-plugins/libudpmulticast_sink.so",
 )
 ALLOWED_SHELL_SCRIPTS = {
     "start_rgb_app.sh",
@@ -147,11 +145,6 @@ def verify(root: Path, runtime_checks: bool, development: bool) -> list[str]:
                 errors.append(
                     f"unresolved dependency in {relative}:\n{dependencies}"
                 )
-        for plugin in ("udpjsonmeta", "udpmulticast_sink"):
-            try:
-                _run(["gst-inspect-1.0", plugin], environment)
-            except RuntimeError as error:
-                errors.append(str(error))
     return errors
 
 
@@ -161,7 +154,7 @@ def main() -> int:
     parser.add_argument(
         "--runtime-checks",
         action="store_true",
-        help="also run ldd and gst-inspect on a compatible Jetson",
+        help="also run ldd on a compatible Jetson",
     )
     parser.add_argument(
         "--development",

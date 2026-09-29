@@ -9,16 +9,6 @@ extern "C" {
 #endif
 
 /**
- * @brief UDP 源 pad probe 回调，用于统计和打印缓冲区信息。
- *
- * @param pad Pad 指针。
- * @param info Probe 信息。
- * @param user_data 用户数据。
- * @return GstPadProbeReturn Probe 处理结果。
- */
-GstPadProbeReturn udpsrc_probe_cb(GstPad *pad, GstPadProbeInfo *info, gpointer user_data);
-
-/**
  * @brief 控制通道 appsink 回调，用于接收并解析控制 JSON。
  *
  * @param sink appsink 元素。

@@ -8,17 +8,7 @@
 	url = https://github.com/karmueo/deepstream_sot_plugin.git
 	branch = anti-uav-dev
 	ignore = dirty
-[submodule "src/gst-udpmulticast_sink"]
-	path = src/gst-udpmulticast_sink
-	url = https://github.com/karmueo/deepstream_udpmulticast_sink.git
-	ignore = dirty
 [submodule "src/gst-videorecognition"]
 	path = src/gst-videorecognition
 	url = https://github.com/karmueo/gstvideorecognition.git
 	branch = anti-uav-dev
-[submodule "src/gst-udpjson_meta"]
-	path = src/gst-udpjson_meta
-	url = https://github.com/karmueo/gst-udpjson_meta.git
-[submodule "src/gst-cuavcontrolsink"]
-	path = src/gst-cuavcontrolsink
-	url = https://github.com/karmueo/gst-cuavcontrolsink.git

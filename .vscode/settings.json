@@ -107,8 +107,7 @@
         "codecvt": "cpp",
         "shared_mutex": "cpp",
         "__bit_reference": "cpp",
-        "gstappsink.h": "c",
-        "deepstream_udpmulticast.h": "c"
+        "gstappsink.h": "c"
     },
     // ...existing code...
     "C_Cpp.intelliSenseEngine": "disabled",

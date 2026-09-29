@@ -125,26 +125,6 @@ cd DeepStream-Yolo
 make -C nvdsinfer_custom_impl_Yolo clean && make -C nvdsinfer_custom_impl_Yolo
 ```
 
-## 编译报文发送插件
-
-```sh
-cd src/gst-udpmulticast_sink
-mkdir build && cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..
-cmake --build .
-sudo cmake --install .
-```
-
-## 编译报文接收插件
-
-```sh
-cd src/gst-udpjson_meta
-mkdir build && cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..
-cmake --build .
-sudo cmake --install .
-```
-
 ## 编译单目标跟踪插件
 ```sh
 cd sot_plugin

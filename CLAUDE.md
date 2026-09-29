@@ -16,7 +16,6 @@ cd src/deepstream-app && make
 
 # 分步编译（需要 sudo 安装插件）
 cd DeepStream-Yolo && make -C nvdsinfer_custom_impl_Yolo clean && make -C nvdsinfer_custom_impl_Yolo
-cd src/gst-udpmulticast_sink && cmake -B build -S . && cmake --build build && sudo cmake --install build
 cd src/gst-videorecognition && cmake -B build -S . && cmake --build build && sudo cmake --install build
 cd sot_plugin && cmake -B build -S . && cmake --build build && sudo cmake --install build
 cd src/deepstream-app && cmake -B build -S . && cmake --build build && sudo cmake --install build
@@ -36,7 +35,7 @@ export LD_LIBRARY_PATH=/opt/nvidia/deepstream/deepstream/lib:$LD_LIBRARY_PATH
 
 ```
 视频源 → NVDEC (GPU 解码) → 流复用器 → 主推理 (YOLOv11) →
-目标跟踪 (SOT/MOT) → 多帧识别 (X3D) → UDP 组播输出
+目标跟踪 (SOT/MOT) → 多帧识别 (X3D) → 显示、录制或 RTSP 输出
 ```
 
 ### 核心组件
@@ -44,7 +43,6 @@ export LD_LIBRARY_PATH=/opt/nvidia/deepstream/deepstream/lib:$LD_LIBRARY_PATH
 | 组件 | 路径 | 用途 |
 |------|------|------|
 | 主程序 | `src/deepstream-app/` | 入口点、流水线构建、配置解析 |
-| UDP 组播 Sink | `src/gst-udpmulticast_sink/` | JSON 元数据输出的 GStreamer 插件 |
 | 视频识别 | `src/gst-videorecognition/` | 多帧动作识别插件 (X3D) |
 | SOT 插件 | `sot_plugin/` | 单目标跟踪 (MixFormerV2/NanoTrack) |
 | YOLO 自定义实现 | `DeepStream-Yolo/nvdsinfer_custom_impl_Yolo/` | TensorRT YOLO 推理 |
@@ -86,19 +84,6 @@ export LD_LIBRARY_PATH=/opt/nvidia/deepstream/deepstream/lib:$LD_LIBRARY_PATH
 - 推理配置: `config_infer_primary_yoloV11_rgb.yml`
 - 视频源: `file_sources.csv`、`sources.csv`
 - SOT 配置: `sot_plugin/config_sot.yml`
-
-## C-UAV 协议
-
-项目使用 UDP 组播进行光电设备通信，协议定义见 `C-UAV_PROTOCOL.md`。关键报文：
-
-| 报文 ID | 名称 | 用途 |
-|---------|------|------|
-| 0x7111 | 引导信息 | 中心下发目标引导 |
-| 0x7112 | 目标信息1 | 无距离信息的目标跟踪结果 |
-| 0x7203 | 跟踪控制 | 跟踪模块启停控制 |
-| 0x7208 | 手框目标区 | 用户框选目标区域 |
-
-默认组播地址: `230.1.88.51:8003`（指控→光电）、`230.1.88.51:8013`（光电→指控）
 
 ## 开发约束
 

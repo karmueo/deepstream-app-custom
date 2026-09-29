@@ -149,7 +149,6 @@ set(INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_BINARY_DIR}/generated
     ${CMAKE_CURRENT_SOURCE_DIR}/../../apps-common/includes
-    ${CMAKE_CURRENT_SOURCE_DIR}/../gst-udpjson_meta
     /opt/nvidia/deepstream/deepstream/sources/includes
     ${CUDAToolkit_INCLUDE_DIRS}
 )
@@ -245,18 +244,6 @@ target_link_libraries(deepstream-app PRIVATE
     ${JSON_GLIB_LIBRARIES}
     ${GSTAPP_LIBRARIES}
 )
-
-# Link the repository-built udpjsonmeta library for callback symbols. Falling
-# back to a globally installed copy can silently package a different ABI.
-set(UDPJSONMETA_LIBRARY
-    "${CMAKE_CURRENT_SOURCE_DIR}/../gst-udpjson_meta/build/libudpjsonmeta.so"
-    CACHE FILEPATH "Repository-built udpjsonmeta library")
-if(NOT EXISTS "${UDPJSONMETA_LIBRARY}")
-    message(FATAL_ERROR
-        "Missing UDPJSONMETA_LIBRARY: ${UDPJSONMETA_LIBRARY}. Build src/gst-udpjson_meta before configuring the main application.")
-endif()
-target_link_libraries(deepstream-app PRIVATE "${UDPJSONMETA_LIBRARY}")
-message(STATUS "Linking udpjsonmeta: ${UDPJSONMETA_LIBRARY}")
 
 # Set RPATH for runtime library loading
 set_target_properties(deepstream-app PROPERTIES
@@ -366,16 +353,10 @@ set(SOT_LIBRARY
 set(YOLO_CUSTOM_LIBRARY
     "${CMAKE_CURRENT_SOURCE_DIR}/../../DeepStream-Yolo/nvdsinfer_custom_impl_Yolo/libnvdsinfer_custom_impl_Yolo.so"
     CACHE FILEPATH "Built DeepStream YOLO parser library to package")
-set(UDPMULTICAST_LIBRARY
-    "${CMAKE_CURRENT_SOURCE_DIR}/../gst-udpmulticast_sink/build/libudpmulticast_sink.so"
-    CACHE FILEPATH "Repository-built UDP multicast sink library")
-
 set(_RUNTIME_REQUIRED_INPUTS
     "${YOLO_CUSTOM_LIBRARY}"
     "${PACKAGED_CUSTOM_PREPROCESS_LIBRARY}"
     "${SOT_LIBRARY}"
-    "${UDPJSONMETA_LIBRARY}"
-    "${UDPMULTICAST_LIBRARY}"
     "${CMAKE_CURRENT_SOURCE_DIR}/models/yolo26n_rgb_352_uav_no-p2_b4.engine"
     "${CMAKE_CURRENT_SOURCE_DIR}/models/yolo26n_rgb_352_uav_no-p2_b4.onnx"
     "${CMAKE_CURRENT_SOURCE_DIR}/models/convert2trt.sh"
@@ -423,12 +404,6 @@ install(FILES
     DESTINATION lib
 )
 install(FILES "${SOT_LIBRARY}" DESTINATION lib RENAME libsot.so)
-install(FILES
-    "${UDPJSONMETA_LIBRARY}"
-    "${UDPMULTICAST_LIBRARY}"
-    DESTINATION gst-plugins
-)
-
 # Libraries above are prebuilt inputs, so CMake's target stripping does not
 # apply to them. Strip only their installed Release copies.
 if(CMAKE_BUILD_TYPE STREQUAL "Release" AND CMAKE_STRIP)

@@ -313,160 +313,6 @@ done:
     return ret;
 }
 
-static gboolean
-create_mynework_bin(NvDsMyNetworkConfig *config,
-                    NvDsSinkBinSubBin *bin)
-{
-    gboolean ret = FALSE;
-    gchar elem_name[50];
-
-    uid++;
-
-    // 创建一个子bin
-    g_snprintf(elem_name, sizeof(elem_name), "sink_sub_bin%d", uid);
-    bin->bin = gst_bin_new(elem_name);
-    if (!bin->bin)
-    {
-        NVGSTDS_ERR_MSG_V("Failed to create '%s'", elem_name);
-        goto done;
-    }
-
-    // 创建一个队列元素，并将其添加到 bin 对象中
-    g_snprintf(elem_name, sizeof(elem_name), "sink_sub_bin_queue%d", uid);
-    bin->queue = gst_element_factory_make(NVDS_ELEM_QUEUE, elem_name);
-    if (!bin->queue)
-    {
-        NVGSTDS_ERR_MSG_V("Failed to create '%s'", elem_name);
-        goto done;
-    }
-
-    /** set threshold on queue to avoid pipeline choke when broker is stuck on network
-     * leaky=2 (2): downstream       - Leaky on downstream (old buffers)
-     * 在队列上设置阈值以避免在网络上时管道阻塞
-     * leaky=1 队列满时丢弃最旧的数据
-     */
-    g_object_set(G_OBJECT(bin->queue), "leaky", 1, "max-size-buffers", 20,
-                 "max-size-bytes", 0, "max-size-time", 0, NULL);
-    g_signal_connect(G_OBJECT(bin->queue), "overrun",
-                     G_CALLBACK(broker_queue_overrun), bin);
-
-    /* 创建消息转换器以从缓冲区元数据生成有效负载 */
-    g_snprintf(elem_name, sizeof(elem_name), "sink_sub_bin_transform%d", uid);
-    config->disable_msgconv = TRUE;
-    if (config->disable_msgconv)
-    {
-        bin->transform = gst_element_factory_make("queue", elem_name);
-    }
-    else
-    {
-        bin->transform = gst_element_factory_make(NVDS_ELEM_MSG_CONV, elem_name);
-    }
-    if (!bin->transform)
-    {
-        NVGSTDS_ERR_MSG_V("Failed to create '%s'", elem_name);
-        goto done;
-    }
-
-    /* 避免组播网络异常时阻塞主干，转换队列也设为泄压模式 */
-    if (g_strcmp0(gst_element_get_name(bin->transform), "queue") == 0)
-    {
-        g_object_set(G_OBJECT(bin->transform), "leaky", 2,
-                     "max-size-buffers", 5, "max-size-bytes", 0,
-                     "max-size-time", 0, NULL);
-    }
-
-    // 如果启用消息转换器，则设置其属性
-    if (!config->disable_msgconv)
-        g_object_set(G_OBJECT(bin->transform), "config", config->config_file_path,
-                     "msg2p-lib", (config->conv_msg2p_lib ? config->conv_msg2p_lib : NULL),
-                     "payload-type", config->conv_payload_type,
-                     "comp-id", config->conv_comp_id,
-                     "debug-payload-dir", config->debug_payload_dir,
-                     "multiple-payloads", config->multiple_payloads,
-                     "msg2p-newapi", config->conv_msg2p_new_api,
-                     "frame-interval", config->conv_frame_interval,
-                     "dummy-payload", config->conv_dummy_payload, NULL);
-
-    // 创建自定义的消息发送ELEMENT
-    g_snprintf(elem_name, sizeof(elem_name), "sink_sub_bin_sink%d", uid);
-    bin->sink = gst_element_factory_make(NVDS_ELEM_DSMYNETWORK_ELEMENT, elem_name);
-    if (!bin->sink)
-    {
-        NVGSTDS_ERR_MSG_V("Failed to create '%s'", elem_name);
-        goto done;
-    }
-    /* 组播 sink 不与时钟同步，避免阻塞 tee 分支 */
-    g_object_set(G_OBJECT(bin->sink), "sync", FALSE, "async", FALSE,
-                 "qos", FALSE, "enable-last-sample", FALSE, NULL);
-    // 设置其属性
-    // g_object_set(G_OBJECT(bin->sink), "proto-lib", config->proto_lib,
-    //              "conn-str", config->conn_str,
-    //              "topic", config->topic,
-    //              "sync", config->sync, "async", FALSE,
-    //              "config", config->broker_config_file_path,
-    //              "comp-id", config->broker_comp_id, "new-api", config->new_api,
-    //              "sleep-time", config->broker_sleep_time, NULL);
-
-    // 把队列|消息转换器|自定义消息发送ELEMENT添加到bin->bin中
-    gst_bin_add_many(GST_BIN(bin->bin),
-                     bin->queue, bin->transform, bin->sink, NULL);
-
-    // 链接队列到消息转换器
-    NVGSTDS_LINK_ELEMENT(bin->queue, bin->transform);
-    // 链接消息转换器到自定义消息发送ELEMENT
-    NVGSTDS_LINK_ELEMENT(bin->transform, bin->sink);
-
-    // 如果解析到了配置里的组播 ip 和端口，设置给 element 属性（需要 element 支持同名属性）
-    if (config->ip)
-    {
-        g_object_set(G_OBJECT(bin->sink), "ip", config->ip, NULL);
-    }
-    if (config->multicast_port)
-    {
-        g_object_set(G_OBJECT(bin->sink), "port", config->multicast_port, NULL);
-    }
-    if (config->iface)
-    {
-        g_object_set(G_OBJECT(bin->sink), "iface", config->iface, NULL);
-    }
-    // 设置帧率，默认为25
-    guint fps_value = config->fps > 0 ? config->fps : 25;
-    gfloat sot_score_threshold = config->sot_score_threshold > 0.0f
-                                     ? config->sot_score_threshold
-                                     : 0.75f;
-    g_object_set(G_OBJECT(bin->sink), "fps", fps_value,
-                 "sot-mode", config->sot_mode,
-                 "sot-score-threshold", sot_score_threshold, NULL);
-
-    // 添加一个虚拟pad
-    NVGSTDS_BIN_ADD_GHOST_PAD(bin->bin, bin->queue, "sink");
-
-    ret = TRUE;
-
-done:
-    if (!ret)
-    {
-        NVGSTDS_ERR_MSG_V("%s failed", __func__);
-    }
-    return ret;
-}
-
-/**
- * @brief 创建仅包含自定义组播发送器的独立 sink bin。
- *
- * 该接口复用 mynetwork sink 的内部构建逻辑，供 tiled-display 模式下
- * 的旁路分支使用。
- *
- * @param config 自定义组播配置。
- * @param bin 用于接收创建结果的 sink 子 bin。
- * @return 创建成功返回 TRUE，否则返回 FALSE。
- */
-gboolean
-create_mynetwork_only_bin(NvDsMyNetworkConfig *config, NvDsSinkBinSubBin *bin)
-{
-    return create_mynework_bin(config, bin);
-}
-
 /**
  * Probe function to drop upstream "GST_QUERY_SEEKING" query from h264parse element.
  * This is a WAR to avoid memory leaks from h264parse element
@@ -1006,7 +852,7 @@ done:
 
 gboolean
 create_sink_bin(guint num_sub_bins, NvDsSinkSubBinConfig *config_array,
-                NvDsSinkBin *bin, guint index, gboolean include_mynetwork)
+                NvDsSinkBin *bin, guint index)
 {
     gboolean ret = FALSE;
     guint i;
@@ -1048,20 +894,7 @@ create_sink_bin(guint num_sub_bins, NvDsSinkSubBinConfig *config_array,
         {
             continue;
         }
-        if (config_array[i].type == NV_DS_SINK_MYNETWORK)
-        {
-            if (!include_mynetwork)
-            {
-                continue;
-            }
-            /* 未显式配置 source-id 时，让 mynetwork sink 同时接收所有 source。 */
-            if (config_array[i].source_id_specified &&
-                config_array[i].source_id != index)
-            {
-                continue;
-            }
-        }
-        else if (config_array[i].source_id != index)
+        if (config_array[i].source_id != index)
         {
             continue;
         }
@@ -1099,10 +932,6 @@ create_sink_bin(guint num_sub_bins, NvDsSinkSubBinConfig *config_array,
         case NV_DS_SINK_MSG_CONV_BROKER:
             config_array[i].msg_conv_broker_config.sync = config_array[i].sync;
             if (!create_msg_conv_broker_bin(&config_array[i].msg_conv_broker_config, &bin->sub_bins[i]))
-                goto done;
-            break;
-        case NV_DS_SINK_MYNETWORK:
-            if (!create_mynework_bin(&config_array[i].mynetwork_config, &bin->sub_bins[i]))
                 goto done;
             break;
         default:
@@ -1145,7 +974,7 @@ done:
 
 gboolean
 create_demux_sink_bin(guint num_sub_bins, NvDsSinkSubBinConfig *config_array,
-                      NvDsSinkBin *bin, guint index, gboolean include_mynetwork)
+                      NvDsSinkBin *bin, guint index)
 {
     gboolean ret = FALSE;
     guint i;
@@ -1184,19 +1013,6 @@ create_demux_sink_bin(guint num_sub_bins, NvDsSinkSubBinConfig *config_array,
         if (!config_array[i].enable)
         {
             continue;
-        }
-        if (config_array[i].type == NV_DS_SINK_MYNETWORK)
-        {
-            if (!include_mynetwork)
-            {
-                continue;
-            }
-            /* 未显式配置 source-id 时，让 mynetwork sink 同时接收所有 source。 */
-            if (config_array[i].source_id_specified &&
-                config_array[i].source_id != index)
-            {
-                continue;
-            }
         }
         if (!config_array[i].link_to_demux)
         {

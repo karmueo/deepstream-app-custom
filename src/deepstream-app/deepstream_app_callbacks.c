@@ -24,37 +24,6 @@ static NvDsFPSSensorInfo *s_fps_sensor_info_create(NvDsFPSSensorInfo *sensor_inf
 static void s_fps_sensor_info_destroy(NvDsFPSSensorInfo *sensor_info);
 static NvDsFPSSensorInfo *get_fps_sensor_info(AppCtx *appCtx, guint source_id);
 
-/* 调试: udpsrc probe 回调，统计 buffer */
-GstPadProbeReturn udpsrc_probe_cb(GstPad *pad, GstPadProbeInfo *info, gpointer user_data)
-{
-    static guint64 cnt = 0;
-    if (info->type & GST_PAD_PROBE_TYPE_BUFFER)
-    {
-        GstBuffer *b = GST_BUFFER(info->data);
-        gsize      sz = 0;
-        GstMapInfo map;
-        if (gst_buffer_map(b, &map, GST_MAP_READ))
-        {
-            sz = map.size;
-            gst_buffer_unmap(b, &map);
-        }
-        if (G_UNLIKELY(cnt < 20 || (cnt < 1000 && (cnt % 50) == 0) || (cnt % 500) == 0))
-        {
-            GstCaps *caps = gst_pad_get_current_caps(pad);
-            gchar   *caps_str = caps ? gst_caps_to_string(caps) : g_strdup("(null)");
-            g_print("[udpsrc-multicast][probe] #%" G_GUINT64_FORMAT " size=%zu caps=%s\n", ++cnt, sz, caps_str);
-            g_free(caps_str);
-            if (caps)
-                gst_caps_unref(caps);
-        }
-        else
-        {
-            cnt++;
-        }
-    }
-    return GST_PAD_PROBE_OK;
-}
-
 GstFlowReturn on_control_data(GstElement *sink, AppCtx *appCtx)
 {
     /* // 控制速率,比如每秒处理30次

@@ -32,7 +32,6 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
     config->encoder_config.compute_hw = 0;
     config->render_config.qos = FALSE;
     config->link_to_demux = FALSE;
-    config->source_id_specified = FALSE;
     config->msg_conv_broker_config.new_api = FALSE;
     config->msg_conv_broker_config.conv_msg2p_new_api = FALSE;
     config->msg_conv_broker_config.conv_frame_interval = 30;
@@ -129,7 +128,6 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
         {
             config->source_id =
                 itr->second.as<guint>();
-            config->source_id_specified = TRUE;
         }
         else if (paramKey == "rtsp-port")
         {
@@ -232,42 +230,6 @@ parse_sink_yaml(NvDsSinkSubBinConfig *config, std::string group_str, gchar *cfg_
         {
             config->msg_conv_broker_config.new_api =
                 itr->second.as<gboolean>();
-        }
-        else if (paramKey == "ip")
-        {
-            // 设置报文发送组播地址
-            std::string temp = itr->second.as<std::string>();
-            config->mynetwork_config.ip = (char *)malloc(sizeof(char) * 1024);
-            std::strncpy(config->mynetwork_config.ip, temp.c_str(), 1023);
-        }
-        else if (paramKey == "multicast-port")
-        {
-            // 设置报文发送组播端口
-            config->mynetwork_config.multicast_port =
-                itr->second.as<gint>();
-        }
-        else if (paramKey == "multicast-iface")
-        {
-            // 设置报文发送组播网卡
-            std::string temp = itr->second.as<std::string>();
-            config->mynetwork_config.iface = (char *)malloc(sizeof(char) * 1024);
-            std::strncpy(config->mynetwork_config.iface, temp.c_str(), 1023);
-        }
-        else if (paramKey == "fps")
-        {
-            // 设置帧率
-            config->mynetwork_config.fps =
-                itr->second.as<gint>();
-        }
-        else if (paramKey == "sot-mode")
-        {
-            config->mynetwork_config.sot_mode =
-                itr->second.as<gboolean>();
-        }
-        else if (paramKey == "sot-score-threshold")
-        {
-            config->mynetwork_config.sot_score_threshold =
-                itr->second.as<gfloat>();
         }
         else
         {
