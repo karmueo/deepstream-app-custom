@@ -18,6 +18,8 @@ src/gst-videorecognition/build
 src/Mixformer_plugin/.idea
 src/Mixformer_plugin/cmake-build-debug
 src/Mixformer_plugin/models/profile.json
+src/face_detect_plugin
+src/emotieff_plugin
 
 *.onnx
 *.engine

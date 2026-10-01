@@ -49,9 +49,7 @@ set(LICENSE_ED25519_PUBLIC_KEY_HEX "${_DEVELOPMENT_LICENSE_PUBLIC_KEY}"
 set(LICENSE_KEY_ID "prod-2026-01" CACHE STRING
     "Embedded license signing key identifier")
 if(NOT CMAKE_BUILD_TYPE STREQUAL "Release")
-    # Development builds do not enforce licenses. Reset cached production
-    # metadata so switching this directory back to Release requires the key
-    # arguments to be supplied explicitly again.
+    # Keep development builds on the placeholder signing metadata.
     set(LICENSE_ED25519_PUBLIC_KEY_HEX "${_DEVELOPMENT_LICENSE_PUBLIC_KEY}"
         CACHE STRING "Raw Ed25519 public key encoded as 64 hexadecimal characters" FORCE)
     set(LICENSE_KEY_ID "prod-2026-01" CACHE STRING
@@ -69,13 +67,9 @@ if(NOT _LICENSE_PUBLIC_KEY_LENGTH EQUAL 64 OR
     message(FATAL_ERROR
         "LICENSE_ED25519_PUBLIC_KEY_HEX must contain exactly 64 hexadecimal characters")
 endif()
-if(CMAKE_BUILD_TYPE STREQUAL "Release" AND
-   LICENSE_ED25519_PUBLIC_KEY_HEX STREQUAL _DEVELOPMENT_LICENSE_PUBLIC_KEY)
-    message(FATAL_ERROR
-        "Release builds require a production Ed25519 public key. Run tools/license_issuer.py keygen and pass -DLICENSE_ED25519_PUBLIC_KEY_HEX=<hex>.")
-elseif(LICENSE_ED25519_PUBLIC_KEY_HEX STREQUAL _DEVELOPMENT_LICENSE_PUBLIC_KEY)
+if(LICENSE_ED25519_PUBLIC_KEY_HEX STREQUAL _DEVELOPMENT_LICENSE_PUBLIC_KEY)
     message(STATUS
-        "Using the placeholder public key; license enforcement is disabled for this development build")
+        "Using the placeholder public key; license enforcement is disabled for all build types")
 endif()
 
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
@@ -157,11 +151,8 @@ set(INCLUDE_DIRS
 # Create executable
 add_executable(deepstream-app ${ALL_SOURCES})
 
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    set(DS_LICENSE_ENFORCEMENT_ENABLED 1)
-else()
-    set(DS_LICENSE_ENFORCEMENT_ENABLED 0)
-endif()
+# License enforcement is currently disabled for all build types.
+set(DS_LICENSE_ENFORCEMENT_ENABLED 0)
 
 # Set include directories
 target_include_directories(deepstream-app PRIVATE
